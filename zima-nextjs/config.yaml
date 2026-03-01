@@ -1,0 +1,89 @@
+zima:
+  version: "1.0.0"
+  name: "Zima Looper"
+
+workers:
+  count: 4
+  max_concurrent_stories: 4
+  poll_interval_seconds: 5
+  # Per-worker memory cap (can cause workers to get stuck/killed if limit too low - disabled by default)
+  memory_limit:
+    enabled: false
+    max_percent: 70
+
+# Cursor CLI (agent) only
+claude:
+  cli_path: "agent"
+  default_timeout_seconds: 2000
+  max_timeout_seconds: 2000
+  model: "auto"   # "sonnet" was failing: "Claude Sonnet 4.5 is not available in the slow pool. Please switch to auto or Auto."
+
+# Do not create .md or documentation files unless acceptance criteria explicitly require them
+behavior:
+  skip_documentation: true
+
+# Shared context across workers (reduces duplicate work and token usage)
+shared_context:
+  enabled: true
+  max_recent_stories: 15
+  max_summary_chars: 1500
+  recent_changes_limit: 20
+  recent_changes_max_chars: 500
+  avoid_files_max: 30
+
+# Token optimization (reduce LLM credits)
+token_optimization:
+  max_acceptance_criteria_items: 25
+  max_acceptance_criteria_chars: 4000
+  max_error_log_chars: 600
+  max_error_context_lines: 15
+  max_readme_chars: 6000
+  prd_analysis_readme_chars: 5000
+  prd_stories_readme_chars: 4000
+
+retry:
+  max_attempts: 3
+  backoff_multiplier: 3
+  base_delay_seconds: 5
+  enable_claude_fix: true
+
+checkpoints:
+  enabled: true
+  frequency_minutes: 5
+  max_checkpoints_per_story: 20
+
+git:
+  auto_commit: true
+  commit_message_template: "Story {story_id}: {title}"
+  use_branches: true
+  branch_prefix: "zima/story-"
+
+# Quality gates: Flutter (analyze + build) or Next.js (lint + build) or Laravel (PHPUnit)
+quality:
+  run_tests_before_complete: true
+  require_passing_tests: false
+  # Flutter (when pubspec.yaml present)
+  run_flutter_analyze: true   # flutter analyze
+  run_flutter_build: true     # flutter build apk (or flutter_build_target)
+  flutter_build_target: apk   # apk, ios, web, macos
+  # Next.js (when frontend/package.json present)
+  run_linter: false   # true = run ESLint after each story (uses a lot of RAM)
+  run_npm_build: true # false = skip Next.js build in gate (build is very RAM-heavy)
+
+monitoring:
+  dashboard_enabled: true
+  dashboard_port: 5000
+  log_level: "INFO"
+  metrics_enabled: true
+
+notifications:
+  console_enabled: true
+  web_enabled: true
+
+# Large project support (459+ stories)
+large_project:
+  enabled: true
+  max_stories: 500
+  batch_size: 50
+  module_based_execution: true
+  priority_ordering: true

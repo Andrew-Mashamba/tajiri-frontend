@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.display_name | default(project.name) }} - Zima Looper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            margin-bottom: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: #764ba2;
+        }
+
+        .project-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .project-title h1 {
+            font-size: 2rem;
+            color: #333;
+        }
+
+        .project-status {
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-pending { background: #ffc107; color: #000; }
+        .status-executing { background: #17a2b8; color: white; }
+        .status-completed { background: #28a745; color: white; }
+        .status-failed { background: #dc3545; color: white; }
+        .status-paused { background: #6c757d; color: white; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .metric-card h3 {
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .metric-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .progress-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .progress-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .progress-bar-large {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .progress-fill-large {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .progress-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .breakdown-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .breakdown-count {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .breakdown-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .count-completed { color: #28a745; }
+        .count-in-progress { color: #17a2b8; }
+        .count-pending { color: #ffc107; }
+        .count-failed { color: #dc3545; }
+        .count-skipped { color: #6c757d; }
+
+        .stories-table-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .stories-table-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .stories-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .stories-table thead {
+            background: #f8f9fa;
+        }
+
+        .stories-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+            color: #333;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .stories-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .stories-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .story-number {
+            font-weight: bold;
+            color: #667eea;
+            width: 80px;
+        }
+
+        .story-title-col {
+            color: #333;
+        }
+
+        .story-status-cell {
+            text-align: center;
+            width: 150px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-badge.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.in-progress,
+        .status-badge.implementing,
+        .status-badge.planning,
+        .status-badge.testing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-badge.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-icon {
+            font-size: 1rem;
+        }
+
+        .workers-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .workers-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .worker-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .worker-status {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .worker-info {
+            flex: 1;
+        }
+
+        .worker-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .worker-story {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .stories-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .stories-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .story-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 5px solid #667eea;
+        }
+
+        .story-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .story-title {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .story-status {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .activity-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .activity-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .activity-item {
+            padding: 15px;
+            border-left: 3px solid #667eea;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .activity-time {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .activity-text {
+            color: #333;
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .refresh-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator">
+        <div class="refresh-dot"></div>
+        <span id="update-status">Live</span>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <a href="/" class="back-button">← Back to Dashboard</a>
+            <div class="project-title">
+                <h1>{{ project.display_name | default(project.name) }}</h1>
+                <div class="project-status status-{{ project.status }}">
+                    {{ project.status }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h3>Total Stories</h3>
+                <div class="value" id="total-stories">{{ metrics.total_stories }}</div>
+            </div>
+            <div class="metric-card">
+                <h3>Completed</h3>
+                <div class="value" id="completed-stories">{{ metrics.completed_stories }}</div>
+            </div>
+            <div class="metric-card">
+                <h3>Success Rate</h3>
+                <div class="value" id="success-rate">{{ "%.0f"|format(metrics.success_rate) }}%</div>
+            </div>
+            <div class="metric-card">
+                <h3>In Progress</h3>
+                <div class="value" id="in-progress-stories">{{ metrics.in_progress_stories }}</div>
+            </div>
+            <div class="metric-card">
+                <h3>Active Workers</h3>
+                <div class="value" id="active-workers">{{ metrics.active_workers }}</div>
+            </div>
+            {% if metrics.elapsed_time %}
+            <div class="metric-card">
+                <h3>Elapsed Time</h3>
+                <div class="value" style="font-size: 1.5rem;">{{ metrics.elapsed_time }}</div>
+            </div>
+            {% endif %}
+            {% if metrics.estimated_remaining %}
+            <div class="metric-card">
+                <h3>Est. Remaining</h3>
+                <div class="value" style="font-size: 1.5rem;">{{ metrics.estimated_remaining }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section">
+            <h2>Overall Progress</h2>
+            <div class="progress-bar-large">
+                <div class="progress-fill-large" id="progress-fill" style="width: {{ metrics.completion_percentage }}%">
+                    <span id="progress-percentage">{{ "%.1f"|format(metrics.completion_percentage) }}%</span>
+                </div>
+            </div>
+
+            <div class="progress-breakdown">
+                <div class="breakdown-item">
+                    <div class="breakdown-count count-completed" id="breakdown-completed">
+                        {{ metrics.completed_stories }}
+                    </div>
+                    <div class="breakdown-label">Completed</div>
+                </div>
+                <div class="breakdown-item">
+                    <div class="breakdown-count count-in-progress" id="breakdown-in-progress">
+                        {{ metrics.in_progress_stories }}
+                    </div>
+                    <div class="breakdown-label">In Progress</div>
+                </div>
+                <div class="breakdown-item">
+                    <div class="breakdown-count count-pending" id="breakdown-pending">
+                        {{ metrics.pending_stories }}
+                    </div>
+                    <div class="breakdown-label">Pending</div>
+                </div>
+                <div class="breakdown-item">
+                    <div class="breakdown-count count-failed" id="breakdown-failed">
+                        {{ metrics.failed_stories }}
+                    </div>
+                    <div class="breakdown-label">Failed</div>
+                </div>
+                <div class="breakdown-item">
+                    <div class="breakdown-count count-skipped" id="breakdown-skipped">
+                        {{ metrics.skipped_stories }}
+                    </div>
+                    <div class="breakdown-label">Skipped</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stories Table Section -->
+        <div class="stories-table-section">
+            <h2>All Stories ({{ stories|length }})</h2>
+            <table class="stories-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Story Title</th>
+                        <th style="text-align: center;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for story in stories|sort(attribute='story_number') %}
+                    <tr>
+                        <td class="story-number">{{ story.story_number }}</td>
+                        <td class="story-title-col">{{ story.title }}</td>
+                        <td class="story-status-cell">
+                            {% if story.status == 'completed' %}
+                                <span class="status-badge completed">
+                                    <span class="status-icon">✓</span>
+                                    Completed
+                                </span>
+                            {% elif story.status in ['in_progress', 'implementing', 'planning', 'testing'] %}
+                                <span class="status-badge in-progress">
+                                    <span class="status-icon">⚙</span>
+                                    In Progress
+                                </span>
+                            {% elif story.status == 'failed' %}
+                                <span class="status-badge failed">
+                                    <span class="status-icon">✗</span>
+                                    Failed
+                                </span>
+                            {% elif story.status == 'pending' %}
+                                <span class="status-badge pending">
+                                    <span class="status-icon">○</span>
+                                    Pending
+                                </span>
+                            {% else %}
+                                <span class="status-badge">{{ story.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Workers Section -->
+        {% if summary.active_workers %}
+        <div class="workers-section">
+            <h2>Active Workers</h2>
+            {% for worker_id in summary.active_workers %}
+                {% set worker_story = stories|selectattr('worker_id', 'equalto', worker_id)|selectattr('status', 'in', ['in_progress', 'planning', 'implementing', 'testing'])|first %}
+                <div class="worker-card">
+                    <div class="worker-status"></div>
+                    <div class="worker-info">
+                        <div class="worker-name">Worker #{{ worker_id }}</div>
+                        {% if worker_story %}
+                        <div class="worker-story">
+                            Story {{ worker_story.story_number }}: {{ worker_story.title }}
+                        </div>
+                        {% else %}
+                        <div class="worker-story">Idle</div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Recent Activity -->
+        {% if recent_activity %}
+        <div class="activity-section">
+            <h2>Recent Activity</h2>
+            {% for activity in recent_activity %}
+            <div class="activity-item">
+                <div class="activity-time">{{ activity.created_at }}</div>
+                <div class="activity-text">
+                    <strong>Story {{ activity.story_number }}</strong>: {{ activity.execution_type }}
+                    {% if activity.exit_code != None %}
+                    (exit: {{ activity.exit_code }})
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Server-Sent Events for real-time updates
+        const projectId = {{ project.id }};
+        const eventSource = new EventSource(`/api/project/${projectId}/stream`);
+
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.status === 'complete') {
+                document.getElementById('update-status').textContent = 'Complete';
+                eventSource.close();
+                setTimeout(() => location.reload(), 2000);
+                return;
+            }
+
+            if (data.error) {
+                console.error('Error:', data.error);
+                eventSource.close();
+                return;
+            }
+
+            // Update metrics
+            if (data.metrics) {
+                document.getElementById('completed-stories').textContent = data.metrics.completed_stories;
+                document.getElementById('in-progress-stories').textContent = data.metrics.in_progress_stories;
+                document.getElementById('active-workers').textContent = data.metrics.active_workers;
+                document.getElementById('success-rate').textContent = Math.round(data.metrics.success_rate) + '%';
+                document.getElementById('progress-percentage').textContent = data.metrics.completion_percentage.toFixed(1) + '%';
+                document.getElementById('progress-fill').style.width = data.metrics.completion_percentage + '%';
+
+                // Update breakdown
+                document.getElementById('breakdown-completed').textContent = data.metrics.completed_stories;
+                document.getElementById('breakdown-in-progress').textContent = data.metrics.in_progress_stories;
+                document.getElementById('breakdown-pending').textContent = data.metrics.pending_stories;
+                document.getElementById('breakdown-failed').textContent = data.metrics.failed_stories;
+                document.getElementById('breakdown-skipped').textContent = data.metrics.skipped_stories;
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            console.error('EventSource error:', error);
+            document.getElementById('update-status').textContent = 'Disconnected';
+            eventSource.close();
+
+            // Reload page after 5 seconds
+            setTimeout(() => location.reload(), 5000);
+        };
+    </script>
+</body>
+</html>

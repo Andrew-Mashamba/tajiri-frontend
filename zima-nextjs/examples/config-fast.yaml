@@ -1,0 +1,67 @@
+# Zima Looper - Fast Configuration
+# Use this configuration for maximum speed
+# Minimal quality checks, optimized timeouts, fast iterations
+
+zima:
+  version: "1.0.0"
+  name: "Zima Looper"
+
+# Worker configuration - MAXIMUM PARALLELISM
+workers:
+  count: 4                      # 4 workers for parallelism
+  max_concurrent_stories: 4
+  poll_interval_seconds: 2      # Fast polling
+
+# Claude CLI configuration - OPTIMIZED
+claude:
+  cli_path: "claude"
+  default_timeout_seconds: 180  # 3 minutes (short timeout)
+  max_timeout_seconds: 600      # 10 minutes maximum
+  model: "sonnet"               # Fast model
+
+# Retry configuration - MINIMAL
+retry:
+  max_attempts: 1               # Only 1 retry attempt
+  backoff_multiplier: 2
+  base_delay_seconds: 3         # Short delay
+  enable_claude_fix: false      # Skip Claude fix for speed
+
+# Checkpoint system - MINIMAL
+checkpoints:
+  enabled: true
+  frequency_minutes: 15         # Infrequent checkpoints
+  max_checkpoints_per_story: 3  # Keep fewer checkpoints
+
+# Git configuration - FAST
+git:
+  auto_commit: true
+  commit_message_template: "Story {story_number}"  # Short commit messages
+  use_branches: false           # Direct commits
+  branch_prefix: "zima/story-"
+
+# Quality gates - MINIMAL CHECKS
+quality:
+  run_tests_before_complete: false      # SKIP tests entirely
+  require_passing_tests: false
+  require_syntax_valid: true            # Only check syntax
+  require_composer_valid: false
+  require_env_valid: false
+  test_timeout_seconds: 120             # Short timeout if tests run
+  allow_no_tests: true
+  rollback_on_failure: false            # Never rollback
+  max_test_failures: 999
+
+# Monitoring - MINIMAL
+monitoring:
+  dashboard_enabled: false              # Skip dashboard overhead
+  dashboard_port: 5000
+  log_level: "ERROR"                    # Only log errors
+  metrics_enabled: false                # Skip metrics for speed
+  detailed_logging: false
+
+# Notifications - MINIMAL
+notifications:
+  console_enabled: true
+  web_enabled: false                    # Skip web notifications
+  notify_on_failure: true
+  notify_on_completion: false           # Skip completion notifications

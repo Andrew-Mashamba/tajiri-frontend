@@ -1,0 +1,3552 @@
+{
+  "project": {
+    "name": "TAJIRI",
+    "description": "Tanzanian-born digital social platform for connection, content, and economic empowerment. Combines social networking, media, messaging, and digital services for Tanzania and Africa.",
+    "vision": "Tanzania's leading digital platform for social connection and economic empowerment",
+    "tech_stack": {
+      "tier": "Modern Full-Stack",
+      "frontend": "Flutter (iOS, Android, Web)",
+      "backend": "Laravel 12 (PHP)",
+      "database": [
+        "PostgreSQL"
+      ],
+      "cache": "Redis",
+      "auth": "Laravel Sanctum, Phone-based UserProfile",
+      "storage": "S3-compatible, Chunked Resumable Uploads"
+    },
+    "design_principles": [
+      "Swahili-first UX (Nyumbani, Marafiki, Ujumbe, Picha, Mimi)",
+      "Low bandwidth optimization (2G/3G networks)",
+      "Material 3 design",
+      "Local-first, global-ready"
+    ],
+    "design_system": "DOCS/DESIGN.md",
+    "story_rules": {
+      "required_references": "Every story MUST reference both DOCS/DESIGN.md and DOCS/NAVIGATION.md. Stories are implemented separately without knowledge of other things.",
+      "design_reference": "DOCS/DESIGN.md: layout, components, tokens, overflow, touch targets (48dp min).",
+      "navigation_reference": "DOCS/NAVIGATION.md: how users reach this feature, navigation_path, parent screens.",
+      "implementation_directives": [
+        "After implementing, recheck work and confirm all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files touched."
+      ],
+      "parent_child": "Every story has parent_story_id: null (root) or a valid parent. No orphan stories.",
+      "reachability": "Every story has navigation_path. Use DOCS/NAVIGATION.md as source of truth for how users reach each feature.",
+      "social_reference": "Every story has social_media_reference for behavior patterns (Instagram, Facebook, TikTok, WhatsApp, etc.)."
+    },
+    "navigation_anchor": "Splash \u2192 Home (5 bottom tabs: Nyumbani, Marafiki, Ujumbe, Picha, Mimi)",
+    "navigation_map": {
+      "entry": "SplashScreen",
+      "unauthenticated": "Splash \u2192 Login \u2192 RegistrationScreen",
+      "authenticated": "Splash \u2192 HomeScreen",
+      "home_tabs": [
+        {
+          "index": 0,
+          "label": "Nyumbani",
+          "screen": "FeedScreen",
+          "stories": [
+            26,
+            27,
+            28,
+            29,
+            88,
+            51
+          ]
+        },
+        {
+          "index": 1,
+          "label": "Marafiki",
+          "screen": "FriendsScreen",
+          "stories": [
+            36,
+            34,
+            35,
+            37
+          ]
+        },
+        {
+          "index": 2,
+          "label": "Ujumbe",
+          "screen": "ConversationsScreen",
+          "stories": [
+            38,
+            39,
+            40,
+            59,
+            60
+          ]
+        },
+        {
+          "index": 3,
+          "label": "Picha",
+          "screen": "PhotosScreen",
+          "stories": [
+            33,
+            31,
+            32
+          ]
+        },
+        {
+          "index": 4,
+          "label": "Mimi",
+          "screen": "ProfileScreen",
+          "stories": [
+            10,
+            11,
+            12,
+            13,
+            14,
+            55,
+            56,
+            57,
+            61,
+            69,
+            77,
+            78,
+            79,
+            81,
+            87
+          ]
+        }
+      ],
+      "profile_menu": [
+        "Settings",
+        "Tajiri Pay",
+        "Simu",
+        "Logout"
+      ],
+      "create_post_entry": "Feed FAB or Profile FAB"
+    },
+    "required_story_references": [
+      "DOCS/DESIGN.md",
+      "DOCS/NAVIGATION.md"
+    ]
+  },
+  "epics": [
+    {
+      "id": "EPIC-001",
+      "name": "Authentication & Registration",
+      "module": "Auth"
+    },
+    {
+      "id": "EPIC-002",
+      "name": "User Profiles (Wasifu)",
+      "module": "Profiles"
+    },
+    {
+      "id": "EPIC-003",
+      "name": "Location & Reference Data",
+      "module": "Reference Data"
+    },
+    {
+      "id": "EPIC-004",
+      "name": "Posts & Feed",
+      "module": "Content"
+    },
+    {
+      "id": "EPIC-005",
+      "name": "Photos & Albums",
+      "module": "Content"
+    },
+    {
+      "id": "EPIC-006",
+      "name": "Friends & Connections",
+      "module": "Social"
+    },
+    {
+      "id": "EPIC-007",
+      "name": "Messaging",
+      "module": "Social"
+    },
+    {
+      "id": "EPIC-008",
+      "name": "Groups",
+      "module": "Communities"
+    },
+    {
+      "id": "EPIC-009",
+      "name": "Pages",
+      "module": "Communities"
+    },
+    {
+      "id": "EPIC-010",
+      "name": "Events",
+      "module": "Communities"
+    },
+    {
+      "id": "EPIC-011",
+      "name": "Polls",
+      "module": "Communities"
+    },
+    {
+      "id": "EPIC-012",
+      "name": "Stories",
+      "module": "Media"
+    },
+    {
+      "id": "EPIC-013",
+      "name": "Clips (Short Videos)",
+      "module": "Media"
+    },
+    {
+      "id": "EPIC-014",
+      "name": "Music",
+      "module": "Media"
+    },
+    {
+      "id": "EPIC-015",
+      "name": "Live Streaming",
+      "module": "Media"
+    },
+    {
+      "id": "EPIC-016",
+      "name": "Voice & Video Calls",
+      "module": "Communication"
+    },
+    {
+      "id": "EPIC-017",
+      "name": "Wallet (Tajiri Pay)",
+      "module": "Payments"
+    },
+    {
+      "id": "EPIC-018",
+      "name": "Subscriptions & Creator Monetization",
+      "module": "Payments"
+    },
+    {
+      "id": "EPIC-019",
+      "name": "Search & Discovery",
+      "module": "Discovery"
+    },
+    {
+      "id": "EPIC-020",
+      "name": "Settings & Preferences",
+      "module": "Settings"
+    },
+    {
+      "id": "EPIC-021",
+      "name": "UI Shell & Navigation",
+      "module": "UI Shell"
+    },
+    {
+      "id": "EPIC-022",
+      "name": "Michango (Campaigns/Fundraising)",
+      "module": "Fundraising"
+    }
+  ],
+  "stories": [
+    {
+      "id": 1,
+      "original_id": "STORY-001",
+      "title": "Phone-Based Registration",
+      "description": "As a new user, I want to register using my phone number so that I can create my Tajiri account without needing email",
+      "acceptance": [
+        "Display registration form with first name, last name, phone number, DOB, gender",
+        "Validate phone number uniqueness against user_profiles",
+        "POST /api/users/register creates UserProfile",
+        "Return success with user id and profile data",
+        "Flutter: RegistrationScreen with multi-step flow",
+        "Store registered user in Hive local storage",
+        "Validate required fields (first_name, last_name, phone_number)",
+        "Support Swahili and English labels"
+      ],
+      "priority": 1,
+      "estimate_hours": 6.0,
+      "module": "Auth",
+      "epic": "EPIC-001",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "Full-screen registration with stepped form",
+        "components": [
+          "Input fields",
+          "Primary CTA button"
+        ],
+        "tokens": "Primary blue #1E88E5",
+        "notes": "Low bandwidth - minimal assets",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "route": "/login",
+        "menu": "Entry point",
+        "flutter_screen": "RegistrationScreen",
+        "api_endpoint": "POST /api/users/register"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen (multi-step)",
+      "parent_story_id": null,
+      "social_media_reference": "WhatsApp/Telegram phone-first signup; Instagram multi-step onboarding",
+      "implementation_notes": "Phone as primary identifier (Africa pattern). Support offline-first: save locally, sync when online.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 2,
+      "original_id": "STORY-002",
+      "title": "Check Phone Availability",
+      "description": "As a user, I want to check if my phone number is available before registering",
+      "acceptance": [
+        "POST /api/users/check-phone validates uniqueness",
+        "Return available/unavailable status"
+      ],
+      "priority": 2,
+      "estimate_hours": 1.0,
+      "module": "Auth",
+      "epic": "EPIC-001",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/users/check-phone",
+        "menu": "PhoneStep (validation before submit)"
+      },
+      "navigation_path": "Embedded in RegistrationScreen \u2192 PhoneStep (validation before submit)",
+      "parent_story_id": 1,
+      "social_media_reference": "WhatsApp phone verification; Telegram number check",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 3,
+      "original_id": "STORY-003",
+      "title": "Splash Screen & Auth Gate",
+      "description": "As a user, I want a splash screen that directs me to registration or home based on auth state",
+      "acceptance": [
+        "SplashScreen checks Hive for stored user",
+        "Redirect to RegistrationScreen if no user",
+        "Redirect to HomeScreen if user exists",
+        "Smooth transition animation"
+      ],
+      "priority": 3,
+      "estimate_hours": 2.0,
+      "module": "UI Shell",
+      "epic": "EPIC-021",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "SplashScreen",
+        "menu": "SplashScreen (auto-redirect based on auth)"
+      },
+      "navigation_path": "App Launch \u2192 SplashScreen (auto-redirect based on auth)",
+      "parent_story_id": null,
+      "social_media_reference": "All apps: splash \u2192 home or login. Facebook/Instagram pattern.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 4,
+      "original_id": "STORY-004",
+      "title": "Location Hierarchy Selection",
+      "description": "As a user, I want to select my location from Tanzania hierarchy (Region > District > Ward > Street) during registration",
+      "acceptance": [
+        "GET /api/locations/regions returns regions",
+        "GET /api/locations/regions/{id}/districts",
+        "GET /api/locations/districts/{id}/wards",
+        "GET /api/locations/wards/{id}/streets",
+        "Flutter LocationPicker widget with cascading dropdowns",
+        "Store selection in registration payload"
+      ],
+      "priority": 4,
+      "estimate_hours": 4.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/locations/*",
+        "flutter_screen": "LocationPicker",
+        "menu": "LocationStep (Step 2)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 LocationStep (Step 2)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn location; Facebook signup location",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 5,
+      "original_id": "STORY-005",
+      "title": "Primary School Picker",
+      "description": "As a user, I want to select my primary school from the Tanzania database during registration",
+      "acceptance": [
+        "GET /api/schools/regions, districts, search",
+        "Flutter SchoolPicker with search and filters",
+        "16,000+ primary schools in database"
+      ],
+      "priority": 5,
+      "estimate_hours": 4.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/schools/*",
+        "menu": "PrimarySchoolStep (Step 3)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 PrimarySchoolStep (Step 3)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn education; Facebook school connection",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 6,
+      "original_id": "STORY-006",
+      "title": "Secondary School Picker",
+      "description": "As a user, I want to select my O-Level secondary school",
+      "acceptance": [
+        "GET /api/secondary-schools/* with 5,500+ schools",
+        "Search by region, district, name"
+      ],
+      "priority": 6,
+      "estimate_hours": 2.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/secondary-schools/*",
+        "menu": "SecondarySchoolStep (Step 4)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 SecondarySchoolStep (Step 4)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn education hierarchy",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 7,
+      "original_id": "STORY-007",
+      "title": "A-Level School & Combination Picker",
+      "description": "As a user, I want to select my A-Level school and combination (PCB, HGL, etc.)",
+      "acceptance": [
+        "GET /api/alevel-schools/* with 900+ schools",
+        "GET /api/alevel-schools/combinations",
+        "Select combination per school"
+      ],
+      "priority": 7,
+      "estimate_hours": 3.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/alevel-schools/*",
+        "menu": "AlevelStep (Step 5, conditional)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 AlevelStep (Step 5, conditional)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn education with optional paths",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 8,
+      "original_id": "STORY-008",
+      "title": "University & Programme Picker",
+      "description": "As a user, I want to select my university and programme",
+      "acceptance": [
+        "GET /api/universities-detailed/* with colleges, departments, programmes",
+        "50+ universities with full hierarchy"
+      ],
+      "priority": 8,
+      "estimate_hours": 4.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/universities-detailed/*",
+        "menu": "UniversityStep (Step 7)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 UniversityStep (Step 7)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn university + programme selection",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 9,
+      "original_id": "STORY-009",
+      "title": "Employer Picker (Business Database)",
+      "description": "As a user, I want to select my current employer from DSE/Parastatals/Corporates",
+      "acceptance": [
+        "GET /api/businesses/* with 750+ businesses",
+        "Search by sector, category, ownership"
+      ],
+      "priority": 9,
+      "estimate_hours": 2.0,
+      "module": "Reference Data",
+      "epic": "EPIC-003",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/businesses/*",
+        "menu": "EmployerStep (Step 8)"
+      },
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 EmployerStep (Step 8)",
+      "parent_story_id": 1,
+      "social_media_reference": "LinkedIn employer; Facebook workplace",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 10,
+      "original_id": "STORY-010",
+      "title": "View User Profile (Wasifu)",
+      "description": "As a user, I want to view my or another user's profile with full details",
+      "acceptance": [
+        "GET /api/users/{id} returns full profile",
+        "Display name, photo, cover, bio, education, employer",
+        "ProfileScreen with tabs for About, Posts, Photos",
+        "Links to WalletScreen, CallHistoryScreen, Settings"
+      ],
+      "priority": 10,
+      "estimate_hours": 6.0,
+      "module": "Profiles",
+      "epic": "EPIC-002",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "route": "/profile/{id}",
+        "flutter_screen": "ProfileScreen",
+        "api_endpoint": "GET /api/users/{id}",
+        "menu": "ProfileScreen"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav [Mimi] \u2192 ProfileScreen",
+      "parent_story_id": null,
+      "social_media_reference": "Facebook/Instagram/VK profile with cover, tabs, action menu",
+      "implementation_notes": "Profile is hub: tabs (posts, photos, videos, music, live, michango, groups), menu (Wallet, Calls, Settings). Like Instagram profile + VK depth.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 11,
+      "original_id": "STORY-011",
+      "title": "Update Profile",
+      "description": "As a user, I want to update my profile information",
+      "acceptance": [
+        "PUT /api/users/phone/{phone} updates profile",
+        "Flutter profile edit form",
+        "Sync to backend and local storage"
+      ],
+      "priority": 11,
+      "estimate_hours": 4.0,
+      "module": "Profiles",
+      "epic": "EPIC-002",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "PUT /api/users/phone/{phone}",
+        "menu": "Edit form"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 \u22ee menu or Edit profile \u2192 Edit form",
+      "parent_story_id": 10,
+      "social_media_reference": "Instagram Edit Profile; Facebook About",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 12,
+      "original_id": "STORY-012",
+      "title": "Profile Photo Upload",
+      "description": "As a user, I want to upload and update my profile photo",
+      "acceptance": [
+        "POST /api/users/{id}/profile-photo uploads image",
+        "Circular crop display",
+        "Update in profile and across app"
+      ],
+      "priority": 12,
+      "estimate_hours": 3.0,
+      "module": "Profiles",
+      "epic": "EPIC-002",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/users/{id}/profile-photo",
+        "menu": "Image picker"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Tap profile photo (own) \u2192 Image picker",
+      "parent_story_id": 10,
+      "social_media_reference": "Instagram/Facebook: tap avatar to change",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 13,
+      "original_id": "STORY-013",
+      "title": "Cover Photo Upload",
+      "description": "As a user, I want to upload a cover photo for my profile",
+      "acceptance": [
+        "POST /api/users/{id}/cover-photo",
+        "Banner display at profile top"
+      ],
+      "priority": 13,
+      "estimate_hours": 2.0,
+      "module": "Profiles",
+      "epic": "EPIC-002",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/users/{id}/cover-photo",
+        "menu": "Image picker"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Tap cover edit icon (camera) \u2192 Image picker",
+      "parent_story_id": 10,
+      "social_media_reference": "Facebook cover photo; LinkedIn banner",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 14,
+      "original_id": "STORY-014",
+      "title": "Username (@handle) Management",
+      "description": "As a user, I want a unique @username for my profile",
+      "acceptance": [
+        "PUT /api/users/{id}/username updates handle",
+        "Validate uniqueness",
+        "Display @username in profile and posts"
+      ],
+      "priority": 14,
+      "estimate_hours": 2.0,
+      "module": "Profiles",
+      "epic": "EPIC-002",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "PUT /api/users/{id}/username",
+        "menu": "Username field"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Settings \u2192 Username field",
+      "parent_story_id": 10,
+      "social_media_reference": "Instagram @handle; Twitter username",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 15,
+      "original_id": "STORY-015",
+      "title": "Create Post (Text)",
+      "description": "As a user, I want to create a text post on my wall",
+      "acceptance": [
+        "POST /api/posts with content, post_type=text",
+        "Flutter CreateTextPostScreen",
+        "Support background colors for text posts"
+      ],
+      "priority": 15,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "route": "/create-post",
+        "api_endpoint": "POST /api/posts",
+        "flutter_screen": "CreateTextPostScreen",
+        "menu": "Text option"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 FAB (+) \u2192 CreatePostScreen \u2192 Text option",
+      "parent_story_id": 26,
+      "social_media_reference": "Facebook/Twitter text post; Instagram caption",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 16,
+      "original_id": "STORY-016",
+      "title": "Create Post (Photo)",
+      "description": "As a user, I want to create a photo post",
+      "acceptance": [
+        "POST /api/posts with post_type=photo and media",
+        "Image picker, multi-select up to 10",
+        "CreateImagePostScreen"
+      ],
+      "priority": 16,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "CreateImagePostScreen",
+        "api_endpoint": "POST /api/posts",
+        "menu": "Photo option"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 FAB (+) \u2192 CreatePostScreen \u2192 Photo option",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram photo post; Facebook photo",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 17,
+      "original_id": "STORY-017",
+      "title": "Create Post (Audio)",
+      "description": "As a user, I want to create an audio post",
+      "acceptance": [
+        "POST /api/posts with audio_path, audio_duration",
+        "CreateAudioPostScreen with waveform"
+      ],
+      "priority": 17,
+      "estimate_hours": 5.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "CreateAudioPostScreen",
+        "menu": "Audio option"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 FAB (+) \u2192 CreatePostScreen \u2192 Audio option",
+      "parent_story_id": 26,
+      "social_media_reference": "Twitter voice tweet; Instagram Reels audio",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 18,
+      "original_id": "STORY-018",
+      "title": "Create Short Video Post",
+      "description": "As a user, I want to create a short-form video post",
+      "acceptance": [
+        "POST /api/posts with is_short_video=true",
+        "Video upload with cover, music overlay",
+        "CreateShortVideoScreen"
+      ],
+      "priority": 18,
+      "estimate_hours": 6.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "CreateShortVideoScreen",
+        "menu": "Short Video option"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 FAB (+) \u2192 CreatePostScreen \u2192 Short Video option",
+      "parent_story_id": 26,
+      "social_media_reference": "TikTok/Reels vertical short video",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 19,
+      "original_id": "STORY-019",
+      "title": "View Post",
+      "description": "As a user, I want to view a single post with full details",
+      "acceptance": [
+        "GET /api/posts/{id} returns post with user, media",
+        "PostCard widget displays content, likes, comments"
+      ],
+      "priority": 19,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/posts/{id}",
+        "menu": "Post detail / expand"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Tap post card \u2192 Post detail / expand",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram/Facebook tap to view full post",
+      "implementation_notes": "Full post view: expand media, show all comments, like/comment/share actions. Auto-play video when in view (like TikTok). Lazy-load comments.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 20,
+      "original_id": "STORY-020",
+      "title": "Edit Post",
+      "description": "As a user, I want to edit my post within a time limit",
+      "acceptance": [
+        "PUT /api/posts/{id} updates content",
+        "EditPostScreen",
+        "Show edited indicator"
+      ],
+      "priority": 20,
+      "estimate_hours": 2.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "EditPostScreen",
+        "api_endpoint": "PUT /api/posts/{id}",
+        "menu": "Edit"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 \u22ee menu \u2192 Edit",
+      "parent_story_id": 19,
+      "social_media_reference": "Facebook/Twitter edit within time window",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 21,
+      "original_id": "STORY-021",
+      "title": "Delete Post",
+      "description": "As a user, I want to delete my post",
+      "acceptance": [
+        "DELETE /api/posts/{id} soft-deletes",
+        "Confirm before delete",
+        "Remove from feed"
+      ],
+      "priority": 21,
+      "estimate_hours": 1.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "DELETE /api/posts/{id}",
+        "menu": "Delete"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 \u22ee menu \u2192 Delete",
+      "parent_story_id": 19,
+      "social_media_reference": "All apps: delete with confirmation",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 22,
+      "original_id": "STORY-022",
+      "title": "Like/Unlike Post",
+      "description": "As a user, I want to like or unlike a post",
+      "acceptance": [
+        "POST /api/posts/{id}/like",
+        "DELETE /api/posts/{id}/like",
+        "Update likes_count",
+        "Show reaction on PostCard"
+      ],
+      "priority": 22,
+      "estimate_hours": 2.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|DELETE /api/posts/{id}/like",
+        "menu": "Heart/Like button"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 Heart/Like button",
+      "parent_story_id": 19,
+      "social_media_reference": "Instagram/Facebook like; Twitter like",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 23,
+      "original_id": "STORY-023",
+      "title": "Comment on Post",
+      "description": "As a user, I want to comment on a post",
+      "acceptance": [
+        "POST /api/posts/{id}/comments",
+        "GET /api/posts/{id}/comments",
+        "Threaded replies support",
+        "Comment bottom sheet in Flutter"
+      ],
+      "priority": 23,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|GET /api/posts/{id}/comments",
+        "menu": "Comment sheet"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 Comment icon \u2192 Comment sheet",
+      "parent_story_id": 19,
+      "social_media_reference": "Instagram/Facebook threaded comments",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 24,
+      "original_id": "STORY-024",
+      "title": "Share/Repost",
+      "description": "As a user, I want to share a post to my wall",
+      "acceptance": [
+        "POST /api/posts/{id}/share creates shared post",
+        "original_post_id linkage",
+        "Display as shared post in feed"
+      ],
+      "priority": 24,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/posts/{id}/share",
+        "menu": "Share to wall"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 Share icon \u2192 Share to wall",
+      "parent_story_id": 19,
+      "social_media_reference": "Facebook share; Twitter retweet; Instagram repost",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 25,
+      "original_id": "STORY-025",
+      "title": "Save/Bookmark Post",
+      "description": "As a user, I want to save posts for later",
+      "acceptance": [
+        "POST /api/posts/{id}/save",
+        "DELETE /api/posts/{id}/save",
+        "GET /api/posts/saved"
+      ],
+      "priority": 25,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|DELETE /api/posts/{id}/save",
+        "menu": "Saved"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Post \u2192 Bookmark icon \u2192 Saved",
+      "parent_story_id": 19,
+      "social_media_reference": "Instagram Saved; Facebook Save post",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 26,
+      "original_id": "STORY-026",
+      "title": "For You Feed",
+      "description": "As a user, I want an algorithm-curated For You feed",
+      "acceptance": [
+        "GET /api/posts/feed/for-you returns personalized posts",
+        "Engagement-based ranking",
+        "Infinite scroll pagination"
+      ],
+      "priority": 26,
+      "estimate_hours": 8.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/posts/feed/for-you",
+        "flutter_screen": "FeedScreen",
+        "menu": "FeedScreen (tab 0)"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav [Nyumbani] \u2192 FeedScreen (tab 0)",
+      "parent_story_id": null,
+      "social_media_reference": "Facebook News Feed; Instagram Home; TikTok For You",
+      "implementation_notes": "Feed tabs: Friends, Discover, Live. Infinite scroll, pull-to-refresh. FAB for Create Post.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 27,
+      "original_id": "STORY-027",
+      "title": "Following Feed",
+      "description": "As a user, I want to see posts from people I follow",
+      "acceptance": [
+        "GET /api/posts/feed/following",
+        "Chronological order"
+      ],
+      "priority": 27,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/posts/feed/following",
+        "menu": "Tab [Marafiki/Friends]"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Tab [Marafiki/Friends]",
+      "parent_story_id": 26,
+      "social_media_reference": "Facebook Friends feed; LinkedIn network feed",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 28,
+      "original_id": "STORY-028",
+      "title": "Shorts Feed",
+      "description": "As a user, I want a vertical shorts feed (TikTok-style)",
+      "acceptance": [
+        "GET /api/posts/feed/shorts",
+        "Full-screen vertical video swipe",
+        "ShortsVideoFeed widget"
+      ],
+      "priority": 28,
+      "estimate_hours": 6.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/posts/feed/shorts",
+        "flutter_screen": "ShortsVideoFeed",
+        "menu": "Tab [Shorts] or vertical swipe feed"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Tab [Shorts] or vertical swipe feed",
+      "parent_story_id": 26,
+      "social_media_reference": "TikTok/Reels/YouTube Shorts full-screen swipe",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 29,
+      "original_id": "STORY-029",
+      "title": "Discover Feed",
+      "description": "As a user, I want to discover trending and recommended content",
+      "acceptance": [
+        "GET /api/feed/discover",
+        "GET /api/feed/trending",
+        "GET /api/feed/nearby"
+      ],
+      "priority": 29,
+      "estimate_hours": 5.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/feed/*",
+        "menu": "Tab [Discover]"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Tab [Discover]",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram Explore; TikTok Discover",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 30,
+      "original_id": "STORY-030",
+      "title": "Post Drafts",
+      "description": "As a user, I want to save posts as drafts",
+      "acceptance": [
+        "POST /api/drafts",
+        "GET /api/drafts",
+        "POST /api/drafts/{id}/publish",
+        "DraftService in Flutter"
+      ],
+      "priority": 30,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET|POST /api/drafts/*",
+        "menu": "Save as draft"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 FAB \u2192 Create Post \u2192 Save as draft",
+      "parent_story_id": 15,
+      "social_media_reference": "Twitter drafts; Instagram draft posts",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 31,
+      "original_id": "STORY-031",
+      "title": "Upload Photo",
+      "description": "As a user, I want to upload photos to my albums",
+      "acceptance": [
+        "POST /api/photos",
+        "Image picker with multi-select",
+        "Assign to album or create new"
+      ],
+      "priority": 31,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-005",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/photos",
+        "flutter_screen": "PhotosScreen",
+        "menu": "Upload"
+      },
+      "navigation_path": "Home \u2192 Bottom Nav [Picha] \u2192 PhotosScreen \u2192 Upload",
+      "parent_story_id": 33,
+      "social_media_reference": "Instagram photo upload; Google Photos",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 32,
+      "original_id": "STORY-032",
+      "title": "Create & Manage Albums",
+      "description": "As a user, I want to create and manage photo albums",
+      "acceptance": [
+        "POST /api/albums",
+        "GET /api/albums",
+        "PUT /api/albums/{id}",
+        "DELETE /api/albums/{id}",
+        "Privacy per album"
+      ],
+      "priority": 32,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-005",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET|POST|PUT|DELETE /api/albums/*",
+        "menu": "Create album / Manage albums"
+      },
+      "navigation_path": "Home \u2192 Photos \u2192 Create album / Manage albums",
+      "parent_story_id": 33,
+      "social_media_reference": "Facebook Albums; Google Photos albums",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 33,
+      "original_id": "STORY-033",
+      "title": "View Photo Gallery",
+      "description": "As a user, I want to view my photos and albums in a gallery",
+      "acceptance": [
+        "PhotosScreen with grid view",
+        "AlbumScreen with photos",
+        "PhotoViewerScreen for full view",
+        "PhotoGalleryWidget with Pinterest-style staggered grid on profile tab"
+      ],
+      "priority": 33,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-005",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "PhotosScreen",
+        "menu": "Picha tab"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav [Picha] \u2192 PhotosScreen",
+      "parent_story_id": null,
+      "social_media_reference": "Instagram grid; Pinterest staggered; Facebook photos",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 34,
+      "original_id": "STORY-034",
+      "title": "Send Friend Request",
+      "description": "As a user, I want to send friend requests",
+      "acceptance": [
+        "POST /api/friends/request",
+        "Friend status: pending, accepted, declined"
+      ],
+      "priority": 34,
+      "estimate_hours": 3.0,
+      "module": "Social",
+      "epic": "EPIC-006",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/friends/request",
+        "menu": "Add Friend button"
+      },
+      "navigation_path": "Home \u2192 Profile (other user) \u2192 Add Friend button",
+      "parent_story_id": 36,
+      "social_media_reference": "Facebook Add Friend; LinkedIn Connect",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 35,
+      "original_id": "STORY-035",
+      "title": "Accept/Decline Friend Request",
+      "description": "As a user, I want to accept or decline friend requests",
+      "acceptance": [
+        "POST /api/friends/accept/{id}",
+        "POST /api/friends/decline/{id}",
+        "GET /api/friends/requests"
+      ],
+      "priority": 35,
+      "estimate_hours": 3.0,
+      "module": "Social",
+      "epic": "EPIC-006",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/friends/accept|decline",
+        "menu": "Requests tab / Notification"
+      },
+      "navigation_path": "Home \u2192 Bottom Nav [Marafiki] \u2192 Requests tab / Notification",
+      "parent_story_id": 36,
+      "social_media_reference": "Facebook friend requests; LinkedIn connection requests",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 36,
+      "original_id": "STORY-036",
+      "title": "Friends List",
+      "description": "As a user, I want to view my friends list",
+      "acceptance": [
+        "GET /api/friends",
+        "FriendsScreen with list",
+        "Remove friend option"
+      ],
+      "priority": 36,
+      "estimate_hours": 4.0,
+      "module": "Social",
+      "epic": "EPIC-006",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "FriendsScreen",
+        "menu": "Marafiki tab",
+        "api_endpoint": "GET /api/friends"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav [Marafiki] \u2192 FriendsScreen",
+      "parent_story_id": null,
+      "social_media_reference": "Facebook Friends list; Instagram Following",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 37,
+      "original_id": "STORY-037",
+      "title": "Friend Suggestions",
+      "description": "As a user, I want friend suggestions based on mutual friends, school, location",
+      "acceptance": [
+        "GET /api/friends/suggestions",
+        "Display suggestion cards with Add button"
+      ],
+      "priority": 37,
+      "estimate_hours": 4.0,
+      "module": "Social",
+      "epic": "EPIC-006",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/friends/suggestions",
+        "menu": "Suggestions section"
+      },
+      "navigation_path": "Home \u2192 Friends \u2192 Suggestions section",
+      "parent_story_id": 36,
+      "social_media_reference": "Facebook People You May Know; LinkedIn suggestions",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 38,
+      "original_id": "STORY-038",
+      "title": "Conversations List",
+      "description": "As a user, I want to see my conversations with last message preview",
+      "acceptance": [
+        "GET /api/conversations",
+        "ConversationsScreen",
+        "Unread badge count",
+        "Order by last_message_at"
+      ],
+      "priority": 38,
+      "estimate_hours": 4.0,
+      "module": "Social",
+      "epic": "EPIC-007",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "ConversationsScreen",
+        "menu": "Ujumbe tab",
+        "api_endpoint": "GET /api/conversations"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav [Ujumbe] \u2192 ConversationsScreen",
+      "parent_story_id": null,
+      "social_media_reference": "WhatsApp/Instagram DMs; Facebook Messenger list",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 39,
+      "original_id": "STORY-039",
+      "title": "Private Chat",
+      "description": "As a user, I want to chat privately with a friend",
+      "acceptance": [
+        "GET /api/conversations/private/{userId}",
+        "POST /api/conversations/{id}/messages",
+        "ChatScreen with message bubbles"
+      ],
+      "priority": 39,
+      "estimate_hours": 6.0,
+      "module": "Social",
+      "epic": "EPIC-007",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "route": "/chat/{id}",
+        "flutter_screen": "ChatScreen",
+        "api_endpoint": "GET|POST /api/conversations/*/messages",
+        "menu": "ChatScreen"
+      },
+      "navigation_path": "Home \u2192 Messages \u2192 Tap conversation \u2192 ChatScreen",
+      "parent_story_id": 38,
+      "social_media_reference": "WhatsApp chat; Messenger chat bubbles",
+      "implementation_notes": "Bubbles: sender right (blue), receiver left (gray). Show read receipts, timestamps. Support text, image, video, voice. Optimize for low bandwidth: compress images, lazy-load media.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 40,
+      "original_id": "STORY-040",
+      "title": "Typing Indicator",
+      "description": "As a user, I want to see when someone is typing",
+      "acceptance": [
+        "POST /api/conversations/{id}/typing/start",
+        "POST /api/conversations/{id}/typing/stop",
+        "Display typing indicator in chat"
+      ],
+      "priority": 40,
+      "estimate_hours": 3.0,
+      "module": "Social",
+      "epic": "EPIC-007",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/conversations/*/typing/*",
+        "menu": "Typing indicator (automatic)"
+      },
+      "navigation_path": "Home \u2192 Messages \u2192 Chat \u2192 Typing indicator (automatic)",
+      "parent_story_id": 39,
+      "social_media_reference": "WhatsApp \"typing...\"; Messenger typing indicator",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 41,
+      "original_id": "STORY-041",
+      "title": "Create Group",
+      "description": "As a user, I want to create a group",
+      "acceptance": [
+        "POST /api/groups",
+        "Name, description, privacy (public/private/secret)",
+        "CreateGroupScreen"
+      ],
+      "priority": 41,
+      "estimate_hours": 5.0,
+      "module": "Communities",
+      "epic": "EPIC-008",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/groups",
+        "flutter_screen": "CreateGroupScreen",
+        "menu": "Create"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Groups tab OR Groups discover \u2192 Create",
+      "parent_story_id": 91,
+      "social_media_reference": "Facebook Create Group; WhatsApp New Group",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 42,
+      "original_id": "STORY-042",
+      "title": "Join/Leave Group",
+      "description": "As a user, I want to join or leave groups",
+      "acceptance": [
+        "POST /api/groups/{id}/join",
+        "POST /api/groups/{id}/leave",
+        "Approval flow for private groups"
+      ],
+      "priority": 42,
+      "estimate_hours": 4.0,
+      "module": "Communities",
+      "epic": "EPIC-008",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/groups/*/join|leave",
+        "menu": "Join/Leave"
+      },
+      "navigation_path": "Home \u2192 Groups \u2192 Tap group \u2192 Join/Leave",
+      "parent_story_id": 91,
+      "social_media_reference": "Facebook group join; LinkedIn group",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 43,
+      "original_id": "STORY-043",
+      "title": "Group Posts",
+      "description": "As a user, I want to post in groups",
+      "acceptance": [
+        "GET /api/groups/{id}/posts",
+        "POST /api/groups/{id}/posts",
+        "GroupDetailScreen with posts"
+      ],
+      "priority": 43,
+      "estimate_hours": 4.0,
+      "module": "Communities",
+      "epic": "EPIC-008",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET|POST /api/groups/*/posts",
+        "menu": "Posts tab"
+      },
+      "navigation_path": "Home \u2192 Groups \u2192 Group detail \u2192 Posts tab",
+      "parent_story_id": 91,
+      "social_media_reference": "Facebook group feed; Discord channel",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 44,
+      "original_id": "STORY-044",
+      "title": "Create Page",
+      "description": "As a user/business, I want to create a Page",
+      "acceptance": [
+        "POST /api/pages",
+        "Name, category, description",
+        "CreatePageScreen"
+      ],
+      "priority": 44,
+      "estimate_hours": 5.0,
+      "module": "Communities",
+      "epic": "EPIC-009",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/pages",
+        "flutter_screen": "CreatePageScreen",
+        "menu": "Create Page flow"
+      },
+      "navigation_path": "Discover/Profile \u2192 Create Page flow",
+      "parent_story_id": 10,
+      "social_media_reference": "Facebook Create Page; LinkedIn Company Page",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 45,
+      "original_id": "STORY-045",
+      "title": "Follow/Like Page",
+      "description": "As a user, I want to follow or like a Page",
+      "acceptance": [
+        "POST /api/pages/{id}/follow",
+        "DELETE /api/pages/{id}/follow",
+        "POST /api/pages/{id}/like"
+      ],
+      "priority": 45,
+      "estimate_hours": 3.0,
+      "module": "Communities",
+      "epic": "EPIC-009",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|DELETE /api/pages/*/follow|like",
+        "menu": "Follow/Like button"
+      },
+      "navigation_path": "Page detail \u2192 Follow/Like button",
+      "parent_story_id": 44,
+      "social_media_reference": "Facebook Like Page; Instagram Follow",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 46,
+      "original_id": "STORY-046",
+      "title": "Create Event",
+      "description": "As a user, I want to create an event",
+      "acceptance": [
+        "POST /api/events",
+        "Title, date, location, description",
+        "CreateEventScreen"
+      ],
+      "priority": 46,
+      "estimate_hours": 5.0,
+      "module": "Communities",
+      "epic": "EPIC-010",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/events",
+        "flutter_screen": "CreateEventScreen",
+        "menu": "Create"
+      },
+      "navigation_path": "Home \u2192 Events discover OR Profile \u2192 Events \u2192 Create",
+      "parent_story_id": 90,
+      "social_media_reference": "Facebook Create Event; Eventbrite",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 47,
+      "original_id": "STORY-047",
+      "title": "Event RSVP",
+      "description": "As a user, I want to RSVP to events",
+      "acceptance": [
+        "POST /api/events/{id}/respond",
+        "Going/Interested/Not Going",
+        "View attendees"
+      ],
+      "priority": 47,
+      "estimate_hours": 3.0,
+      "module": "Communities",
+      "epic": "EPIC-010",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/events/*/respond",
+        "menu": "Going/Interested/Not Going"
+      },
+      "navigation_path": "Event detail \u2192 Going/Interested/Not Going",
+      "parent_story_id": 90,
+      "social_media_reference": "Facebook event RSVP; Meetup RSVP",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 48,
+      "original_id": "STORY-048",
+      "title": "Create Poll",
+      "description": "As a user, I want to create a poll",
+      "acceptance": [
+        "POST /api/polls",
+        "Question, options, end date",
+        "CreatePollScreen"
+      ],
+      "priority": 48,
+      "estimate_hours": 5.0,
+      "module": "Communities",
+      "epic": "EPIC-011",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/polls",
+        "flutter_screen": "CreatePollScreen",
+        "menu": "Poll option"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Create Post \u2192 Poll option",
+      "parent_story_id": 15,
+      "social_media_reference": "Instagram poll in Stories; Twitter polls",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 49,
+      "original_id": "STORY-049",
+      "title": "Vote on Poll",
+      "description": "As a user, I want to vote on a poll",
+      "acceptance": [
+        "POST /api/polls/{id}/vote",
+        "DELETE /api/polls/{id}/vote",
+        "Show results after voting"
+      ],
+      "priority": 49,
+      "estimate_hours": 3.0,
+      "module": "Communities",
+      "epic": "EPIC-011",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|DELETE /api/polls/*/vote",
+        "menu": "Vote"
+      },
+      "navigation_path": "Poll post/card \u2192 Tap option \u2192 Vote",
+      "parent_story_id": 48,
+      "social_media_reference": "Instagram poll vote; Strawpoll",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 50,
+      "original_id": "STORY-050",
+      "title": "Create Story",
+      "description": "As a user, I want to create a 24-hour story",
+      "acceptance": [
+        "POST /api/stories",
+        "Photo or video (up to 60s)",
+        "CreateStoryScreen with stickers, filters"
+      ],
+      "priority": 50,
+      "estimate_hours": 6.0,
+      "module": "Media",
+      "epic": "EPIC-012",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/stories",
+        "flutter_screen": "CreateStoryScreen",
+        "menu": "Create Story"
+      },
+      "navigation_path": "Home \u2192 Feed/Profile \u2192 Stories ring \u2192 Create Story",
+      "parent_story_id": 51,
+      "social_media_reference": "Instagram Stories; Snapchat; WhatsApp Status",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 51,
+      "original_id": "STORY-051",
+      "title": "View Stories",
+      "description": "As a user, I want to view friends' stories",
+      "acceptance": [
+        "GET /api/stories",
+        "StoryViewerScreen with tap-to-advance",
+        "Track views"
+      ],
+      "priority": 51,
+      "estimate_hours": 5.0,
+      "module": "Media",
+      "epic": "EPIC-012",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "StoryViewerScreen",
+        "api_endpoint": "GET /api/stories",
+        "menu": "Tap to view"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Stories row (top) \u2192 Tap to view",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram Stories tap-through; Snapchat Stories",
+      "implementation_notes": "Tap right=next, left=previous. Auto-advance after ~5s. Progress bar at top. Swipe down to exit. View count for own stories. 24h expiry.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 52,
+      "original_id": "STORY-052",
+      "title": "Story Highlights",
+      "description": "As a user, I want to save stories to profile highlights",
+      "acceptance": [
+        "POST /api/stories/highlights",
+        "GET /api/stories/highlights/{userId}",
+        "Permanent highlight albums"
+      ],
+      "priority": 52,
+      "estimate_hours": 4.0,
+      "module": "Media",
+      "epic": "EPIC-012",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|GET /api/stories/highlights",
+        "menu": "Add to highlight"
+      },
+      "navigation_path": "Profile \u2192 Story highlight \u2192 Add to highlight",
+      "parent_story_id": 51,
+      "social_media_reference": "Instagram Highlights; permanent profile collections",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 53,
+      "original_id": "STORY-053",
+      "title": "Create Clip",
+      "description": "As a user, I want to create a short-form clip",
+      "acceptance": [
+        "POST /api/clips",
+        "Vertical video up to 60s",
+        "Music overlay, filters",
+        "CreateClipScreen",
+        "UploadVideoScreen for video picker/upload"
+      ],
+      "priority": 53,
+      "estimate_hours": 8.0,
+      "module": "Media",
+      "epic": "EPIC-013",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/clips",
+        "flutter_screen": "CreateClipScreen",
+        "menu": "Create"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Videos tab \u2192 Upload OR Clips discover \u2192 Create",
+      "parent_story_id": 54,
+      "social_media_reference": "TikTok create; Instagram Reels create",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 54,
+      "original_id": "STORY-054",
+      "title": "Clips Feed & Player",
+      "description": "As a user, I want to browse and watch clips",
+      "acceptance": [
+        "GET /api/clips",
+        "GET /api/clips/trending",
+        "ClipPlayerScreen with vertical swipe"
+      ],
+      "priority": 54,
+      "estimate_hours": 6.0,
+      "module": "Media",
+      "epic": "EPIC-013",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "ClipsScreen",
+        "api_endpoint": "GET /api/clips/*",
+        "menu": "Vertical swipe"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Shorts tab OR ClipsScreen \u2192 Vertical swipe",
+      "parent_story_id": 26,
+      "social_media_reference": "TikTok feed; Instagram Reels; YouTube Shorts",
+      "implementation_notes": "Full-screen vertical. Swipe up/down for next/prev. Auto-play with sound (mute toggle). Like, comment, share overlays. Infinite scroll. Preload next 2 videos.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 55,
+      "original_id": "STORY-055",
+      "title": "Music Library",
+      "description": "As a user, I want to browse and play music",
+      "acceptance": [
+        "GET /api/music",
+        "GET /api/music/trending",
+        "MusicScreen, MusicPlayerSheet",
+        "Background playback"
+      ],
+      "priority": 55,
+      "estimate_hours": 8.0,
+      "module": "Media",
+      "epic": "EPIC-014",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "MusicScreen",
+        "api_endpoint": "GET /api/music/*",
+        "menu": "Library link OR direct MusicScreen"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Music tab \u2192 Library link OR direct MusicScreen",
+      "parent_story_id": 10,
+      "social_media_reference": "Spotify library; Instagram music in Reels",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 56,
+      "original_id": "STORY-056",
+      "title": "Upload Music",
+      "description": "As a creator, I want to upload music tracks",
+      "acceptance": [
+        "POST /api/music/extract-metadata",
+        "POST /api/music/finalize-upload",
+        "Chunked upload for large files",
+        "MusicUploadScreen"
+      ],
+      "priority": 56,
+      "estimate_hours": 6.0,
+      "module": "Media",
+      "epic": "EPIC-014",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/music/*",
+        "flutter_screen": "MusicUploadScreen",
+        "menu": "MusicUploadScreen"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Music tab \u2192 Upload button \u2192 MusicUploadScreen",
+      "parent_story_id": 55,
+      "social_media_reference": "SoundCloud upload; Spotify for Artists",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 57,
+      "original_id": "STORY-057",
+      "title": "Go Live",
+      "description": "As a creator, I want to start a live stream",
+      "acceptance": [
+        "POST /api/streams",
+        "POST /api/streams/{id}/start",
+        "GoLiveScreen, BackstageScreen",
+        "RTMP/camera streaming",
+        "StandbyScreen"
+      ],
+      "priority": 57,
+      "estimate_hours": 12.0,
+      "module": "Media",
+      "epic": "EPIC-015",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/streams/*",
+        "flutter_screen": "GoLiveScreen",
+        "menu": "Go Live"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Live tab \u2192 Go Live OR Feed Live tab \u2192 Go Live",
+      "parent_story_id": 58,
+      "social_media_reference": "Instagram Live; TikTok Live; Facebook Live",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 58,
+      "original_id": "STORY-058",
+      "title": "Watch Live Stream",
+      "description": "As a user, I want to watch live streams",
+      "acceptance": [
+        "GET /api/streams",
+        "StreamViewerScreen",
+        "Live chat, like, gifts",
+        "POST /api/streams/{id}/join"
+      ],
+      "priority": 58,
+      "estimate_hours": 8.0,
+      "module": "Media",
+      "epic": "EPIC-015",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "StreamViewerScreen",
+        "api_endpoint": "GET /api/streams",
+        "menu": "Tap"
+      },
+      "navigation_path": "Home \u2192 Feed \u2192 Live tab \u2192 Tap stream OR Profile \u2192 Live tab \u2192 Tap",
+      "parent_story_id": 26,
+      "social_media_reference": "Twitch viewer; Instagram Live viewer",
+      "implementation_notes": "Full-screen video, overlay chat, like/hearts, gifts. Adaptive bitrate for 2G/3G. Show viewer count. Tap to focus. Exit confirmation.",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 59,
+      "original_id": "STORY-059",
+      "title": "Initiate Voice/Video Call",
+      "description": "As a user, I want to call a friend",
+      "acceptance": [
+        "POST /api/calls",
+        "Voice or video mode",
+        "CallScreen with answer/decline"
+      ],
+      "priority": 59,
+      "estimate_hours": 10.0,
+      "module": "Communication",
+      "epic": "EPIC-016",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/calls",
+        "menu": "Call"
+      },
+      "navigation_path": "Home \u2192 Messages \u2192 Chat \u2192 Call icon OR Profile \u2192 Call",
+      "parent_story_id": 39,
+      "social_media_reference": "WhatsApp voice/video call; Messenger call",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 60,
+      "original_id": "STORY-060",
+      "title": "Group Call",
+      "description": "As a user, I want to join group voice/video calls",
+      "acceptance": [
+        "POST /api/calls/group",
+        "Join, leave, mute, toggle video",
+        "Group call UI"
+      ],
+      "priority": 60,
+      "estimate_hours": 12.0,
+      "module": "Communication",
+      "epic": "EPIC-016",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/calls/group/*",
+        "menu": "Group call"
+      },
+      "navigation_path": "Home \u2192 Messages \u2192 Group chat \u2192 Group call",
+      "parent_story_id": 39,
+      "social_media_reference": "Zoom/Meet; WhatsApp group call",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 61,
+      "original_id": "STORY-061",
+      "title": "Wallet Balance & Transactions",
+      "description": "As a user, I want to view my wallet balance and transaction history",
+      "acceptance": [
+        "GET /api/wallet/{userId}",
+        "GET /api/wallet/{userId}/transactions",
+        "WalletScreen"
+      ],
+      "priority": 61,
+      "estimate_hours": 5.0,
+      "module": "Payments",
+      "epic": "EPIC-017",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "WalletScreen",
+        "api_endpoint": "GET /api/wallet/*",
+        "menu": "WalletScreen"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 \u22ee menu \u2192 Tajiri Pay \u2192 WalletScreen",
+      "parent_story_id": 10,
+      "social_media_reference": "Venmo balance; PayPal wallet; M-Pesa",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 62,
+      "original_id": "STORY-062",
+      "title": "Deposit/Withdraw",
+      "description": "As a user, I want to deposit and withdraw via mobile money",
+      "acceptance": [
+        "POST /api/wallet/{userId}/deposit",
+        "POST /api/wallet/{userId}/withdraw",
+        "M-Pesa, Tigo Pesa, Airtel Money integration (ClickPesa)"
+      ],
+      "priority": 62,
+      "estimate_hours": 12.0,
+      "module": "Payments",
+      "epic": "EPIC-017",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/wallet/*/deposit|withdraw",
+        "menu": "Deposit/Withdraw"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Wallet \u2192 Deposit/Withdraw",
+      "parent_story_id": 61,
+      "social_media_reference": "M-Pesa deposit; PayPal add money",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 63,
+      "original_id": "STORY-063",
+      "title": "P2P Transfer",
+      "description": "As a user, I want to transfer money to another user",
+      "acceptance": [
+        "POST /api/wallet/{userId}/transfer",
+        "Recipient by phone or user ID",
+        "PIN verification"
+      ],
+      "priority": 63,
+      "estimate_hours": 6.0,
+      "module": "Payments",
+      "epic": "EPIC-017",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/wallet/*/transfer",
+        "menu": "Transfer"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Wallet \u2192 Transfer",
+      "parent_story_id": 61,
+      "social_media_reference": "Venmo send; M-Pesa P2P",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 64,
+      "original_id": "STORY-064",
+      "title": "Creator Subscription Tiers",
+      "description": "As a creator, I want to create subscription tiers",
+      "acceptance": [
+        "POST /api/subscriptions/tiers",
+        "GET /api/subscriptions/tiers/{creatorId}",
+        "Pricing, benefits per tier"
+      ],
+      "priority": 64,
+      "estimate_hours": 6.0,
+      "module": "Payments",
+      "epic": "EPIC-018",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST|GET /api/subscriptions/tiers",
+        "menu": "Subscription tiers setup"
+      },
+      "navigation_path": "Creator profile \u2192 Subscription tiers setup",
+      "parent_story_id": 65,
+      "social_media_reference": "Patreon tiers; YouTube Memberships",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 65,
+      "original_id": "STORY-065",
+      "title": "Subscribe to Creator",
+      "description": "As a user, I want to subscribe to a creator",
+      "acceptance": [
+        "POST /api/subscriptions",
+        "Payment from wallet",
+        "Access to exclusive content"
+      ],
+      "priority": 65,
+      "estimate_hours": 6.0,
+      "module": "Payments",
+      "epic": "EPIC-018",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/subscriptions",
+        "menu": "Subscribe button"
+      },
+      "navigation_path": "Creator profile \u2192 Subscribe button",
+      "parent_story_id": 10,
+      "social_media_reference": "Patreon subscribe; OnlyFans",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 66,
+      "original_id": "STORY-066",
+      "title": "Send Tip",
+      "description": "As a user, I want to tip a creator",
+      "acceptance": [
+        "POST /api/subscriptions/tips",
+        "Optional message with tip"
+      ],
+      "priority": 66,
+      "estimate_hours": 4.0,
+      "module": "Payments",
+      "epic": "EPIC-018",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/subscriptions/tips",
+        "menu": "Tip button"
+      },
+      "navigation_path": "Live stream / Creator profile \u2192 Tip button",
+      "parent_story_id": 58,
+      "social_media_reference": "Twitch bits; YouTube Super Chat",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 67,
+      "original_id": "STORY-067",
+      "title": "User Search",
+      "description": "As a user, I want to search for users",
+      "acceptance": [
+        "GET /api/users/search",
+        "Search by name, username"
+      ],
+      "priority": 67,
+      "estimate_hours": 4.0,
+      "module": "Discovery",
+      "epic": "EPIC-019",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/users/search",
+        "menu": "Users tab"
+      },
+      "navigation_path": "Home \u2192 Search (global) \u2192 Users tab",
+      "parent_story_id": null,
+      "social_media_reference": "Instagram user search; Facebook search",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 68,
+      "original_id": "STORY-068",
+      "title": "Hashtag Search",
+      "description": "As a user, I want to search posts by hashtag",
+      "acceptance": [
+        "GET /api/hashtags/trending",
+        "GET /api/hashtags/search",
+        "GET /api/posts/hashtag/{tag}"
+      ],
+      "priority": 68,
+      "estimate_hours": 4.0,
+      "module": "Discovery",
+      "epic": "EPIC-019",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "GET /api/hashtags/*",
+        "flutter_screen": "HashtagScreen",
+        "menu": "Hashtags OR tap #hashtag in post"
+      },
+      "navigation_path": "Home \u2192 Search \u2192 Hashtags OR tap #hashtag in post",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram hashtag explore; Twitter hashtag",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 69,
+      "original_id": "STORY-069",
+      "title": "Settings Screen",
+      "description": "As a user, I want to access settings",
+      "acceptance": [
+        "SettingsScreen",
+        "Account, notifications, privacy, display",
+        "Theme toggle (Light/Dark)"
+      ],
+      "priority": 69,
+      "estimate_hours": 4.0,
+      "module": "Settings",
+      "epic": "EPIC-020",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "SettingsScreen",
+        "menu": "SettingsScreen"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 \u2699 Settings \u2192 SettingsScreen",
+      "parent_story_id": 10,
+      "social_media_reference": "Instagram Settings; Facebook Settings",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 70,
+      "original_id": "STORY-070",
+      "title": "Privacy Settings",
+      "description": "As a user, I want to control my privacy",
+      "acceptance": [
+        "Profile visibility",
+        "Who can message",
+        "Who can see posts",
+        "Last seen visibility"
+      ],
+      "priority": 70,
+      "estimate_hours": 5.0,
+      "module": "Settings",
+      "epic": "EPIC-020",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "ProfileTabsSettingsScreen",
+        "menu": "Profile Tabs / Privacy"
+      },
+      "navigation_path": "Home \u2192 Profile \u2192 Settings \u2192 Profile Tabs / Privacy",
+      "parent_story_id": 69,
+      "social_media_reference": "Facebook privacy settings; Instagram privacy",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 71,
+      "original_id": "STORY-071",
+      "title": "Bottom Navigation",
+      "description": "As a user, I want bottom nav with Nyumbani, Marafiki, Ujumbe, Picha, Mimi",
+      "acceptance": [
+        "HomeScreen with IndexedStack",
+        "5 tabs with Swahili labels",
+        "Unread badge on Ujumbe"
+      ],
+      "priority": 71,
+      "estimate_hours": 4.0,
+      "module": "UI Shell",
+      "epic": "EPIC-021",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "HomeScreen",
+        "menu": "Bottom Nav (5 tabs)"
+      },
+      "navigation_path": "Splash \u2192 Home \u2192 Bottom Nav (5 tabs)",
+      "parent_story_id": null,
+      "social_media_reference": "Instagram bottom nav; Facebook app tabs; TikTok nav",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 72,
+      "original_id": "STORY-072",
+      "title": "Resumable Chunked Uploads",
+      "description": "As a user, I want reliable uploads for large files (video, music) that can resume",
+      "acceptance": [
+        "POST /api/uploads/init",
+        "POST /api/uploads/{id}/chunk",
+        "POST /api/uploads/{id}/complete",
+        "ResumableUploadService in Flutter"
+      ],
+      "priority": 72,
+      "estimate_hours": 8.0,
+      "module": "Infrastructure",
+      "epic": "EPIC-021",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/uploads/*",
+        "menu": "Embedded in Create Clip / Upload Music / Video post"
+      },
+      "navigation_path": "Embedded in Create Clip / Upload Music / Video post",
+      "parent_story_id": 53,
+      "social_media_reference": "YouTube resumable upload; Google Drive chunked",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 73,
+      "original_id": "STORY-073",
+      "title": "Registration Bio Step (Taarifa Binafsi)",
+      "description": "As a new user, I want to enter my basic info in the first registration step",
+      "acceptance": [
+        "BioStep widget",
+        "Swahili label Taarifa Binafsi"
+      ],
+      "priority": 73,
+      "estimate_hours": 2.0,
+      "module": "Auth",
+      "epic": "EPIC-001",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "BioStep",
+        "menu": "BioStep (Step 0)"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 BioStep (Step 0)",
+      "parent_story_id": 1,
+      "social_media_reference": "All apps: name, DOB, gender first",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 74,
+      "original_id": "STORY-074",
+      "title": "Registration Phone Step (Thibitisha Simu)",
+      "description": "As a new user, I want to enter my phone number",
+      "acceptance": [
+        "PhoneStep widget",
+        "Swahili label Thibitisha Simu"
+      ],
+      "priority": 74,
+      "estimate_hours": 2.0,
+      "module": "Auth",
+      "epic": "EPIC-001",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "PhoneStep",
+        "menu": "PhoneStep (Step 1)"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 PhoneStep (Step 1)",
+      "parent_story_id": 1,
+      "social_media_reference": "WhatsApp phone verification",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 75,
+      "original_id": "STORY-075",
+      "title": "Registration Education Path Step",
+      "description": "As a new user, I want to indicate if I attended A-Level",
+      "acceptance": [
+        "EducationPathStep widget",
+        "Conditional A-Level step flow"
+      ],
+      "priority": 75,
+      "estimate_hours": 1.0,
+      "module": "Auth",
+      "epic": "EPIC-001",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "EducationPathStep",
+        "menu": "EducationPathStep (Step 5)"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Splash \u2192 Login \u2192 RegistrationScreen \u2192 EducationPathStep (Step 5)",
+      "parent_story_id": 1,
+      "social_media_reference": "Conditional flows like LinkedIn education",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 76,
+      "original_id": "STORY-076",
+      "title": "Profile Tab Configuration",
+      "description": "As a user, I want to customize profile tabs visibility and order",
+      "acceptance": [
+        "ProfileTabsSettingsScreen",
+        "Enable/disable and reorder tabs",
+        "Persist in Hive"
+      ],
+      "priority": 76,
+      "estimate_hours": 4.0,
+      "module": "Settings",
+      "epic": "EPIC-020",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "ProfileTabsSettingsScreen",
+        "menu": "Profile Tabs Settings"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Profile \u2192 Settings \u2192 Profile Tabs Settings",
+      "parent_story_id": 69,
+      "social_media_reference": "Customizable tabs; iOS Home screen edit",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 77,
+      "original_id": "STORY-077",
+      "title": "Profile Video Gallery Tab",
+      "description": "As a user, I want to see clips/videos on a profile",
+      "acceptance": [
+        "VideoGalleryWidget",
+        "Grid with thumbnails",
+        "Tap to play"
+      ],
+      "priority": 77,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-005",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "VideoGalleryWidget",
+        "menu": "VideoGalleryWidget"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Profile \u2192 Tab [Video] \u2192 VideoGalleryWidget",
+      "parent_story_id": 10,
+      "social_media_reference": "Instagram profile Reels tab; TikTok profile videos",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 78,
+      "original_id": "STORY-078",
+      "title": "Profile Music Gallery Tab",
+      "description": "As a user, I want to see music on a profile",
+      "acceptance": [
+        "MusicGalleryWidget"
+      ],
+      "priority": 78,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-014",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "MusicGalleryWidget",
+        "menu": "MusicGalleryWidget"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Profile \u2192 Tab [Muziki] \u2192 MusicGalleryWidget",
+      "parent_story_id": 10,
+      "social_media_reference": "Spotify profile playlists",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 79,
+      "original_id": "STORY-079",
+      "title": "Profile Live Gallery Tab",
+      "description": "As a user, I want to see live streams on a profile",
+      "acceptance": [
+        "LiveGalleryWidget"
+      ],
+      "priority": 79,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-015",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "LiveGalleryWidget",
+        "menu": "LiveGalleryWidget"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Profile \u2192 Tab [Live] \u2192 LiveGalleryWidget",
+      "parent_story_id": 10,
+      "social_media_reference": "Twitch channel videos; Instagram Live archive",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 80,
+      "original_id": "STORY-080",
+      "title": "Create Campaign (Michango)",
+      "description": "As a user, I want to create a fundraising campaign",
+      "acceptance": [
+        "POST /api/campaigns",
+        "Title, story, goal, category",
+        "ContributionService",
+        "Cover image, bank/mobile money"
+      ],
+      "priority": 80,
+      "estimate_hours": 8.0,
+      "module": "Fundraising",
+      "epic": "EPIC-022",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "api_endpoint": "POST /api/campaigns",
+        "menu": "Create campaign"
+      },
+      "implementation_status": "frontend_only",
+      "navigation_path": "Home \u2192 Profile \u2192 Tab [Michango] \u2192 Create campaign",
+      "parent_story_id": 81,
+      "social_media_reference": "GoFundMe create campaign; Kickstarter",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 81,
+      "original_id": "STORY-081",
+      "title": "View & Manage Campaigns (Michango)",
+      "description": "As a campaign organizer, I want to view and manage my campaigns",
+      "acceptance": [
+        "MichangoGalleryWidget",
+        "Tabs: Active, Completed, Draft",
+        "Stats, edit, pause, publish"
+      ],
+      "priority": 81,
+      "estimate_hours": 6.0,
+      "module": "Fundraising",
+      "epic": "EPIC-022",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "MichangoGalleryWidget",
+        "menu": "MichangoGalleryWidget"
+      },
+      "implementation_status": "frontend_only",
+      "navigation_path": "Home \u2192 Profile \u2192 Tab [Michango] \u2192 MichangoGalleryWidget",
+      "parent_story_id": 10,
+      "social_media_reference": "GoFundMe My Campaigns; Patreon creator dashboard",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 82,
+      "original_id": "STORY-082",
+      "title": "Donate to Campaign",
+      "description": "As a user, I want to donate to a campaign",
+      "acceptance": [
+        "Donate flow",
+        "Wallet or mobile money",
+        "POST /api/campaigns/{id}/donate"
+      ],
+      "priority": 82,
+      "estimate_hours": 6.0,
+      "module": "Fundraising",
+      "epic": "EPIC-022",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "menu": "Donate button"
+      },
+      "implementation_status": "frontend_only",
+      "navigation_path": "Campaign detail \u2192 Donate button",
+      "parent_story_id": 81,
+      "social_media_reference": "GoFundMe donate; PayPal donate",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 83,
+      "original_id": "STORY-083",
+      "title": "Campaign Withdrawals",
+      "description": "As a campaign organizer, I want to withdraw raised funds",
+      "acceptance": [
+        "Withdrawal to bank or mobile money",
+        "KYC verification"
+      ],
+      "priority": 83,
+      "estimate_hours": 8.0,
+      "module": "Fundraising",
+      "epic": "EPIC-022",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "menu": "Withdraw"
+      },
+      "implementation_status": "frontend_only",
+      "navigation_path": "Profile \u2192 Michango \u2192 Campaign \u2192 Withdraw",
+      "parent_story_id": 81,
+      "social_media_reference": "GoFundMe withdrawal; Patreon payout",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 84,
+      "original_id": "STORY-084",
+      "title": "Livestream Battle Mode (PK Battle)",
+      "description": "As a streamer, I want to compete in PK battles",
+      "acceptance": [
+        "BattleModeOverlay",
+        "BattleModeService",
+        "Scores, progress bars",
+        "Gift-based scoring"
+      ],
+      "priority": 84,
+      "estimate_hours": 10.0,
+      "module": "Media",
+      "epic": "EPIC-015",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "BattleModeOverlay",
+        "menu": "PK Battle mode (when active)"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "StreamViewerScreen \u2192 PK Battle mode (when active)",
+      "parent_story_id": 58,
+      "social_media_reference": "TikTok Live PK; Douyin battle mode",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 85,
+      "original_id": "STORY-085",
+      "title": "Schedule Post for Later",
+      "description": "As a user, I want to schedule a post",
+      "acceptance": [
+        "SchedulePostWidget",
+        "Date/time picker",
+        "scheduled_at on post"
+      ],
+      "priority": 85,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "SchedulePostWidget",
+        "menu": "Date/time"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Feed \u2192 Create Post \u2192 Schedule toggle \u2192 Date/time",
+      "parent_story_id": 15,
+      "social_media_reference": "Twitter scheduled tweets; Facebook scheduler",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 86,
+      "original_id": "STORY-086",
+      "title": "@Mentions and #Hashtags in Posts",
+      "description": "As a user, I want mentions and hashtags in posts",
+      "acceptance": [
+        "MentionTextField",
+        "Friend suggestions on @",
+        "Hashtag suggestions on #"
+      ],
+      "priority": 86,
+      "estimate_hours": 4.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "MentionTextField",
+        "menu": "@ and # in text field"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Create Post (any type) \u2192 @ and # in text field",
+      "parent_story_id": 15,
+      "social_media_reference": "Twitter @mentions; Instagram #hashtags",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 87,
+      "original_id": "STORY-087",
+      "title": "Call History",
+      "description": "As a user, I want to view call history",
+      "acceptance": [
+        "CallHistoryScreen",
+        "All/Missed tabs",
+        "Dialer FAB"
+      ],
+      "priority": 87,
+      "estimate_hours": 4.0,
+      "module": "Communication",
+      "epic": "EPIC-016",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "CallHistoryScreen",
+        "menu": "CallHistoryScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Profile \u2192 \u22ee menu \u2192 Simu \u2192 CallHistoryScreen",
+      "parent_story_id": 10,
+      "social_media_reference": "WhatsApp call log; iPhone Recents",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 88,
+      "original_id": "STORY-088",
+      "title": "Feed Live Tab",
+      "description": "As a user, I want to see live streams in feed",
+      "acceptance": [
+        "FeedScreen live tab",
+        "LiveStreamsGrid"
+      ],
+      "priority": 88,
+      "estimate_hours": 3.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "LiveStreamsGrid",
+        "menu": "LiveStreamsGrid"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Feed \u2192 Tab [Live] \u2192 LiveStreamsGrid",
+      "parent_story_id": 26,
+      "social_media_reference": "Twitch live thumbnails; YouTube Live",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 89,
+      "original_id": "STORY-089",
+      "title": "Streams Screen",
+      "description": "As a user, I want to browse live streams",
+      "acceptance": [
+        "StreamsScreen",
+        "Live/All tabs",
+        "Go Live FAB"
+      ],
+      "priority": 89,
+      "estimate_hours": 4.0,
+      "module": "Media",
+      "epic": "EPIC-015",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "StreamsScreen",
+        "menu": "Browse"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Feed \u2192 Live tab \u2192 StreamsScreen OR Profile \u2192 Live \u2192 Browse",
+      "parent_story_id": 58,
+      "social_media_reference": "Twitch directory; YouTube Live list",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 90,
+      "original_id": "STORY-090",
+      "title": "Events Screen",
+      "description": "As a user, I want to browse events",
+      "acceptance": [
+        "EventsScreen",
+        "Yanayokuja / Matukio Yangu tabs"
+      ],
+      "priority": 90,
+      "estimate_hours": 3.0,
+      "module": "Communities",
+      "epic": "EPIC-010",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "EventsScreen",
+        "menu": "EventsScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Discover/Home \u2192 Events \u2192 EventsScreen",
+      "parent_story_id": null,
+      "social_media_reference": "Facebook Events; Meetup discover",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 91,
+      "original_id": "STORY-091",
+      "title": "Groups Screen",
+      "description": "As a user, I want to browse groups",
+      "acceptance": [
+        "GroupsScreen",
+        "Gundua / Vikundi Vyangu tabs"
+      ],
+      "priority": 91,
+      "estimate_hours": 3.0,
+      "module": "Communities",
+      "epic": "EPIC-008",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "GroupsScreen",
+        "menu": "GroupsScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Discover/Profile \u2192 Groups \u2192 GroupsScreen",
+      "parent_story_id": null,
+      "social_media_reference": "Facebook Groups discover; LinkedIn groups",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 92,
+      "original_id": "STORY-092",
+      "title": "Create Post Hub",
+      "description": "As a user, I want a hub to choose post type",
+      "acceptance": [
+        "CreatePostScreen",
+        "Route to text/photo/audio/video screens"
+      ],
+      "priority": 92,
+      "estimate_hours": 2.0,
+      "module": "Content",
+      "epic": "EPIC-004",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "CreatePostScreen",
+        "menu": "CreatePostScreen (hub)"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Home \u2192 Feed \u2192 FAB (+) \u2192 CreatePostScreen (hub)",
+      "parent_story_id": 26,
+      "social_media_reference": "Instagram + FAB; Facebook Create post types",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 93,
+      "original_id": "STORY-093",
+      "title": "Clip Video Search",
+      "description": "As a user, I want to search for clips",
+      "acceptance": [
+        "VideoSearchScreen"
+      ],
+      "priority": 93,
+      "estimate_hours": 3.0,
+      "module": "Media",
+      "epic": "EPIC-013",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "VideoSearchScreen",
+        "menu": "VideoSearchScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Create Clip \u2192 Add music \u2192 VideoSearchScreen",
+      "parent_story_id": 53,
+      "social_media_reference": "TikTok sound search; Instagram Reels music",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 94,
+      "original_id": "STORY-094",
+      "title": "Music Artist Detail",
+      "description": "As a user, I want to view artist profile",
+      "acceptance": [
+        "ArtistDetailScreen"
+      ],
+      "priority": 94,
+      "estimate_hours": 3.0,
+      "module": "Media",
+      "epic": "EPIC-014",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "flutter_screen": "ArtistDetailScreen",
+        "menu": "UploadVideoScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Create Clip \u2192 Pick video \u2192 UploadVideoScreen",
+      "parent_story_id": 53,
+      "social_media_reference": "TikTok upload from gallery",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    },
+    {
+      "id": 95,
+      "original_id": "STORY-095",
+      "title": "Media Caching",
+      "description": "As a user, I want cached media for offline viewing",
+      "acceptance": [
+        "MediaCacheService",
+        "VideoCacheService",
+        "CachedMediaImage"
+      ],
+      "priority": 95,
+      "estimate_hours": 4.0,
+      "module": "Infrastructure",
+      "epic": "EPIC-021",
+      "design": {
+        "reference": "DOCS/DESIGN.md",
+        "layout": "See DOCS/DESIGN.md - Standard page structure, touch targets 48dp min",
+        "components": [],
+        "tokens": "Primary #1A1A1A, background #FAFAFA, accent per DOCS/DESIGN.md",
+        "notes": "Low bandwidth optimization; Swahili-first labels; Material 3",
+        "navigation_reference": "DOCS/NAVIGATION.md"
+      },
+      "access_route": {
+        "menu": "ArtistDetailScreen"
+      },
+      "implementation_status": "implemented",
+      "navigation_path": "Music library / Profile music \u2192 Tap artist \u2192 ArtistDetailScreen",
+      "parent_story_id": 55,
+      "social_media_reference": "Spotify artist page; Apple Music artist",
+      "implementation_directives": [
+        "After implementing, recheck your work and confirm that all story business logic has been fully implemented.",
+        "Check and ensure there are no lint errors in the files you touched."
+      ]
+    }
+  ],
+  "metadata": {
+    "total_stories": 95,
+    "total_hours": 432.0,
+    "modules": [
+      "Auth",
+      "Profiles",
+      "Reference Data",
+      "Content",
+      "Social",
+      "Communities",
+      "Media",
+      "Communication",
+      "Payments",
+      "Fundraising",
+      "Discovery",
+      "Settings",
+      "UI Shell",
+      "Infrastructure"
+    ],
+    "generated_by": "TAJIRI PRD Generator",
+    "version": "1.0",
+    "last_updated": "2026-01"
+  }
+}

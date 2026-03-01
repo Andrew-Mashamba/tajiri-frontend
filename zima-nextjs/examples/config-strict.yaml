@@ -1,0 +1,67 @@
+# Zima Looper - Strict Configuration
+# Use this configuration for production-grade quality enforcement
+# All quality gates are required, tests must pass, comprehensive checks
+
+zima:
+  version: "1.0.0"
+  name: "Zima Looper"
+
+# Worker configuration
+workers:
+  count: 4                      # 4 parallel workers for maximum throughput
+  max_concurrent_stories: 4
+  poll_interval_seconds: 5      # Check for new stories every 5 seconds
+
+# Claude CLI configuration
+claude:
+  cli_path: "claude"
+  default_timeout_seconds: 600  # 10 minutes for complex stories
+  max_timeout_seconds: 1800     # 30 minutes maximum
+  model: "sonnet"               # Use Sonnet for best balance
+
+# Retry configuration
+retry:
+  max_attempts: 3               # Standard 3 retries
+  backoff_multiplier: 3         # Exponential backoff: 5s, 15s, 45s
+  base_delay_seconds: 5
+  enable_claude_fix: true       # Use Claude to analyze and fix errors
+
+# Checkpoint system
+checkpoints:
+  enabled: true
+  frequency_minutes: 5          # Checkpoint every 5 minutes
+  max_checkpoints_per_story: 10
+
+# Git configuration
+git:
+  auto_commit: true
+  commit_message_template: "[Zima] Story {story_number}: {title}"
+  use_branches: true
+  branch_prefix: "zima/story-"
+
+# Quality gates - STRICT MODE
+quality:
+  run_tests_before_complete: true
+  require_passing_tests: true           # REQUIRED: Tests must pass
+  require_syntax_valid: true            # REQUIRED: No syntax errors
+  require_composer_valid: true          # REQUIRED: composer.json must be valid
+  require_env_valid: true               # REQUIRED: .env.example must exist
+  test_timeout_seconds: 600             # 10 minutes for test execution
+  allow_no_tests: false                 # STRICT: Tests are mandatory
+  rollback_on_failure: true             # Rollback changes if quality gate fails
+  max_test_failures: 0                  # STRICT: No test failures allowed
+
+# Monitoring
+monitoring:
+  dashboard_enabled: true
+  dashboard_port: 5000
+  log_level: "INFO"
+  metrics_enabled: true
+  detailed_logging: true                # Log everything for audit trail
+
+# Notifications
+notifications:
+  console_enabled: true
+  web_enabled: true
+  notify_on_failure: true
+  notify_on_completion: true

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(frontend/**)",
+      "Write(backend/**)",
+      "Write(lib/**)",
+      "Write(**/*.dart)",
+      "Write(**/*.tsx)",
+      "Write(**/*.ts)",
+      "Write(**/*.jsx)",
+      "Write(**/*.js)",
+      "Write(**/*.java)",
+      "Write(**/*.yml)",
+      "Write(**/*.yaml)",
+      "Write(**/*.json)",
+      "Write(**/*.css)",
+      "Write(**/*.sql)",
+      "Read(**/*)",
+      "Shell(npm)",
+      "Shell(mvn)",
+      "Shell(flutter)"
+    ],
+    "deny": []
+  }
+}

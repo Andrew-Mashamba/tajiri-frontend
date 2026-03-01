@@ -1,0 +1,67 @@
+# Zima Looper - Lenient Configuration
+# Use this configuration for rapid development iterations
+# Tests are optional, quality gates are relaxed, focus on speed
+
+zima:
+  version: "1.0.0"
+  name: "Zima Looper"
+
+# Worker configuration
+workers:
+  count: 4                      # 4 parallel workers
+  max_concurrent_stories: 4
+  poll_interval_seconds: 3      # More frequent polling for faster pickup
+
+# Claude CLI configuration
+claude:
+  cli_path: "claude"
+  default_timeout_seconds: 300  # 5 minutes default
+  max_timeout_seconds: 900      # 15 minutes maximum
+  model: "sonnet"
+
+# Retry configuration
+retry:
+  max_attempts: 2               # Only 2 retries for faster failure
+  backoff_multiplier: 2         # Shorter backoff: 5s, 10s
+  base_delay_seconds: 5
+  enable_claude_fix: true
+
+# Checkpoint system
+checkpoints:
+  enabled: true
+  frequency_minutes: 10         # Less frequent checkpoints
+  max_checkpoints_per_story: 5
+
+# Git configuration
+git:
+  auto_commit: true
+  commit_message_template: "Story {story_number}: {title}"
+  use_branches: false           # Commit directly to main for speed
+  branch_prefix: "zima/story-"
+
+# Quality gates - LENIENT MODE
+quality:
+  run_tests_before_complete: true
+  require_passing_tests: false          # LENIENT: Tests can fail
+  require_syntax_valid: true            # Still check syntax
+  require_composer_valid: false         # LENIENT: composer.json optional
+  require_env_valid: false              # LENIENT: .env not required
+  test_timeout_seconds: 300             # 5 minutes for tests
+  allow_no_tests: true                  # LENIENT: No tests is OK
+  rollback_on_failure: false            # LENIENT: Keep changes even on failure
+  max_test_failures: 999                # LENIENT: Allow many test failures
+
+# Monitoring
+monitoring:
+  dashboard_enabled: true
+  dashboard_port: 5000
+  log_level: "WARNING"                  # Less verbose logging
+  metrics_enabled: true
+  detailed_logging: false               # Skip detailed logs for speed
+
+# Notifications
+notifications:
+  console_enabled: true
+  web_enabled: true
+  notify_on_failure: true
+  notify_on_completion: true
