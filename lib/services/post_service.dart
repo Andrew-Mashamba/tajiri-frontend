@@ -175,7 +175,7 @@ class PostService {
             meta: PaginationMeta.fromJson(data['meta'] ?? {}),
           );
         }
-        _log('getPosts: success!=true or data null. keys=${data is Map ? (data as Map).keys.toList() : []}');
+        _log('getPosts: success!=true or data null. keys=${data is Map ? data.keys.toList() : []}');
       } else {
         _log('getPosts: status=${response.statusCode} body=${response.body.length} chars');
       }
@@ -709,12 +709,22 @@ class PostService {
   }
 
   /// Delete a post
-  Future<bool> deletePost(int postId) async {
+  Future<SimpleResult> deletePost(int postId, {int? userId}) async {
     try {
-      final response = await http.delete(Uri.parse('$_baseUrl/posts/$postId'));
-      return response.statusCode == 200;
+      final uri = userId != null
+          ? '$_baseUrl/posts/$postId?user_id=$userId'
+          : '$_baseUrl/posts/$postId';
+      final response = await http.delete(
+        Uri.parse(uri),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = response.body.isNotEmpty ? jsonDecode(response.body) : <String, dynamic>{};
+      return SimpleResult(
+        success: response.statusCode == 200 && (data['success'] != false),
+        message: data['message'],
+      );
     } catch (e) {
-      return false;
+      return SimpleResult(success: false, message: 'Error: $e');
     }
   }
 
@@ -967,6 +977,29 @@ class PostService {
     }
   }
 
+  /// Report a post (reason optional)
+  Future<SimpleResult> reportPost(int postId, int userId, {String? reason, String? category}) async {
+    try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        if (category != null && category.isNotEmpty) 'category': category,
+      };
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/report'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      final data = response.body.isNotEmpty ? jsonDecode(response.body) : <String, dynamic>{};
+      return SimpleResult(
+        success: response.statusCode == 200 && (data['success'] != false),
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
+    }
+  }
+
   /// Report a comment (reason optional)
   Future<bool> reportComment(int commentId, {String? reason, String? category}) async {
     try {
@@ -1177,6 +1210,101 @@ class PostService {
       return PostListResult(success: false, message: 'Error: $e');
     }
   }
+
+  // ==================== PIN / ARCHIVE ENDPOINTS ====================
+
+  /// Pin a post to the user's profile grid (max 3).
+  Future<SimpleResult> pinPost(int postId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/pin?user_id=$userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      return SimpleResult(
+        success: data['success'] == true,
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Unpin a post from the user's profile grid.
+  Future<SimpleResult> unpinPost(int postId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/unpin?user_id=$userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      return SimpleResult(
+        success: data['success'] == true,
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Archive a post (hide from grid, keep privately).
+  Future<SimpleResult> archivePost(int postId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/archive?user_id=$userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      return SimpleResult(
+        success: data['success'] == true,
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Unarchive a post (restore to grid).
+  Future<SimpleResult> unarchivePost(int postId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/unarchive?user_id=$userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      return SimpleResult(
+        success: data['success'] == true,
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Get estimated earnings for a post (creator analytics).
+  Future<PostEarningsResult> getPostEarnings(int postId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/posts/$postId/earnings'),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return PostEarningsResult.fromJson(data['data']);
+      }
+      return PostEarningsResult.empty();
+    } catch (e) {
+      return PostEarningsResult.empty();
+    }
+  }
+}
+
+/// Simple success/failure result for operations that don't return data.
+class SimpleResult {
+  final bool success;
+  final String? message;
+  SimpleResult({required this.success, this.message});
 }
 
 // Result classes
@@ -1284,4 +1412,97 @@ class PaginationMeta {
   }
 
   bool get hasMore => currentPage < lastPage;
+}
+
+/// Earnings breakdown for a single metric.
+class EarningsMetric {
+  final int count;
+  final double rate;
+  final double amount;
+
+  const EarningsMetric({required this.count, required this.rate, required this.amount});
+
+  factory EarningsMetric.fromJson(Map<String, dynamic> json) {
+    return EarningsMetric(
+      count: (json['count'] ?? json['seconds'] ?? 0) as int,
+      rate: (json['rate'] ?? 0).toDouble(),
+      amount: (json['amount'] ?? 0).toDouble(),
+    );
+  }
+
+  factory EarningsMetric.zero() => const EarningsMetric(count: 0, rate: 0, amount: 0);
+}
+
+/// Result from GET /posts/{id}/earnings.
+class PostEarningsResult {
+  final int postId;
+  final double estimatedEarnings;
+  final String currency;
+  final double engagementRate;
+  final int impressions;
+  final EarningsMetric views;
+  final EarningsMetric likes;
+  final EarningsMetric shares;
+  final EarningsMetric saves;
+  final EarningsMetric comments;
+  final EarningsMetric watchTime;
+
+  const PostEarningsResult({
+    required this.postId,
+    required this.estimatedEarnings,
+    required this.currency,
+    required this.engagementRate,
+    required this.impressions,
+    required this.views,
+    required this.likes,
+    required this.shares,
+    required this.saves,
+    required this.comments,
+    required this.watchTime,
+  });
+
+  factory PostEarningsResult.fromJson(Map<String, dynamic> json) {
+    final breakdown = json['breakdown'] as Map<String, dynamic>? ?? {};
+    return PostEarningsResult(
+      postId: (json['post_id'] ?? 0) as int,
+      estimatedEarnings: (json['estimated_earnings'] ?? 0).toDouble(),
+      currency: (json['currency'] ?? 'TSh').toString(),
+      engagementRate: (json['engagement_rate'] ?? 0).toDouble(),
+      impressions: (json['impressions'] ?? 0) as int,
+      views: breakdown['views'] != null
+          ? EarningsMetric.fromJson(breakdown['views'])
+          : EarningsMetric.zero(),
+      likes: breakdown['likes'] != null
+          ? EarningsMetric.fromJson(breakdown['likes'])
+          : EarningsMetric.zero(),
+      shares: breakdown['shares'] != null
+          ? EarningsMetric.fromJson(breakdown['shares'])
+          : EarningsMetric.zero(),
+      saves: breakdown['saves'] != null
+          ? EarningsMetric.fromJson(breakdown['saves'])
+          : EarningsMetric.zero(),
+      comments: breakdown['comments'] != null
+          ? EarningsMetric.fromJson(breakdown['comments'])
+          : EarningsMetric.zero(),
+      watchTime: breakdown['watch_time'] != null
+          ? EarningsMetric.fromJson(breakdown['watch_time'])
+          : EarningsMetric.zero(),
+    );
+  }
+
+  factory PostEarningsResult.empty() => PostEarningsResult(
+    postId: 0,
+    estimatedEarnings: 0,
+    currency: 'TSh',
+    engagementRate: 0,
+    impressions: 0,
+    views: EarningsMetric.zero(),
+    likes: EarningsMetric.zero(),
+    shares: EarningsMetric.zero(),
+    saves: EarningsMetric.zero(),
+    comments: EarningsMetric.zero(),
+    watchTime: EarningsMetric.zero(),
+  );
+
+  bool get isEmpty => estimatedEarnings == 0 && impressions == 0;
 }

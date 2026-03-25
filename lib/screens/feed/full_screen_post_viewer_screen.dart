@@ -221,9 +221,9 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
       _onShare(post);
     } else if (action == 'delete') {
       try {
-        final success = await _postService.deletePost(post.id);
+        final result = await _postService.deletePost(post.id);
         if (!mounted) return;
-        if (success) {
+        if (result.success) {
           setState(() => _posts.removeWhere((p) => p.id == post.id));
           if (_posts.isEmpty) Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(

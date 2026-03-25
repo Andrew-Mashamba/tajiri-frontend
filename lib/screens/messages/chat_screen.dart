@@ -2177,7 +2177,9 @@ class _MessageBubble extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (message.replyTo != null) _buildReplyPreview(context),
-                    if (message.messageType == MessageType.image && message.mediaUrl != null)
+                    if (message.messageType == MessageType.sharedPost)
+                      _buildSharedPostContent(context)
+                    else if (message.messageType == MessageType.image && message.mediaUrl != null)
                       _buildImage(message.mediaUrl!)
                     else if (message.messageType == MessageType.video && message.mediaUrl != null)
                       _buildVideoThumbnail(message.mediaUrl!)
@@ -2264,6 +2266,180 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildSharedPostContent(BuildContext context) {
+    try {
+      final data = jsonDecode(message.content ?? '{}') as Map<String, dynamic>;
+      final postId = data['post_id'];
+      final userName = data['user_name'] ?? '';
+      final userPhoto = data['user_photo'];
+      final content = data['content'] ?? '';
+      final mediaList = data['media'] as List? ?? [];
+      final coverImageUrl = data['cover_image_url'];
+      final likesCount = data['likes_count'] ?? 0;
+      final commentsCount = data['comments_count'] ?? 0;
+
+      // Resolve the first media image URL for preview
+      String? previewImageUrl;
+      if (mediaList.isNotEmpty) {
+        final first = mediaList.first as Map<String, dynamic>;
+        final type = first['media_type'] ?? 'image';
+        if (type == 'video') {
+          previewImageUrl = first['thumbnail_url'];
+        } else {
+          previewImageUrl = first['file_url'];
+        }
+      }
+      previewImageUrl ??= coverImageUrl;
+
+      return GestureDetector(
+        onTap: () {
+          if (postId != null) {
+            Navigator.pushNamed(context, '/post/$postId');
+          }
+        },
+        child: Container(
+          width: 240,
+          decoration: BoxDecoration(
+            color: isMe ? Colors.white.withValues(alpha: 0.15) : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Media preview
+              if (previewImageUrl != null)
+                Stack(
+                  children: [
+                    CachedMediaImage(
+                      imageUrl: previewImageUrl.startsWith('http')
+                          ? previewImageUrl
+                          : '${ApiConfig.storageUrl}/$previewImageUrl',
+                      width: 240,
+                      height: 160,
+                      fit: BoxFit.cover,
+                    ),
+                    // Video play icon overlay
+                    if (mediaList.isNotEmpty &&
+                        (mediaList.first as Map<String, dynamic>)['media_type'] == 'video')
+                      Positioned.fill(
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow, color: Colors.white, size: 24),
+                          ),
+                        ),
+                      ),
+                    // Multi-media indicator
+                    if (mediaList.length > 1)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '1/${mediaList.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              // Post info
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Author row
+                    Row(
+                      children: [
+                        if (userPhoto != null)
+                          ClipOval(
+                            child: CachedMediaImage(
+                              imageUrl: userPhoto.startsWith('http')
+                                  ? userPhoto
+                                  : '${ApiConfig.storageUrl}/$userPhoto',
+                              width: 20,
+                              height: 20,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        else
+                          const Icon(Icons.account_circle, size: 20, color: Color(0xFF999999)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            userName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              color: isMe ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (content.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        content,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isMe ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF333333),
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    // Engagement row
+                    Row(
+                      children: [
+                        Icon(Icons.favorite_border, size: 14,
+                            color: isMe ? Colors.white70 : const Color(0xFF999999)),
+                        const SizedBox(width: 2),
+                        Text('$likesCount',
+                            style: TextStyle(fontSize: 11,
+                                color: isMe ? Colors.white70 : const Color(0xFF999999))),
+                        const SizedBox(width: 10),
+                        Icon(Icons.chat_bubble_outline, size: 14,
+                            color: isMe ? Colors.white70 : const Color(0xFF999999)),
+                        const SizedBox(width: 2),
+                        Text('$commentsCount',
+                            style: TextStyle(fontSize: 11,
+                                color: isMe ? Colors.white70 : const Color(0xFF999999))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      // Fallback: render content as plain text
+      return Text(
+        message.content ?? message.preview,
+        style: TextStyle(
+          color: isMe ? Colors.white : _kPrimaryText,
+          fontSize: 14,
+        ),
+      );
+    }
   }
 
   Widget _buildImage(String imageUrl) {

@@ -311,6 +311,18 @@ class AppStrings {
   String get withdraw => isSwahili ? 'Ondoa' : 'Withdraw';
   String get musicLibrary => isSwahili ? 'Maktaba ya muziki' : 'Music library';
 
+  /// Own-profile tab labels (same pattern as myOrders, myProducts, etc.)
+  String get myPosts => isSwahili ? 'Machapisho yangu' : 'My Posts';
+  String get myPhotos => isSwahili ? 'Picha zangu' : 'My Photos';
+  String get myVideos => isSwahili ? 'Video zangu' : 'My Videos';
+  String get myMusic => isSwahili ? 'Muziki wangu' : 'My Music';
+  String get myLive => isSwahili ? 'Mistari yangu' : 'My Streams';
+  String get contributions => isSwahili ? 'Michango' : 'Contributions';
+  String get myGroups => isSwahili ? 'Vikundi vyangu' : 'My Groups';
+  String get myFiles => isSwahili ? 'Faili zangu' : 'My Files';
+  String get myShop => isSwahili ? 'Duka langu' : 'My Shop';
+  String get myFriends => isSwahili ? 'Marafiki wangu' : 'My Friends';
+
   /// Localized label for profile tab by id. Use for profile tab bar and tab settings.
   String profileTabLabel(String id) {
     switch (id) {
@@ -326,6 +338,24 @@ class AppStrings {
       case 'friends': return friends;
       case 'about': return about;
       default: return id;
+    }
+  }
+
+  /// For own profile: uses the same "My X" getters as myOrders, myProducts, etc.
+  String profileTabLabelOwn(String id) {
+    switch (id) {
+      case 'posts': return myPosts;
+      case 'photos': return myPhotos;
+      case 'videos': return myVideos;
+      case 'music': return myMusic;
+      case 'live': return myLive;
+      case 'michango': return contributions;
+      case 'groups': return myGroups;
+      case 'documents': return myFiles;
+      case 'shop': return myShop;
+      case 'friends': return myFriends;
+      case 'about': return about;
+      default: return isSwahili ? '$id yangu' : 'My $id';
     }
   }
 
@@ -673,6 +703,21 @@ class AppStrings {
   String get broadcastTitle => isSwahili ? 'Kichwa cha Tangazo' : 'Broadcast title';
   String get enterTitleHint => isSwahili ? 'Andika kichwa...' : 'Enter title...';
   String get description => isSwahili ? 'Maelezo' : 'Description';
+  String get showMore => isSwahili ? 'Onyesha zaidi' : 'Show more';
+  String get showLess => isSwahili ? 'Onyesha kidogo' : 'Show less';
+  String get linkCopied => isSwahili ? 'Kiungo kimenakiliwa' : 'Link copied to clipboard';
+  String get writeReview => isSwahili ? 'Andika tathmini' : 'Write a review';
+  String get yourRating => isSwahili ? 'Kiwango chako' : 'Your rating';
+  String get reviewHint => isSwahili ? 'Shiriki uzoefu wako...' : 'Share your experience...';
+  String get submitReview => isSwahili ? 'Tuma tathmini' : 'Submit review';
+  String get reviewSubmitted => isSwahili ? 'Tathmini imetumwa' : 'Review submitted';
+  String get tapToRate => isSwahili ? 'Gusa kutathimini' : 'Tap to rate';
+  String get shareProduct => isSwahili ? 'Shiriki bidhaa' : 'Share product';
+  String get shareVia => isSwahili ? 'Shiriki kupitia...' : 'Share via...';
+  String get shareToApps => isSwahili ? 'Shiriki kwa programu' : 'Share to apps';
+  String get sendToFriend => isSwahili ? 'Tuma kwa rafiki' : 'Send to a friend';
+  String get copyLink => isSwahili ? 'Nakili kiungo' : 'Copy link';
+  String get repost => isSwahili ? 'Chapisha tena' : 'Repost';
   String get broadcastDescriptionHint => isSwahili ? 'Maelezo ya tangazo...' : 'Broadcast description...';
   String get tagLabel => isSwahili ? 'Lebo' : 'Tag';
   String get addTagHint => isSwahili ? 'Ongeza lebo' : 'Add tag';
@@ -869,7 +914,7 @@ class AppStrings {
   String get noReviewsYet => isSwahili ? 'Hakuna maoni bado' : 'No reviews yet';
   String get customerReviews => isSwahili ? 'Maoni ya Wateja' : 'Customer Reviews';
   String get relatedProducts => isSwahili ? 'Bidhaa Zinazofanana' : 'Related Products';
-  String get viewShop => isSwahili ? 'Tazama Duka' : 'View Shop';
+  String get viewShop => isSwahili ? 'Tazama Ukurasa' : 'View Page';
   String get seller => isSwahili ? 'Muuzaji' : 'Seller';
   String get sales => isSwahili ? 'mauzo' : 'sales';
   String get helpful => isSwahili ? 'Inasaidia' : 'Helpful';
@@ -947,6 +992,32 @@ class AppStrings {
   String get orderStatusCancelled => isSwahili ? 'Imeghairiwa' : 'Cancelled';
   String get orderStatusRefunded => isSwahili ? 'Imerudishiwa' : 'Refunded';
 
+  // Order management
+  String get noOrders => isSwahili ? 'Hakuna oda bado' : 'No orders yet';
+  String get noOrdersMessage => isSwahili ? 'Oda mpya zitaonekana hapa' : 'New orders will appear here';
+  String get orderDetails => isSwahili ? 'Maelezo ya Oda' : 'Order Details';
+  String get confirmOrder => isSwahili ? 'Thibitisha Oda' : 'Confirm Order';
+  String get confirmOrderMessage => isSwahili ? 'Thibitisha oda hii na kuanza kuishughulikia?' : 'Confirm this order and start processing?';
+  String get markAsShipped => isSwahili ? 'Tuma Oda' : 'Mark as Shipped';
+  String get trackingNumber => isSwahili ? 'Nambari ya Ufuatiliaji' : 'Tracking Number';
+  String get trackingNumberHint => isSwahili ? 'Ingiza nambari ya ufuatiliaji (hiari)' : 'Enter tracking number (optional)';
+  String get cancelOrder => isSwahili ? 'Ghairi Oda' : 'Cancel Order';
+  String get cancelOrderMessage => isSwahili ? 'Una uhakika unataka kughairi oda hii?' : 'Are you sure you want to cancel this order?';
+  String get cancelReason => isSwahili ? 'Sababu ya kughairi' : 'Reason for cancellation';
+  String get orderConfirmed => isSwahili ? 'Oda imethibitishwa' : 'Order confirmed';
+  String get orderShipped => isSwahili ? 'Oda imetumwa' : 'Order shipped';
+  String get orderCancelled => isSwahili ? 'Oda imeghairiwa' : 'Order cancelled';
+  String get orderReceived => isSwahili ? 'Oda imepokelewa' : 'Order received';
+  String get confirmReceived => isSwahili ? 'Thibitisha Upokeaji' : 'Confirm Received';
+  String get confirmReceivedMessage => isSwahili ? 'Thibitisha umepokea oda hii?' : 'Confirm you have received this order?';
+  String get estimatedDelivery => isSwahili ? 'Tarehe ya Kupokea' : 'Estimated Delivery';
+  String get statusHistory => isSwahili ? 'Historia ya Hali' : 'Status History';
+  String get contactBuyer => isSwahili ? 'Wasiliana na Mnunuzi' : 'Contact Buyer';
+  String get contactSeller => isSwahili ? 'Wasiliana na Muuzaji' : 'Contact Seller';
+  String get failedToLoadOrders => isSwahili ? 'Imeshindwa kupakia oda' : 'Failed to load orders';
+  String get failedToUpdateOrder => isSwahili ? 'Imeshindwa kusasisha oda' : 'Failed to update order';
+  String get activeOrders => isSwahili ? 'Oda Zinazoendelea' : 'Active';
+  String get completedOrders => isSwahili ? 'Oda Zilizokamilika' : 'Completed';
   // Filters
   String get filter => isSwahili ? 'Chuja' : 'Filter';
   String get filterAndSort => isSwahili ? 'Chuja & Panga' : 'Filter & Sort';
@@ -1033,4 +1104,122 @@ class AppStrings {
   String get startSellingMessage => isSwahili ? 'Anza kuuza kwa kuongeza bidhaa yako ya kwanza' : 'Start selling by adding your first product';
   String get sellerNoProducts => isSwahili ? 'Muuzaji huyu hajaweka bidhaa bado' : 'This seller has no products yet';
   String productsCount(int count) => isSwahili ? '$count bidhaa' : '$count products';
+
+  // ——— Groups Management (Profile > My Groups) ———
+  String get groupInvitations => isSwahili ? 'Mialiko' : 'Invitations';
+  String get groupsICreated => isSwahili ? 'Nilivyounda' : 'Created by me';
+  String get systemGroups => isSwahili ? 'Vikundi vya Mfumo' : 'System Groups';
+  String get systemGroupsSubtitle => isSwahili ? 'Shule, Mahali, Mwajiri' : 'School, Location, Employer';
+  String get otherGroups => isSwahili ? 'Vikundi Vingine' : 'Other Groups';
+  String get adminBadge => isSwahili ? 'Msimamizi' : 'Admin';
+  String get systemBadge => isSwahili ? 'Mfumo' : 'System';
+  String membersCount(int count) => isSwahili ? '$count wanachama' : '$count members';
+  String get privacySecret => isSwahili ? 'Siri' : 'Secret';
+  String invitedBy(String name) => isSwahili ? 'Umealikwa na $name' : 'Invited by $name';
+  String get invitedToJoin => isSwahili ? 'Umealikwa kujiunga' : 'You\'ve been invited to join';
+  String get acceptInvitation => isSwahili ? 'Kubali' : 'Accept';
+  String get declineInvitation => isSwahili ? 'Kataa' : 'Decline';
+  String get joinedGroup => isSwahili ? 'Umejiunga na kikundi' : 'You\'ve joined the group';
+  String get declinedInvitation => isSwahili ? 'Umekataa mwaliko' : 'Invitation declined';
+  String get actionFailed => isSwahili ? 'Imeshindwa. Jaribu tena.' : 'Failed. Try again.';
+  String get discoverGroups => isSwahili ? 'Gundua' : 'Discover';
+  String get noGroupsYet => isSwahili ? 'Hujajiunga na kikundi chochote bado' : 'You haven\'t joined any groups yet';
+  String get somethingWrong => isSwahili ? 'Kuna tatizo' : 'Something went wrong';
+
+  // ——— Files/Documents Management (Dropbox-like) ———
+  String get storage => isSwahili ? 'Hifadhi' : 'Storage';
+  String get filesCount => isSwahili ? 'faili' : 'files';
+  String get foldersCount => isSwahili ? 'folda' : 'folders';
+  String get allFiles => isSwahili ? 'Zote' : 'All';
+  String get archives => isSwahili ? 'Kumbukumbu' : 'Archives';
+  String get recentFiles => isSwahili ? 'Hivi Karibuni' : 'Recent';
+  String get starredFiles => isSwahili ? 'Zenye Nyota' : 'Starred';
+  String get offlineFiles => isSwahili ? 'Nje ya Mtandao' : 'Offline';
+  String get sharedFiles => isSwahili ? 'Zilizoshirikiwa' : 'Shared';
+  String get createFolder => isSwahili ? 'Unda Folda' : 'Create Folder';
+  String get folderName => isSwahili ? 'Jina la folda' : 'Folder name';
+  String get create => isSwahili ? 'Unda' : 'Create';
+  String get deleteConfirm => isSwahili ? 'Una uhakika unataka kufuta' : 'Are you sure you want to delete';
+  String get addToStarred => isSwahili ? 'Weka nyota' : 'Add star';
+  String get removeFromStarred => isSwahili ? 'Ondoa nyota' : 'Remove star';
+  String get rename => isSwahili ? 'Badilisha jina' : 'Rename';
+  String get moveTo => isSwahili ? 'Hamisha' : 'Move to';
+  String get copyTo => isSwahili ? 'Nakili' : 'Copy to';
+  String get emptyFolder => isSwahili ? 'Folda tupu' : 'Empty folder';
+  String get noFiles => isSwahili ? 'Hakuna faili' : 'No files';
+  String get uploadFilesHint => isSwahili ? 'Bonyeza + kupakia faili' : 'Tap + to upload files';
+  String get uploadFile => isSwahili ? 'Pakia faili' : 'Upload file';
+  String get downloading => isSwahili ? 'Inapakua...' : 'Downloading...';
+  String get uploading => isSwahili ? 'Inapakia...' : 'Uploading...';
+  String get uploadSuccess => isSwahili ? 'Imepakiwa' : 'Uploaded';
+  String get uploaded => isSwahili ? 'Imepakiwa' : 'Uploaded';
+  String get failed => isSwahili ? 'Imeshindwa' : 'Failed';
+  String get files => isSwahili ? 'faili' : 'files';
+
+  // Product creation
+  String get maxImagesReached => isSwahili ? 'Upeo wa picha 10 umefikiwa' : 'Maximum 10 images allowed';
+  String get addAtLeastOneImage => isSwahili ? 'Tafadhali ongeza angalau picha moja' : 'Please add at least one image';
+  String get productCreated => isSwahili ? 'Bidhaa imeundwa' : 'Product created successfully';
+  String get basicInfo => isSwahili ? 'Taarifa za Msingi' : 'Basic Information';
+  String get productTitle => isSwahili ? 'Jina la Bidhaa' : 'Product Title';
+  String get productTitleHint => isSwahili ? 'Ingiza jina la bidhaa' : 'Enter product name';
+  String get requiredField => isSwahili ? 'Sehemu hii inahitajika' : 'This field is required';
+  String get descriptionHint => isSwahili ? 'Elezea bidhaa yako...' : 'Describe your product...';
+  String get pricing => isSwahili ? 'Bei' : 'Pricing';
+  String get invalidPrice => isSwahili ? 'Bei batili' : 'Invalid price';
+  String get comparePrice => isSwahili ? 'Bei ya Kulinganisha' : 'Compare Price';
+  String get optional => isSwahili ? 'Si lazima' : 'Optional';
+  String get stockQuantity => isSwahili ? 'Kiasi cha Hisa' : 'Stock Quantity';
+  String get locationDelivery => isSwahili ? 'Mahali na Usafirishaji' : 'Location & Delivery';
+  String get locationHint => isSwahili ? 'k.m., Dar es Salaam' : 'e.g., Dar es Salaam';
+  String get pickupAddress => isSwahili ? 'Anwani ya Kuchukua' : 'Pickup Address';
+  String get pickupAddressHint => isSwahili ? 'Wanunuzi wanaweza kuchukua wapi?' : 'Where can buyers pick up?';
+  String get deliveryNotes => isSwahili ? 'Maelezo ya Usafirishaji' : 'Delivery Notes';
+  String get deliveryNotesHint => isSwahili ? 'Masharti, maeneo yanayofikiwa, n.k.' : 'Delivery terms, areas covered, etc.';
+  String get productImages => isSwahili ? 'Picha za Bidhaa' : 'Product Images';
+  String get imagesHint => isSwahili ? 'Ongeza hadi picha 10. Picha ya kwanza itakuwa jalada.' : 'Add up to 10 images. First image will be the cover.';
+  String get cover => isSwahili ? 'Jalada' : 'Cover';
+  String get location => isSwahili ? 'Mahali' : 'Location';
+  String get allowPickup => isSwahili ? 'Ruhusu Kuchukua' : 'Allow Pickup';
+  String get allowDelivery => isSwahili ? 'Ruhusu Kupeleka' : 'Allow Delivery';
+  String get allowShipping => isSwahili ? 'Ruhusu Kusafirisha' : 'Allow Shipping';
+  String get selectCategory => isSwahili ? 'Chagua kategoria' : 'Select category';
+  String get noCategory => isSwahili ? 'Bila kategoria' : 'No category';
+
+  // ─── Post Detail Screen ────────────────────────────────────────────
+  String get pinToProfile => isSwahili ? 'Bandika kwenye profaili yako' : 'Pin to your profile';
+  String get unpinPost => isSwahili ? 'Ondoa bandiko la chapisho' : 'Unpin post';
+  String get postPinned => isSwahili ? 'Chapisho limebandikwa kwenye profaili' : 'Post pinned to profile';
+  String get postUnpinned => isSwahili ? 'Chapisho limeondolewa bandiko' : 'Post unpinned';
+  String get pinUpdateFailed => isSwahili ? 'Imeshindwa kusasisha bandiko' : 'Failed to update pin';
+  String get postArchived => isSwahili ? 'Chapisho limehifadhiwa' : 'Post archived';
+  String get archiveFailed => isSwahili ? 'Imeshindwa kuhifadhi chapisho' : 'Failed to archive post';
+  String get reportSubmitted => isSwahili ? 'Ripoti imetumwa' : 'Report submitted';
+  String get pinnedComment => isSwahili ? 'Imebandikwa' : 'Pinned';
+  String get replyAction => isSwahili ? 'Jibu' : 'Reply';
+  String get replyingTo => isSwahili ? 'Unajibu' : 'Replying to';
+  String get replyToHint => isSwahili ? 'Jibu' : 'Reply to';
+  String get viewReplies => isSwahili ? 'Ona' : 'View';
+  String get hideReplies => isSwahili ? 'Ficha majibu' : 'Hide replies';
+  String get repliesLabel => isSwahili ? 'majibu' : 'replies';
+  String get unknownUser => isSwahili ? 'Haijulikani' : 'Unknown';
+  String get commentNoun => isSwahili ? 'maoni' : 'comment';
+  String get removeLike => isSwahili ? 'Ondoa pendo' : 'Unlike';
+  String get shareToWall => isSwahili ? 'Shiriki kwenye ukuta wako' : 'Share to your wall';
+  String get shareToChat => isSwahili ? 'Shiriki kwenye mazungumzo' : 'Share to chat';
+  String get shareToSocial => isSwahili ? 'Shiriki kwenye mitandao mingine' : 'Share to social media';
+  String get postShared => isSwahili ? 'Umeshiriki chapisho' : 'Post shared';
+  String get shareFailed => isSwahili ? 'Imeshindwa kushiriki' : 'Failed to share';
+  String get sentToChat => isSwahili ? 'Imetumwa kwenye mazungumzo' : 'Sent to chat';
+  String get selectChat => isSwahili ? 'Chagua mazungumzo' : 'Select a chat';
+  String get searchChats => isSwahili ? 'Tafuta mazungumzo...' : 'Search chats...';
+  String get noChatsFound => isSwahili ? 'Hakuna mazungumzo yaliyopatikana' : 'No chats found';
+  String get edited => isSwahili ? 'Iliyohaririwa' : 'Edited';
+  String get audioUnavailable => isSwahili ? 'Sauti haipatikani - hakuna audio_path' : 'Audio unavailable - no audio_path';
+  String get audioAndText => isSwahili ? 'Sauti + Maandishi' : 'Audio + Text';
+  String get audio => isSwahili ? 'Sauti' : 'Audio';
+  String get unsave => isSwahili ? 'Ondoa hifadhi' : 'Unsave';
+  String get subscribersOnly => isSwahili ? 'Kwa Wasajili Pekee' : 'Subscribers Only';
+  String subscribeTo(String name) => isSwahili ? 'Jisajili kwa $name\nkuona maudhui haya' : 'Subscribe to $name\nto see this content';
+  String get thisCreator => isSwahili ? 'msanii huyu' : 'this creator';
 }

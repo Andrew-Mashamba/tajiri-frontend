@@ -13,6 +13,32 @@ const Color _kSecondaryText = Color(0xFF666666);
 const Color _kTertiaryText = Color(0xFF999999);
 const Color _kDivider = Color(0xFFE0E0E0);
 
+// ─── Bilingual label helpers ────────────────────────────────────────────
+
+String _productTypeLabel(BuildContext context, ProductType type) {
+  final s = AppStringsScope.of(context);
+  switch (type) {
+    case ProductType.physical:
+      return s?.productTypePhysical ?? 'Physical';
+    case ProductType.digital:
+      return s?.productTypeDigital ?? 'Digital';
+    case ProductType.service:
+      return s?.productTypeService ?? 'Service';
+  }
+}
+
+String _conditionLabel(BuildContext context, ProductCondition condition) {
+  final s = AppStringsScope.of(context);
+  switch (condition) {
+    case ProductCondition.brandNew:
+      return s?.conditionNew ?? 'New';
+    case ProductCondition.used:
+      return s?.conditionUsed ?? 'Used';
+    case ProductCondition.refurbished:
+      return s?.conditionRefurbished ?? 'Refurbished';
+  }
+}
+
 /// Category products screen with filtering and sorting.
 class CategoryScreen extends StatefulWidget {
   final ProductCategory category;
@@ -571,7 +597,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 onTap: () => setState(() => _type = null),
               ),
               ...ProductType.values.map((type) => _buildFilterChip(
-                    label: type.label,
+                    label: _productTypeLabel(context, type),
                     isSelected: _type == type,
                     onTap: () => setState(() => _type = type),
                   )),
@@ -599,7 +625,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 onTap: () => setState(() => _condition = null),
               ),
               ...ProductCondition.values.map((condition) => _buildFilterChip(
-                    label: condition.label,
+                    label: _conditionLabel(context, condition),
                     isSelected: _condition == condition,
                     onTap: () => setState(() => _condition = condition),
                   )),

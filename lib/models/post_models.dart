@@ -642,6 +642,8 @@ class PostMedia {
   final MediaType mediaType;
   final String filePath;
   final String? thumbnailPath;
+  final String? dominantColor;
+  final String? gridThumbnailPath;
   final String? originalFilename;
   final int? fileSize;
   final int? width;
@@ -655,6 +657,8 @@ class PostMedia {
     required this.mediaType,
     required this.filePath,
     this.thumbnailPath,
+    this.dominantColor,
+    this.gridThumbnailPath,
     this.originalFilename,
     this.fileSize,
     this.width,
@@ -670,6 +674,8 @@ class PostMedia {
       mediaType: MediaType.fromString(json['media_type'] ?? 'image'),
       filePath: json['file_path'] ?? '',
       thumbnailPath: json['thumbnail_path'],
+      dominantColor: json['dominant_color'],
+      gridThumbnailPath: json['grid_thumbnail_path'],
       originalFilename: json['original_filename'],
       fileSize: json['file_size'] != null ? _parseInt(json['file_size']) : null,
       width: json['width'] != null ? _parseInt(json['width']) : null,
@@ -682,6 +688,9 @@ class PostMedia {
   String get fileUrl => _buildStorageUrl(filePath);
 
   String? get thumbnailUrl => thumbnailPath != null ? _buildStorageUrl(thumbnailPath!) : null;
+
+  /// Small 300x300 grid thumbnail URL (for profile grid).
+  String? get gridThumbnailUrl => gridThumbnailPath != null ? _buildStorageUrl(gridThumbnailPath!) : null;
 
   /// Check if this is a vertical/portrait video (for shorts/reels)
   bool get isVertical => (height ?? 0) > (width ?? 0);

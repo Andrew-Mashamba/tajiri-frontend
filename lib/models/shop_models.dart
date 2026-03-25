@@ -313,48 +313,57 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    // Helper to parse int from either int or string
+    int? parseInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      return int.tryParse(value.toString());
+    }
+
     return Product(
-      id: json['id'],
-      sellerId: json['seller_id'] ?? json['user_id'],
+      id: parseInt(json['id']) ?? 0,
+      sellerId: parseInt(json['seller_id']) ?? parseInt(json['user_id']) ?? 0,
       title: json['title'] ?? '',
       description: json['description'],
       slug: json['slug'] ?? '',
       type: ProductType.fromString(json['type']),
       status: ProductStatus.fromString(json['status']),
-      price: (json['price'] ?? 0).toDouble(),
+      price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
       compareAtPrice: json['compare_at_price'] != null
-          ? (json['compare_at_price']).toDouble()
+          ? double.tryParse(json['compare_at_price'].toString())
           : null,
       currency: json['currency'] ?? 'TZS',
-      stockQuantity: json['stock_quantity'] ?? 0,
+      stockQuantity: parseInt(json['stock_quantity']) ?? 0,
       images: json['images'] != null
           ? List<String>.from(json['images'])
           : [],
-      thumbnailPath: json['thumbnail_path'],
-      categoryId: json['category_id'],
+      thumbnailPath: json['thumbnail_path'] ?? json['thumbnail_url'],
+      categoryId: parseInt(json['category_id']),
       tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
       condition: ProductCondition.fromString(json['condition']),
       locationName: json['location_name'],
-      latitude: json['latitude']?.toDouble(),
-      longitude: json['longitude']?.toDouble(),
+      latitude: double.tryParse(json['latitude']?.toString() ?? ''),
+      longitude: double.tryParse(json['longitude']?.toString() ?? ''),
       allowPickup: json['allow_pickup'] ?? true,
       allowDelivery: json['allow_delivery'] ?? false,
       allowShipping: json['allow_shipping'] ?? false,
-      deliveryFee: json['delivery_fee']?.toDouble(),
+      deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? ''),
       deliveryNotes: json['delivery_notes'],
       pickupAddress: json['pickup_address'],
       downloadUrl: json['download_url'],
-      downloadLimit: json['download_limit'],
-      durationMinutes: json['duration_minutes'],
+      downloadLimit: parseInt(json['download_limit']),
+      durationMinutes: parseInt(json['duration_minutes']),
       serviceLocation: json['service_location'],
-      viewsCount: json['views_count'] ?? 0,
-      favoritesCount: json['favorites_count'] ?? 0,
-      ordersCount: json['orders_count'] ?? 0,
-      rating: (json['rating'] ?? 0).toDouble(),
-      reviewsCount: json['reviews_count'] ?? 0,
+      viewsCount: parseInt(json['views_count']) ?? 0,
+      favoritesCount: parseInt(json['favorites_count']) ?? 0,
+      ordersCount: parseInt(json['orders_count']) ?? 0,
+      rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 0.0,
+      reviewsCount: parseInt(json['reviews_count']) ?? 0,
       seller: json['seller'] != null
           ? ProductSeller.fromJson(json['seller'])
-          : null,
+          : json['user'] != null
+              ? ProductSeller.fromJson(json['user'])
+              : null,
       category: json['category'] != null
           ? ProductCategory.fromJson(json['category'])
           : null,
@@ -421,7 +430,8 @@ class Product {
   String get discountPercentFormatted =>
       hasDiscount ? '-${discountPercent.round()}%' : '';
 
-  bool get isInStock => stockQuantity > 0 || type != ProductType.physical;
+  bool get isInStock =>
+      type != ProductType.physical || stockQuantity != 0 || status == ProductStatus.active;
 
   bool get isDigital => type == ProductType.digital;
 
@@ -466,7 +476,7 @@ class ProductSeller {
 
   factory ProductSeller.fromJson(Map<String, dynamic> json) {
     return ProductSeller(
-      id: json['id'],
+      id: json['id'] ?? 0,
       firstName: json['first_name'] ?? '',
       lastName: json['last_name'] ?? '',
       username: json['username'],

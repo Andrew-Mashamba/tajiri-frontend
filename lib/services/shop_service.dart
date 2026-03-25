@@ -413,7 +413,9 @@ class ShopService {
       final request = http.MultipartRequest('POST', Uri.parse(url));
 
       // Add fields
-      request.fields['seller_id'] = sellerId.toString();
+      // Backend expects 'user_id' not 'seller_id'
+      request.fields['user_id'] = sellerId.toString();
+      request.fields['seller_id'] = sellerId.toString(); // Keep for compatibility
       request.fields['title'] = title;
       if (description != null) request.fields['description'] = description;
       request.fields['type'] = type.value;
@@ -433,9 +435,10 @@ class ShopService {
       if (locationName != null) request.fields['location_name'] = locationName;
       if (latitude != null) request.fields['latitude'] = latitude.toString();
       if (longitude != null) request.fields['longitude'] = longitude.toString();
-      request.fields['allow_pickup'] = allowPickup.toString();
-      request.fields['allow_delivery'] = allowDelivery.toString();
-      request.fields['allow_shipping'] = allowShipping.toString();
+      // Backend expects '1'/'0' for boolean fields, not 'true'/'false'
+      request.fields['allow_pickup'] = allowPickup ? '1' : '0';
+      request.fields['allow_delivery'] = allowDelivery ? '1' : '0';
+      request.fields['allow_shipping'] = allowShipping ? '1' : '0';
       if (deliveryFee != null) {
         request.fields['delivery_fee'] = deliveryFee.toString();
       }
@@ -452,7 +455,7 @@ class ShopService {
         request.fields['service_location'] = serviceLocation;
       }
 
-      // Add images
+      // Add images - Laravel expects 'images[]' for multiple file uploads
       if (images != null) {
         _log('Uploading ${images.length} product images');
         for (int i = 0; i < images.length; i++) {
@@ -465,7 +468,7 @@ class ShopService {
                   : 'image/jpeg';
 
           request.files.add(await http.MultipartFile.fromPath(
-            'images[$i]',
+            'images[]',
             file.path,
             contentType: MediaType.parse(mimeType),
           ));
@@ -480,7 +483,9 @@ class ShopService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
-        final product = Product.fromJson(data['data']);
+        // Backend may return data.product or just data
+        final productData = data['data']['product'] ?? data['data'];
+        final product = Product.fromJson(productData);
         _log('Product created successfully: #${product.id} "${product.title}"');
         return ProductResult(
           success: true,
@@ -544,6 +549,7 @@ class ShopService {
       final request = http.MultipartRequest('POST', Uri.parse(url));
 
       request.fields['_method'] = 'PUT';
+      request.fields['user_id'] = sellerId.toString();
       request.fields['seller_id'] = sellerId.toString();
 
       if (title != null) request.fields['title'] = title;
@@ -679,13 +685,13 @@ class ShopService {
   }) async {
     final stopwatch = Stopwatch()..start();
     final params = <String, String>{
-      'seller_id': sellerId.toString(),
+      'user_id': sellerId.toString(),
       'page': page.toString(),
       'per_page': perPage.toString(),
     };
 
     if (status != null) params['status'] = status.value;
-    if (currentUserId != null) params['user_id'] = currentUserId.toString();
+    if (currentUserId != null) params['current_user_id'] = currentUserId.toString();
 
     final uri = Uri.parse('$_baseUrl/shop/products/seller')
         .replace(queryParameters: params);
@@ -976,7 +982,7 @@ class ShopService {
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/orders';
     final body = {
-      'buyer_id': buyerId,
+      'user_id': buyerId,
       'product_id': productId,
       'quantity': quantity,
       'delivery_method': deliveryMethod.value,
@@ -1031,7 +1037,7 @@ class ShopService {
         Uri.parse('$_baseUrl/shop/checkout'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'buyer_id': buyerId,
+          'user_id': buyerId,
           'items': items.map((i) => i.toJson()).toList(),
           if (pin != null) 'pin': pin,
         }),
@@ -1293,7 +1299,7 @@ class ShopService {
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/orders/$orderId/received'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'buyer_id': buyerId}),
+        body: jsonEncode({'user_id': buyerId}),
       );
 
       final data = jsonDecode(response.body);
@@ -1564,6 +1570,9 @@ class CheckoutItem {
 class SellerStats {
   final int totalProducts;
   final int activeProducts;
+  final int draftProducts;
+  final int soldOutProducts;
+  final int archivedProducts;
   final int totalOrders;
   final int pendingOrders;
   final int completedOrders;
@@ -1576,6 +1585,9 @@ class SellerStats {
   SellerStats({
     this.totalProducts = 0,
     this.activeProducts = 0,
+    this.draftProducts = 0,
+    this.soldOutProducts = 0,
+    this.archivedProducts = 0,
     this.totalOrders = 0,
     this.pendingOrders = 0,
     this.completedOrders = 0,
@@ -1588,7 +1600,7 @@ class SellerStats {
 
   factory SellerStats.fromJson(Map<String, dynamic> json) {
     // Handle both flat format and nested format from backend
-    // Nested format: { products: {total, active}, orders: {total, pending}, ... }
+    // Nested format: { products: {total, active, draft, sold_out, archived}, orders: {total, pending}, ... }
     // Flat format: { total_products, active_products, total_orders, ... }
 
     if (json.containsKey('products') && json['products'] is Map) {
@@ -1602,6 +1614,9 @@ class SellerStats {
       return SellerStats(
         totalProducts: products['total'] ?? 0,
         activeProducts: products['active'] ?? 0,
+        draftProducts: products['draft'] ?? 0,
+        soldOutProducts: products['sold_out'] ?? 0,
+        archivedProducts: products['archived'] ?? 0,
         totalOrders: orders['total'] ?? 0,
         pendingOrders: orders['pending'] ?? 0,
         completedOrders: orders['completed'] ?? 0,
@@ -1617,6 +1632,9 @@ class SellerStats {
     return SellerStats(
       totalProducts: json['total_products'] ?? 0,
       activeProducts: json['active_products'] ?? 0,
+      draftProducts: json['draft_products'] ?? 0,
+      soldOutProducts: json['sold_out_products'] ?? 0,
+      archivedProducts: json['archived_products'] ?? 0,
       totalOrders: json['total_orders'] ?? 0,
       pendingOrders: json['pending_orders'] ?? 0,
       completedOrders: json['completed_orders'] ?? 0,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/post_models.dart';
 import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_post_sheet.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
@@ -169,7 +170,12 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   }
 
   void _onShare(Post post) {
-    // Share from saved list
+    showSharePostBottomSheet(
+      context,
+      post: post,
+      userId: widget.currentUserId,
+      postService: _postService,
+    );
   }
 
   void _onUserTap(Post post) {

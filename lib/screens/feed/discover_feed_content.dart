@@ -323,9 +323,9 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              final success = await _postService.deletePost(post.id);
+              final result = await _postService.deletePost(post.id);
               if (!mounted) return;
-              if (success) {
+              if (result.success) {
                 setState(() {
                   _discoverPosts.removeWhere((p) => p.id == post.id);
                   _trendingPosts.removeWhere((p) => p.id == post.id);

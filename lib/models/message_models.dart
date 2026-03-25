@@ -337,6 +337,8 @@ class Message {
         return 'Mahali';
       case MessageType.contact:
         return 'Anwani';
+      case MessageType.sharedPost:
+        return 'Chapisho';
     }
   }
 }
@@ -348,7 +350,8 @@ enum MessageType {
   audio('audio'),
   document('document'),
   location('location'),
-  contact('contact');
+  contact('contact'),
+  sharedPost('shared_post');
 
   final String value;
   const MessageType(this.value);

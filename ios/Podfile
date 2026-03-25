@@ -1,4 +1,4 @@
-# Platform version for permission_handler, flutter_sound, and google_ml_kit
+# Platform version for permission_handler, flutter_sound, google_ml_kit, and google_maps_flutter_ios
 # GoogleMLKit requires iOS 16.0+ for all features
 platform :ios, '16.0'
 
@@ -45,8 +45,11 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
-    # Enable permission_handler permissions
     target.build_configurations.each do |config|
+      # Force iOS 16.0 deployment target for all pods
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+
+      # Enable permission_handler permissions
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
         'PERMISSION_MICROPHONE=1',

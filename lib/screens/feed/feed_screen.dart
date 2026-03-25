@@ -518,9 +518,9 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              final success = await _postService.deletePost(post.id);
+              final result = await _postService.deletePost(post.id);
               if (!mounted) return;
-              if (success) {
+              if (result.success) {
                 setState(() => _posts.removeWhere((p) => p.id == post.id));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(s?.postDeleted ?? 'Post deleted')),

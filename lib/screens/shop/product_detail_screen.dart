@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
+import '../../config/api_config.dart';
 import '../../services/shop_service.dart';
 import '../../widgets/shop/product_card.dart';
 import '../../widgets/cached_media_image.dart';
@@ -13,6 +16,32 @@ const Color _kPrimaryText = Color(0xFF1A1A1A);
 const Color _kSecondaryText = Color(0xFF666666);
 const Color _kTertiaryText = Color(0xFF999999);
 const Color _kDivider = Color(0xFFE0E0E0);
+
+// ─── Bilingual label helpers ────────────────────────────────────────────
+
+String _productTypeLabel(BuildContext context, ProductType type) {
+  final s = AppStringsScope.of(context);
+  switch (type) {
+    case ProductType.physical:
+      return s?.productTypePhysical ?? 'Physical';
+    case ProductType.digital:
+      return s?.productTypeDigital ?? 'Digital';
+    case ProductType.service:
+      return s?.productTypeService ?? 'Service';
+  }
+}
+
+String _conditionLabel(BuildContext context, ProductCondition condition) {
+  final s = AppStringsScope.of(context);
+  switch (condition) {
+    case ProductCondition.brandNew:
+      return s?.conditionNew ?? 'New';
+    case ProductCondition.used:
+      return s?.conditionUsed ?? 'Used';
+    case ProductCondition.refurbished:
+      return s?.conditionRefurbished ?? 'Refurbished';
+  }
+}
 
 /// Product detail screen showing full product information.
 class ProductDetailScreen extends StatefulWidget {
@@ -46,6 +75,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // Related products
   List<Product> _relatedProducts = [];
   bool _relatedLoading = true;
+
+  // Description expand/collapse
+  bool _descriptionExpanded = false;
 
   // Add to cart state
   int _quantity = 1;
@@ -240,12 +272,187 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  String get _productShareUrl =>
+      '${ApiConfig.baseUrl.replaceFirst('/api', '')}/shop/product/${_product!.id}';
+
+  String get _productShareText =>
+      '${_product!.title} - ${_product!.priceFormatted}\n$_productShareUrl';
+
+  void _shareProduct() {
+    if (_product == null) return;
+    final s = AppStringsScope.of(context);
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _kDivider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                s?.shareProduct ?? 'Share product',
+                style: const TextStyle(
+                  color: _kPrimaryText,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Share to external apps (like Instagram)
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kPrimaryText.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: HeroIcon(HeroIcons.share, size: 20, color: _kPrimaryText),
+                ),
+              ),
+              title: Text(s?.shareToApps ?? 'Share to apps'),
+              subtitle: Text(
+                s?.shareVia ?? 'Share via...',
+                style: const TextStyle(fontSize: 12, color: _kTertiaryText),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                SharePlus.instance.share(
+                  ShareParams(text: _productShareText),
+                );
+              },
+            ),
+
+            // Send to a friend (internal message)
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kPrimaryText.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: HeroIcon(HeroIcons.paperAirplane, size: 20, color: _kPrimaryText),
+                ),
+              ),
+              title: Text(s?.sendToFriend ?? 'Send to a friend'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.pushNamed(
+                  context,
+                  '/messages/forward',
+                  arguments: {
+                    'shareText': _productShareText,
+                    'shareType': 'product',
+                    'productId': _product!.id,
+                  },
+                );
+              },
+            ),
+
+            // Copy link
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kPrimaryText.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: HeroIcon(HeroIcons.link, size: 20, color: _kPrimaryText),
+                ),
+              ),
+              title: Text(s?.copyLink ?? 'Copy link'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: _productShareUrl));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(s?.linkCopied ?? 'Link copied to clipboard'),
+                  ),
+                );
+              },
+            ),
+
+            // Repost
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kPrimaryText.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: HeroIcon(HeroIcons.arrowPath, size: 20, color: _kPrimaryText),
+                ),
+              ),
+              title: Text(s?.repost ?? 'Repost'),
+              onTap: () {
+                Navigator.pop(ctx);
+                // Share as a post on user's feed
+                Navigator.pushNamed(
+                  context,
+                  '/create-post',
+                  arguments: {
+                    'sharedProductId': _product!.id,
+                    'sharedText': _productShareText,
+                  },
+                );
+              },
+            ),
+
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openSellerProfile() {
     if (_product?.seller == null) return;
     Navigator.pushNamed(
       context,
-      '/profile',
-      arguments: {'userId': _product!.seller!.id},
+      '/profile/${_product!.seller!.id}',
+    );
+  }
+
+  void _showWriteReviewSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _WriteReviewSheet(
+        productId: widget.productId,
+        userId: widget.currentUserId,
+        shopService: _shopService,
+        onSubmitted: (review) {
+          setState(() {
+            _reviews.insert(0, review);
+          });
+        },
+      ),
     );
   }
 
@@ -261,13 +468,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBackground,
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _kPrimaryText),
-            )
-          : _error != null
-              ? _buildErrorState()
-              : _buildContent(),
+      body: SafeArea(
+        top: false, // image gallery extends behind status bar
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: _kPrimaryText),
+              )
+            : _error != null
+                ? _buildErrorState()
+                : _buildContent(),
+      ),
       bottomNavigationBar: _product != null ? _buildBottomBar() : null,
     );
   }
@@ -317,6 +527,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         // Delivery options
         if (_product!.type != ProductType.digital)
           SliverToBoxAdapter(child: _buildDeliveryOptions()),
+
+        // Location
+        if (_product!.locationName != null &&
+            _product!.locationName!.isNotEmpty)
+          SliverToBoxAdapter(child: _buildLocationSection()),
 
         // Seller card
         if (_product!.seller != null)
@@ -405,7 +620,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               CircleAvatar(
                 backgroundColor: _kSurface.withValues(alpha: 0.9),
                 child: IconButton(
-                  onPressed: () {},
+                  onPressed: _shareProduct,
                   icon: const HeroIcon(
                     HeroIcons.share,
                     size: 22,
@@ -605,13 +820,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     : _product!.isService
                         ? HeroIcons.wrenchScrewdriver
                         : HeroIcons.cube,
-                text: _product!.type.label,
+                text: _productTypeLabel(context, _product!.type),
               ),
               // Condition (physical only)
               if (_product!.type == ProductType.physical)
                 _buildBadge(
                   icon: HeroIcons.tag,
-                  text: _product!.condition.label,
+                  text: _conditionLabel(context, _product!.condition),
                 ),
               // Stock
               if (_product!.type == ProductType.physical)
@@ -631,7 +846,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
 
           // Quantity selector
-          if (_product!.isInStock && _product!.type == ProductType.physical) ...[
+          if (_product!.isInStock) ...[
             const SizedBox(height: 20),
             Builder(builder: (context) {
               final s = AppStringsScope.of(context);
@@ -721,9 +936,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
           IconButton(
-            onPressed: _quantity < _product!.stockQuantity
-                ? () => setState(() => _quantity++)
-                : null,
+            onPressed: () {
+              final maxQty = _product!.stockQuantity > 0
+                  ? _product!.stockQuantity
+                  : 99;
+              if (_quantity < maxQty) {
+                setState(() => _quantity++);
+              }
+            },
             icon: const HeroIcon(HeroIcons.plus, size: 18),
             constraints: const BoxConstraints(
               minWidth: 40,
@@ -871,6 +1091,57 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  Widget _buildLocationSection() {
+    final s = AppStringsScope.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      color: _kSurface,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _kPrimaryText.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const HeroIcon(
+              HeroIcons.mapPin,
+              size: 20,
+              color: _kPrimaryText,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s?.location ?? 'Location',
+                  style: const TextStyle(
+                    color: _kSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _product!.locationName!,
+                  style: const TextStyle(
+                    color: _kPrimaryText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSellerCard() {
     final seller = _product!.seller!;
     final s = AppStringsScope.of(context);
@@ -975,6 +1246,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildDescription() {
     final s = AppStringsScope.of(context);
+    final description = _product!.description!;
+    // Show expand toggle only for long descriptions (> 3 lines ~ 150 chars)
+    final isLong = description.length > 150;
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(16),
@@ -991,14 +1266,48 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            _product!.description!,
-            style: const TextStyle(
-              color: _kSecondaryText,
-              fontSize: 14,
-              height: 1.6,
+          AnimatedCrossFade(
+            firstChild: Text(
+              description,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _kSecondaryText,
+                fontSize: 14,
+                height: 1.6,
+              ),
             ),
+            secondChild: Text(
+              description,
+              style: const TextStyle(
+                color: _kSecondaryText,
+                fontSize: 14,
+                height: 1.6,
+              ),
+            ),
+            crossFadeState: _descriptionExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
           ),
+          if (isLong)
+            GestureDetector(
+              onTap: () =>
+                  setState(() => _descriptionExpanded = !_descriptionExpanded),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _descriptionExpanded
+                      ? (s?.showLess ?? 'Show less')
+                      : (s?.showMore ?? 'Show more'),
+                  style: const TextStyle(
+                    color: _kPrimaryText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1014,17 +1323,45 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                s?.customerReviews ?? 'Customer Reviews',
-                style: const TextStyle(
-                  color: _kPrimaryText,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  s?.customerReviews ?? 'Customer Reviews',
+                  style: const TextStyle(
+                    color: _kPrimaryText,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              if (_reviews.isNotEmpty)
+              // Write review button
+              GestureDetector(
+                onTap: _showWriteReviewSheet,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _kPrimaryText,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const HeroIcon(HeroIcons.plus, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        s?.writeReview ?? 'Write a review',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_reviews.isNotEmpty) ...[
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: _openReviews,
                   child: Text(
@@ -1036,6 +1373,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
 
@@ -1209,7 +1547,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         compact: true,
                         showSeller: false,
                         onTap: () {
-                          Navigator.pushReplacementNamed(
+                          Navigator.pushNamed(
                             context,
                             '/shop/product',
                             arguments: {'productId': product.id},
@@ -1244,46 +1582,84 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
       child: Row(
         children: [
-          // Add to cart button
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _product!.isInStock && !_addingToCart
-                  ? _addToCart
-                  : null,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _kPrimaryText,
-                side: const BorderSide(color: _kPrimaryText, width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          // Favorite button
+          GestureDetector(
+            onTap: _toggleFavorite,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                border: Border.all(color: _kDivider),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: HeroIcon(
+                  HeroIcons.heart,
+                  style: _product!.isFavorited
+                      ? HeroIconStyle.solid
+                      : HeroIconStyle.outline,
+                  size: 22,
+                  color: _product!.isFavorited
+                      ? const Color(0xFFDC2626)
+                      : _kPrimaryText,
                 ),
               ),
-              child: _addingToCart
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _kPrimaryText,
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Share button
+          GestureDetector(
+            onTap: _shareProduct,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                border: Border.all(color: _kDivider),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: HeroIcon(
+                  HeroIcons.share,
+                  size: 22,
+                  color: _kPrimaryText,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Add to cart button
+          GestureDetector(
+            onTap: _product!.isInStock && !_addingToCart ? _addToCart : null,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _product!.isInStock ? _kPrimaryText : _kDivider,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: _addingToCart
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _kPrimaryText,
+                        ),
+                      )
+                    : HeroIcon(
+                        HeroIcons.shoppingCart,
+                        size: 22,
+                        color: _product!.isInStock ? _kPrimaryText : _kDivider,
                       ),
-                    )
-                  : Builder(builder: (context) {
-                      final s = AppStringsScope.of(context);
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const HeroIcon(HeroIcons.shoppingCart, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            s?.addToCart ?? 'Add',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
+              ),
             ),
           ),
 
@@ -1313,6 +1689,213 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               );
             }),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Write review bottom sheet.
+class _WriteReviewSheet extends StatefulWidget {
+  final int productId;
+  final int userId;
+  final ShopService shopService;
+  final ValueChanged<Review> onSubmitted;
+
+  const _WriteReviewSheet({
+    required this.productId,
+    required this.userId,
+    required this.shopService,
+    required this.onSubmitted,
+  });
+
+  @override
+  State<_WriteReviewSheet> createState() => _WriteReviewSheetState();
+}
+
+class _WriteReviewSheetState extends State<_WriteReviewSheet> {
+  final TextEditingController _commentController = TextEditingController();
+  int _selectedRating = 0;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_selectedRating == 0) return;
+    setState(() => _submitting = true);
+
+    final result = await widget.shopService.createReview(
+      productId: widget.productId,
+      userId: widget.userId,
+      rating: _selectedRating,
+      comment: _commentController.text.trim().isNotEmpty
+          ? _commentController.text.trim()
+          : null,
+    );
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    if (result.success && result.review != null) {
+      widget.onSubmitted(result.review!);
+      Navigator.pop(context);
+      final s = AppStringsScope.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s?.reviewSubmitted ?? 'Review submitted'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? 'Failed to submit review'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _kDivider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Center(
+            child: Text(
+              s?.writeReview ?? 'Write a review',
+              style: const TextStyle(
+                color: _kPrimaryText,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Star rating
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  s?.tapToRate ?? 'Tap to rate',
+                  style: const TextStyle(
+                    color: _kSecondaryText,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starNum = index + 1;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedRating = starNum),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: HeroIcon(
+                          HeroIcons.star,
+                          style: starNum <= _selectedRating
+                              ? HeroIconStyle.solid
+                              : HeroIconStyle.outline,
+                          size: 36,
+                          color: starNum <= _selectedRating
+                              ? const Color(0xFFF59E0B)
+                              : _kDivider,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Comment field
+          TextField(
+            controller: _commentController,
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: s?.reviewHint ?? 'Share your experience...',
+              hintStyle: const TextStyle(color: _kTertiaryText),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _kDivider),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _kDivider),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _kPrimaryText, width: 2),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Submit button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selectedRating > 0 && !_submitting ? _submit : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimaryText,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _kDivider,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      s?.submitReview ?? 'Submit review',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
         ],
       ),
     );

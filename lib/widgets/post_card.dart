@@ -8,6 +8,7 @@ import 'video_player_widget.dart';
 import 'audio_player_widget.dart';
 import 'cached_media_image.dart';
 import 'poll_vote_widget.dart';
+import '../l10n/app_strings_scope.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -222,6 +223,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildHeader(BuildContext context) {
+    final s = AppStringsScope.of(context);
     return Padding(
       padding: const EdgeInsets.all(_kCardPadding),
       child: Row(
@@ -298,7 +300,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                     if (post.isEdited) ...[
                       const Text(' · ', style: TextStyle(color: _kSecondaryText, fontSize: 12)),
                       Text(
-                        'Iliyohaririwa',
+                        s?.edited ?? 'Edited',
                         style: const TextStyle(
                           color: _kSecondaryText,
                           fontSize: 12,
@@ -494,6 +496,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
 
   /// Build audio post content with waveform visualization
   Widget _buildAudioPostContent(BuildContext context) {
+    final s = AppStringsScope.of(context);
     // Try to get audio URL from multiple sources:
     // 1. Direct audioPath on the post
     // 2. Audio media item in media array
@@ -524,7 +527,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             const SizedBox(width: _kGapIconText),
             Expanded(
               child: Text(
-                'Sauti haipatikani - hakuna audio_path',
+                s?.audioUnavailable ?? 'Audio unavailable - no audio_path',
                 style: const TextStyle(color: _kSecondaryText, fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -570,8 +573,8 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             audioUrl: audioUrl,
             duration: audioDuration,
             title: post.postType == PostType.audioText
-                ? 'Sauti + Maandishi'
-                : 'Sauti',
+                ? (s?.audioAndText ?? 'Audio + Text')
+                : (s?.audio ?? 'Audio'),
           ),
 
           // Music info if present
@@ -673,6 +676,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildDocumentPreview(PostMedia media) {
+    final s = AppStringsScope.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: _kCardPadding, vertical: 8),
       padding: const EdgeInsets.all(12),
@@ -699,7 +703,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  media.originalFilename ?? 'Faili',
+                  media.originalFilename ?? (s?.file ?? 'File'),
                   style: const TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
@@ -846,6 +850,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildSharedPost(BuildContext context) {
+    final s = AppStringsScope.of(context);
     final original = post.originalPost!;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -873,7 +878,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        original.user?.fullName ?? 'Unknown',
+                        original.user?.fullName ?? (s?.unknownUser ?? 'Unknown'),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -913,6 +918,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildStats(BuildContext context) {
+    final s = AppStringsScope.of(context);
     final hasAnyStats = post.likesCount > 0 ||
         post.commentsCount > 0 ||
         post.sharesCount > 0 ||
@@ -957,7 +963,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           const Spacer(),
           if (post.savesCount > 0) ...[
             Text(
-              'Hifadhi ${_formatCount(post.savesCount)}',
+              '${s?.save ?? 'Save'} ${_formatCount(post.savesCount)}',
               style: const TextStyle(color: _kSecondaryText, fontSize: 13),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -966,7 +972,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           ],
           if (post.commentsCount > 0)
             Text(
-              'Maoni ${_formatCount(post.commentsCount)}',
+              '${s?.comments ?? 'Comments'} ${_formatCount(post.commentsCount)}',
               style: const TextStyle(color: _kSecondaryText, fontSize: 13),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -974,7 +980,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           if (post.sharesCount > 0) ...[
             const SizedBox(width: 12),
             Text(
-              'Shiriki ${_formatCount(post.sharesCount)}',
+              '${s?.share ?? 'Share'} ${_formatCount(post.sharesCount)}',
               style: const TextStyle(color: _kSecondaryText, fontSize: 13),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -995,6 +1001,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildActions(BuildContext context) {
+    final s = AppStringsScope.of(context);
     return Column(
       children: [
         // Reaction picker (animated)
@@ -1060,7 +1067,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               Expanded(
                 child: Semantics(
                   button: true,
-                  label: post.isLiked ? 'Ondoa pendo' : 'Penda',
+                  label: post.isLiked ? (s?.removeLike ?? 'Unlike') : (s?.like ?? 'Like'),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 48),
                     child: GestureDetector(
@@ -1083,7 +1090,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                                 color: post.isLiked ? _kPrimaryText : _kSecondaryText,
                               ),
                         label: Text(
-                          post.userReaction?.label ?? 'Penda',
+                          post.userReaction?.label ?? (s?.like ?? 'Like'),
                           style: TextStyle(
                             color: post.isLiked ? _kPrimaryText : _kSecondaryText,
                             fontSize: 13,
@@ -1099,7 +1106,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 child: TextButton.icon(
                   onPressed: widget.onComment,
                   icon: HeroIcon(HeroIcons.chatBubbleLeft, style: HeroIconStyle.outline, size: 20, color: _kSecondaryText),
-                  label: Text('Maoni', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
+                  label: Text(s?.comment ?? 'Comment', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
                 ),
               ),
               // Share button
@@ -1107,7 +1114,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 child: TextButton.icon(
                   onPressed: widget.onShare,
                   icon: HeroIcon(HeroIcons.share, style: HeroIconStyle.outline, size: 20, color: _kSecondaryText),
-                  label: Text('Shiriki', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
+                  label: Text(s?.share ?? 'Share', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
                 ),
               ),
               // Save/Bookmark button (48dp touch target per DESIGN.md)
@@ -1119,7 +1126,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                   size: 22,
                   color: post.isSaved ? _kPrimaryText : _kSecondaryText,
                 ),
-                tooltip: post.isSaved ? 'Ondoa hifadhi' : 'Hifadhi',
+                tooltip: post.isSaved ? (s?.unsave ?? 'Unsave') : (s?.save ?? 'Save'),
                 padding: const EdgeInsets.all(12),
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               ),
@@ -1164,6 +1171,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
 
   /// Builds the subscriber-only overlay with tint and subscribe button.
   Widget _buildSubscriberOverlay() {
+    final s = AppStringsScope.of(context);
     return Container(
       constraints: const BoxConstraints(minHeight: 200),
       color: Colors.black.withValues(alpha: 0.85),
@@ -1187,8 +1195,8 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Kwa Wasajili Pekee',
+              Text(
+                s?.subscribersOnly ?? 'Subscribers Only',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -1197,7 +1205,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               ),
               const SizedBox(height: 8),
               Text(
-                'Jisajili kwa ${post.user?.fullName ?? 'msanii huyu'}\nkuona maudhui haya',
+                s?.subscribeTo(post.user?.fullName ?? (s.thisCreator)) ?? 'Subscribe to ${post.user?.fullName ?? 'this creator'}\nto see this content',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.8),
                   fontSize: 14,
@@ -1208,8 +1216,8 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               ElevatedButton.icon(
                 onPressed: widget.onSubscribe,
                 icon: const Icon(Icons.star, size: 20),
-                label: const Text(
-                  'Jisajili',
+                label: Text(
+                  s?.subscribe ?? 'Subscribe',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(

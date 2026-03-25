@@ -13,6 +13,42 @@ const Color _kDivider = Color(0xFFE0E0E0);
 const Color _kBackground = Color(0xFFFAFAFA);
 const double _kCardRadius = 16.0;
 
+// ─── Bilingual label helpers ────────────────────────────────────────────
+
+String _productTypeLabel(BuildContext context, ProductType type) {
+  final s = AppStringsScope.of(context);
+  switch (type) {
+    case ProductType.physical:
+      return s?.productTypePhysical ?? 'Physical';
+    case ProductType.digital:
+      return s?.productTypeDigital ?? 'Digital';
+    case ProductType.service:
+      return s?.productTypeService ?? 'Service';
+  }
+}
+
+String _orderStatusLabel(BuildContext context, OrderStatus status) {
+  final s = AppStringsScope.of(context);
+  switch (status) {
+    case OrderStatus.pending:
+      return s?.orderStatusPending ?? 'Pending';
+    case OrderStatus.confirmed:
+      return s?.orderStatusConfirmed ?? 'Confirmed';
+    case OrderStatus.processing:
+      return s?.orderStatusProcessing ?? 'Processing';
+    case OrderStatus.shipped:
+      return s?.orderStatusShipped ?? 'Shipped';
+    case OrderStatus.delivered:
+      return s?.orderStatusDelivered ?? 'Delivered';
+    case OrderStatus.completed:
+      return s?.orderStatusCompleted ?? 'Completed';
+    case OrderStatus.cancelled:
+      return s?.orderStatusCancelled ?? 'Cancelled';
+    case OrderStatus.refunded:
+      return s?.orderStatusRefunded ?? 'Refunded';
+  }
+}
+
 /// Compact product card for grid display in marketplace.
 /// DESIGN.md: surface, primary/secondary text, 16px radius, 48dp touch targets.
 class ProductCard extends StatelessWidget {
@@ -53,49 +89,48 @@ class ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product image
-            _buildProductImage(context),
+            // Product image — Expanded to share space with info section
+            Expanded(
+              flex: 3,
+              child: _buildProductImage(context),
+            ),
 
-            // Product info
-            Padding(
-              padding: EdgeInsets.all(compact ? 8 : 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  Text(
-                    product.title,
-                    style: TextStyle(
-                      color: _kPrimaryText,
-                      fontSize: compact ? 13 : 14,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+            // Product info — clipped to prevent overflow
+            Expanded(
+              flex: 2,
+              child: ClipRect(
+                child: Padding(
+                  padding: EdgeInsets.all(compact ? 8 : 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Title
+                      Text(
+                        product.title,
+                        style: TextStyle(
+                          color: _kPrimaryText,
+                          fontSize: compact ? 13 : 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
+                      SizedBox(height: compact ? 4 : 4),
+
+                      // Price row
+                      _buildPriceRow(),
+
+                      if (!compact) ...[
+                        const SizedBox(height: 4),
+                        // Rating and sold count
+                        _buildRatingRow(context),
+                      ],
+                    ],
                   ),
-
-                  SizedBox(height: compact ? 4 : 6),
-
-                  // Price row
-                  _buildPriceRow(),
-
-                  if (!compact) ...[
-                    const SizedBox(height: 6),
-                    // Rating and sold count
-                    _buildRatingRow(context),
-                  ],
-
-                  if (!compact && product.locationName != null) ...[
-                    const SizedBox(height: 4),
-                    _buildLocationRow(),
-                  ],
-
-                  if (showSeller && product.seller != null && !compact) ...[
-                    const SizedBox(height: 8),
-                    _buildSellerRow(),
-                  ],
-                ],
+                ),
               ),
             ),
           ],
@@ -106,9 +141,7 @@ class ProductCard extends StatelessWidget {
 
   Widget _buildProductImage(BuildContext context) {
     final s = AppStringsScope.of(context);
-    return AspectRatio(
-      aspectRatio: compact ? 1 : 1,
-      child: Stack(
+    return Stack(
         fit: StackFit.expand,
         children: [
           // Image
@@ -174,7 +207,7 @@ class ProductCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      product.type.label,
+                      _productTypeLabel(context, product.type),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -249,7 +282,6 @@ class ProductCard extends StatelessWidget {
               ),
             ),
         ],
-      ),
     );
   }
 
@@ -354,75 +386,6 @@ class ProductCard extends StatelessWidget {
     );
   }
 
-  Widget _buildLocationRow() {
-    return Row(
-      children: [
-        const HeroIcon(
-          HeroIcons.mapPin,
-          size: 12,
-          color: _kTertiaryText,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            product.locationName!,
-            style: const TextStyle(
-              color: _kTertiaryText,
-              fontSize: 11,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSellerRow() {
-    final seller = product.seller!;
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 10,
-          backgroundImage: seller.avatarUrl.isNotEmpty
-              ? NetworkImage(seller.avatarUrl)
-              : null,
-          backgroundColor: _kBackground,
-          child: seller.avatarUrl.isEmpty
-              ? Text(
-                  seller.firstName.isNotEmpty ? seller.firstName[0] : 'U',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            seller.displayName,
-            style: const TextStyle(
-              color: _kSecondaryText,
-              fontSize: 11,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (seller.isVerified)
-          const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: HeroIcon(
-              HeroIcons.checkBadge,
-              style: HeroIconStyle.solid,
-              size: 14,
-              color: Color(0xFF3B82F6),
-            ),
-          ),
-      ],
-    );
-  }
 }
 
 /// Horizontal product card for lists and search results.
@@ -973,7 +936,7 @@ class OrderCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _buildStatusBadge(),
+                _buildStatusBadge(context),
               ],
             ),
 
@@ -1090,7 +1053,7 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBadge() {
+  Widget _buildStatusBadge(BuildContext context) {
     Color backgroundColor;
     Color textColor;
 
@@ -1133,7 +1096,7 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        order.status.label,
+        _orderStatusLabel(context, order.status),
         style: TextStyle(
           color: textColor,
           fontSize: 11,

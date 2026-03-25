@@ -146,14 +146,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _buildPinSheet() {
     final s = AppStringsScope.of(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -246,6 +247,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -438,7 +440,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -459,6 +462,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
             const SizedBox(height: 100),
           ],
+        ),
         ),
       ),
       bottomNavigationBar: _buildBottomBar(),

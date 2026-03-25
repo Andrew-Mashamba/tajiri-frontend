@@ -27,6 +27,13 @@ import 'screens/clips/clips_screen.dart';
 import 'screens/groups/events_screen.dart';
 import 'screens/search/search_screen.dart';
 import 'screens/login/login_screen.dart';
+import 'screens/shop/create_product_screen.dart';
+import 'screens/shop/product_detail_screen.dart';
+import 'screens/shop/seller_orders_screen.dart';
+import 'screens/shop/order_detail_screen.dart';
+import 'screens/shop/cart_screen.dart';
+import 'screens/shop/checkout_screen.dart';
+import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
 import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
 import 'services/language_notifier.dart';
@@ -540,6 +547,134 @@ class _TajiriAppState extends State<TajiriApp> {
                   },
                 ),
               );
+            }
+            break;
+
+          case 'shop':
+            // Handle shop routes: /shop/create-product, /shop/edit-product, etc.
+            if (pathSegments.length > 1) {
+              switch (pathSegments[1]) {
+                case 'create-product':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return CreateProductScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'product': {
+                  // Supports /shop/product/123 or /shop/product with arguments
+                  int productId = 0;
+                  if (pathSegments.length > 2) {
+                    productId = int.tryParse(pathSegments[2]) ?? 0;
+                  }
+                  if (productId == 0 && settings.arguments is Map) {
+                    productId = (settings.arguments as Map<String, dynamic>)['productId'] as int? ?? 0;
+                  }
+                  if (productId > 0) {
+                    return MaterialPageRoute(
+                      builder: (_) => FutureBuilder<int>(
+                        future: getCurrentUserId(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          return ProductDetailScreen(
+                            productId: productId,
+                            currentUserId: snapshot.data!,
+                          );
+                        },
+                      ),
+                    );
+                  }
+                  break;
+                }
+
+                case 'seller-orders':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return SellerOrdersScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'order': {
+                  // Supports /shop/order/123 or /shop/order with arguments
+                  int orderId = 0;
+                  bool isSeller = false;
+                  if (pathSegments.length > 2) {
+                    orderId = int.tryParse(pathSegments[2]) ?? 0;
+                  }
+                  if (settings.arguments is Map) {
+                    final args = settings.arguments as Map<String, dynamic>;
+                    if (orderId == 0) {
+                      orderId = args['orderId'] as int? ?? 0;
+                    }
+                    isSeller = args['isSeller'] == true;
+                  }
+                  if (orderId > 0) {
+                    return MaterialPageRoute(
+                      builder: (_) => FutureBuilder<int>(
+                        future: getCurrentUserId(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          return OrderDetailScreen(
+                            orderId: orderId,
+                            currentUserId: snapshot.data!,
+                            isSeller: isSeller,
+                          );
+                        },
+                      ),
+                    );
+                  }
+                  break;
+                }
+
+                case 'cart':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return CartScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'checkout':
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return CheckoutScreen(
+                          currentUserId: snapshot.data!,
+                          product: args?['product'] as Product?,
+                          quantity: args?['quantity'] as int?,
+                          deliveryMethod: args?['deliveryMethod'] as DeliveryMethod?,
+                          cart: args?['cart'] as Cart?,
+                        );
+                      },
+                    ),
+                  );
+              }
             }
             break;
 

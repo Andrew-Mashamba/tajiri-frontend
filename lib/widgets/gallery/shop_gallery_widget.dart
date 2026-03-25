@@ -5,6 +5,7 @@ import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
 import '../../services/local_storage_service.dart';
 import '../cached_media_image.dart';
+import '../shop/product_card.dart';
 
 // DESIGN.md tokens (monochrome palette)
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -16,6 +17,13 @@ const Color _kDivider = Color(0xFFE0E0E0);
 const Color _kSuccess = Color(0xFF22C55E);
 const Color _kWarning = Color(0xFFF59E0B);
 const Color _kError = Color(0xFFDC2626);
+
+// DESIGN.md shadow token §7.1
+const BoxShadow _kCardShadow = BoxShadow(
+  color: Color(0x1A000000), // black 0.1
+  blurRadius: 4,
+  offset: Offset(0, 2),
+);
 
 /// Shopify-style seller dashboard for profile shop tab.
 /// Features:
@@ -45,7 +53,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
   final ScrollController _scrollController = ScrollController();
 
   // State
-  List<Product> _products = [];
+  List<Product> _allProducts = []; // Unfiltered master list
+  List<Product> _products = [];    // Filtered for current tab
   List<Order> _pendingOrders = [];
   SellerStats? _stats;
   bool _isLoading = true;
@@ -114,12 +123,14 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     if (newStatus != _statusFilter) {
       setState(() {
         _statusFilter = newStatus;
-        _products = [];
-        _currentPage = 1;
-        _hasMore = true;
+        _products = _filterProducts(_allProducts, newStatus);
       });
-      _loadProducts();
     }
+  }
+
+  List<Product> _filterProducts(List<Product> products, ProductStatus? status) {
+    if (status == null) return List.of(products);
+    return products.where((p) => p.status == status).toList();
   }
 
   Future<void> _loadData() async {
@@ -144,7 +155,6 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
   Future<void> _loadProducts() async {
     final result = await _shopService.getSellerProducts(
       widget.userId,
-      status: _statusFilter,
       page: 1,
       perPage: 20,
       currentUserId: _currentUserId,
@@ -153,7 +163,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     if (mounted) {
       setState(() {
         if (result.success) {
-          _products = result.products;
+          _allProducts = result.products;
+          _products = _filterProducts(_allProducts, _statusFilter);
           _hasMore = result.meta?.hasMore ?? false;
           _currentPage = 1;
         } else {
@@ -171,7 +182,6 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
 
     final result = await _shopService.getSellerProducts(
       widget.userId,
-      status: _statusFilter,
       page: _currentPage,
       perPage: 20,
       currentUserId: _currentUserId,
@@ -181,7 +191,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       setState(() {
         _isLoadingMore = false;
         if (result.success) {
-          _products.addAll(result.products);
+          _allProducts.addAll(result.products);
+          _products = _filterProducts(_allProducts, _statusFilter);
           _hasMore = result.meta?.hasMore ?? false;
         }
       });
@@ -379,21 +390,100 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _products.isEmpty && _stats == null) {
-      return const Center(child: CircularProgressIndicator());
+      return SafeArea(child: _buildShimmerLoading(context));
     }
 
     if (_error != null && _products.isEmpty) {
-      return _buildErrorState(context);
+      return SafeArea(child: _buildErrorState(context));
     }
 
     // For non-owner viewing, show simple product grid
     if (!widget.isOwnProfile) {
-      return _buildViewerMode(context);
+      return SafeArea(child: _buildViewerMode(context));
     }
 
     // Owner's seller dashboard
-    return _buildSellerDashboard(context);
+    return SafeArea(child: _buildSellerDashboard(context));
   }
+
+  // ─── Shimmer Loading ──────────────────────────────────────────────────
+
+  Widget _buildShimmerLoading(BuildContext context) {
+    return _ShimmerContainer(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section title placeholder
+            _buildShimmerBox(width: 120, height: 20),
+            const SizedBox(height: 16),
+            // Stats cards skeleton (2x2 grid)
+            if (widget.isOwnProfile) ...[
+              Row(
+                children: [
+                  Expanded(child: _buildShimmerBox(height: 100)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildShimmerBox(height: 100)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildShimmerBox(height: 100)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildShimmerBox(height: 100)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Quick action buttons skeleton
+              Row(
+                children: [
+                  Expanded(child: _buildShimmerBox(height: 56)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildShimmerBox(height: 56)),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+            // Products section title placeholder
+            _buildShimmerBox(width: 100, height: 18),
+            const SizedBox(height: 16),
+            // Product grid skeleton (2x2)
+            Row(
+              children: [
+                Expanded(child: _buildShimmerBox(height: 220)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildShimmerBox(height: 220)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildShimmerBox(height: 220)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildShimmerBox(height: 220)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShimmerBox({double? width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _kDivider,
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
+
+  // ─── Error State ──────────────────────────────────────────────────────
 
   Widget _buildErrorState(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -413,6 +503,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       ),
     );
   }
+
+  // ─── Viewer Mode ──────────────────────────────────────────────────────
 
   Widget _buildViewerMode(BuildContext context) {
     if (_products.isEmpty) {
@@ -452,6 +544,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       ),
     );
   }
+
+  // ─── Seller Dashboard ─────────────────────────────────────────────────
 
   Widget _buildSellerDashboard(BuildContext context) {
     return RefreshIndicator(
@@ -528,7 +622,10 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
                 delegate: SliverChildBuilderDelegate(
                   (ctx, index) {
                     if (index >= _products.length) return null;
-                    return _buildSellerProductCard(ctx, _products[index]);
+                    return _StaggeredEntry(
+                      index: index,
+                      child: _buildSellerProductCard(ctx, _products[index]),
+                    );
                   },
                   childCount: _products.length,
                 ),
@@ -556,11 +653,15 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       case ProductStatus.active:
         return _stats!.activeProducts;
       case ProductStatus.draft:
-        return _stats!.totalProducts - _stats!.activeProducts; // Approximation
-      default:
-        return 0;
+        return _stats!.draftProducts;
+      case ProductStatus.soldOut:
+        return _stats!.soldOutProducts;
+      case ProductStatus.archived:
+        return _stats!.archivedProducts;
     }
   }
+
+  // ─── Stats Section ────────────────────────────────────────────────────
 
   Widget _buildStatsSection(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -635,7 +736,7 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       decoration: BoxDecoration(
         color: _kSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _kDivider),
+        boxShadow: const [_kCardShadow],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,6 +761,7 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: color,
+              letterSpacing: -0.3,
             ),
           ),
           const SizedBox(height: 4),
@@ -674,6 +776,8 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       ),
     );
   }
+
+  // ─── Quick Actions ────────────────────────────────────────────────────
 
   Widget _buildQuickActions(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -710,59 +814,64 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     bool isPrimary = false,
     String? badge,
   }) {
-    return Material(
-      color: isPrimary ? _kPrimaryText : _kSurface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            border: isPrimary ? null : Border.all(color: _kDivider),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              HeroIcon(
-                icon,
-                size: 20,
-                color: isPrimary ? Colors.white : _kPrimaryText,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [_kCardShadow],
+      ),
+      child: Material(
+        color: isPrimary ? _kPrimaryText : _kSurface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                HeroIcon(
+                  icon,
+                  size: 20,
                   color: isPrimary ? Colors.white : _kPrimaryText,
                 ),
-              ),
-              if (badge != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _kWarning,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isPrimary ? Colors.white : _kPrimaryText,
                   ),
                 ),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _kWarning,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      badge,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  // ─── Pending Orders ───────────────────────────────────────────────────
 
   Widget _buildPendingOrdersSection(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -812,82 +921,90 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     final s = AppStringsScope.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _kSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _kWarning.withValues(alpha: 0.3)),
+        boxShadow: const [_kCardShadow],
       ),
-      child: InkWell(
-        onTap: () => _navigateToOrderDetail(order),
-        child: Row(
-          children: [
-            // Product thumbnail
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: _kBackground,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: order.product?.thumbnailUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedMediaImage(
-                        imageUrl: order.product!.thumbnailUrl,
-                        width: 48,
-                        height: 48,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : const HeroIcon(HeroIcons.shoppingBag, size: 24, color: _kTertiaryText),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    order.product?.title ?? (s?.productNumber(order.productId) ?? 'Product #${order.productId}'),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: _kPrimaryText,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () => _navigateToOrderDetail(order),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Product thumbnail
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    color: _kBackground,
+                    child: order.product?.thumbnailUrl != null
+                        ? CachedMediaImage(
+                            imageUrl: order.product!.thumbnailUrl,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          )
+                        : const Center(
+                            child: HeroIcon(HeroIcons.shoppingBag, size: 24, color: _kTertiaryText),
+                          ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${order.buyer?.firstName ?? (s?.buyer ?? 'Buyer')} • ${order.totalFormatted}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: _kSecondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _kWarning.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                order.status.label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _kWarning,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.product?.title ?? (s?.productNumber(order.productId) ?? 'Product #${order.productId}'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _kPrimaryText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${order.buyer?.firstName ?? (s?.buyer ?? 'Buyer')} • ${order.totalFormatted}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _kSecondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _kWarning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _orderStatusLabel(context, order.status),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: _kWarning,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+
+  // ─── Products Section ─────────────────────────────────────────────────
 
   Widget _buildProductsSectionHeader(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -916,150 +1033,119 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     );
   }
 
+  /// Seller product card — reuses ProductCard with status/menu overlays.
   Widget _buildSellerProductCard(BuildContext context, Product product) {
     final s = AppStringsScope.of(context);
     return GestureDetector(
-      onTap: () => _navigateToProductDetail(product),
       onLongPress: () => _showProductActions(product),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _kSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _kDivider),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image with status badge and menu
-            Expanded(
-              flex: 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Product image
-                  CachedMediaImage(
-                    imageUrl: product.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    placeholder: Container(
-                      color: _kBackground,
-                      child: const Center(
-                        child: HeroIcon(HeroIcons.photo, size: 32, color: _kTertiaryText),
-                      ),
-                    ),
-                  ),
+      child: Stack(
+        children: [
+          // Reuse the standard ProductCard for consistent styling
+          ProductCard(
+            product: product,
+            compact: true,
+            showSeller: false,
+            onTap: () => _navigateToProductDetail(product),
+          ),
 
-                  // Status badge
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(product.status).withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        product.status.label,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Menu button
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Material(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        onTap: () => _showProductActions(product),
-                        customBorder: const CircleBorder(),
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
-                          child: HeroIcon(HeroIcons.ellipsisVertical, size: 16, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Sold out overlay
-                  if (product.status == ProductStatus.soldOut)
-                    Container(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      child: Center(
-                        child: Text(
-                          s?.soldOut2 ?? 'SOLD OUT',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+          // Status badge overlay (top-left)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getStatusColor(product.status).withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(6),
               ),
-            ),
-
-            // Info section
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _kPrimaryText,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Text(
-                      product.priceFormatted,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: _kPrimaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const HeroIcon(HeroIcons.eye, size: 12, color: _kTertiaryText),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${product.viewsCount}',
-                          style: const TextStyle(fontSize: 11, color: _kTertiaryText),
-                        ),
-                        const SizedBox(width: 12),
-                        const HeroIcon(HeroIcons.shoppingCart, size: 12, color: _kTertiaryText),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${product.ordersCount}',
-                          style: const TextStyle(fontSize: 11, color: _kTertiaryText),
-                        ),
-                      ],
-                    ),
-                  ],
+              child: Text(
+                _productStatusLabel(context, product.status),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+
+          // Menu button overlay (top-right)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.3),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: () => _showProductActions(product),
+                customBorder: const CircleBorder(),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: HeroIcon(HeroIcons.ellipsisVertical, size: 16, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+
+          // Sold out overlay
+          if (product.status == ProductStatus.soldOut)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  child: Center(
+                    child: Text(
+                      s?.soldOut2 ?? 'SOLD OUT',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  String _productStatusLabel(BuildContext context, ProductStatus status) {
+    final s = AppStringsScope.of(context);
+    switch (status) {
+      case ProductStatus.draft:
+        return s?.statusDraft ?? 'Draft';
+      case ProductStatus.active:
+        return s?.statusActive ?? 'Active';
+      case ProductStatus.soldOut:
+        return s?.statusSoldOut ?? 'Sold Out';
+      case ProductStatus.archived:
+        return s?.statusArchived ?? 'Archived';
+    }
+  }
+
+  String _orderStatusLabel(BuildContext context, OrderStatus status) {
+    final s = AppStringsScope.of(context);
+    switch (status) {
+      case OrderStatus.pending:
+        return s?.orderStatusPending ?? 'Pending';
+      case OrderStatus.confirmed:
+        return s?.orderStatusConfirmed ?? 'Confirmed';
+      case OrderStatus.processing:
+        return s?.orderStatusProcessing ?? 'Processing';
+      case OrderStatus.shipped:
+        return s?.orderStatusShipped ?? 'Shipped';
+      case OrderStatus.delivered:
+        return s?.orderStatusDelivered ?? 'Delivered';
+      case OrderStatus.completed:
+        return s?.orderStatusCompleted ?? 'Completed';
+      case OrderStatus.cancelled:
+        return s?.orderStatusCancelled ?? 'Cancelled';
+      case OrderStatus.refunded:
+        return s?.orderStatusRefunded ?? 'Refunded';
+    }
   }
 
   Color _getStatusColor(ProductStatus status) {
@@ -1075,6 +1161,7 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
     }
   }
 
+  /// Viewer product grid — reuses ProductCard for consistent marketplace styling.
   Widget _buildProductsGrid() {
     return GridView.builder(
       controller: _scrollController,
@@ -1083,85 +1170,26 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.65,
       ),
       itemCount: _products.length + (_isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= _products.length) {
           return const Center(child: CircularProgressIndicator());
         }
-        return _buildViewerProductCard(_products[index]);
+        return _StaggeredEntry(
+          index: index,
+          child: ProductCard(
+            product: _products[index],
+            showSeller: false,
+            onTap: () => _navigateToProductDetail(_products[index]),
+          ),
+        );
       },
     );
   }
 
-  Widget _buildViewerProductCard(Product product) {
-    return GestureDetector(
-      onTap: () => _navigateToProductDetail(product),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _kSurface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: CachedMediaImage(
-                imageUrl: product.thumbnailUrl,
-                fit: BoxFit.cover,
-                placeholder: Container(
-                  color: _kBackground,
-                  child: const Center(
-                    child: HeroIcon(HeroIcons.photo, size: 32, color: _kTertiaryText),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _kPrimaryText,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Text(
-                      product.priceFormatted,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: _kPrimaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // ─── Empty State ──────────────────────────────────────────────────────
 
   Widget _buildEmptyState(BuildContext context, {required bool isOwner}) {
     final s = AppStringsScope.of(context);
@@ -1238,7 +1266,11 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
   }
 }
 
-/// Sliver delegate for pinned tab bar
+// ═══════════════════════════════════════════════════════════════════════════
+// Helper widgets
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Sliver delegate for pinned tab bar with bottom border.
 class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
 
@@ -1253,7 +1285,12 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: _kBackground,
+      decoration: const BoxDecoration(
+        color: _kSurface,
+        border: Border(
+          bottom: BorderSide(color: _kDivider, width: 1),
+        ),
+      ),
       child: tabBar,
     );
   }
@@ -1261,5 +1298,107 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
     return tabBar != oldDelegate.tabBar;
+  }
+}
+
+/// Staggered fade+slide animation for grid items (§12).
+class _StaggeredEntry extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const _StaggeredEntry({required this.index, required this.child});
+
+  @override
+  State<_StaggeredEntry> createState() => _StaggeredEntryState();
+}
+
+class _StaggeredEntryState extends State<_StaggeredEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+  bool _hasAnimated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    // Stagger delay: 30ms per item, capped at 300ms — plays once only
+    final delay = Duration(milliseconds: (widget.index * 30).clamp(0, 300));
+    Future.delayed(delay, () {
+      if (mounted && !_hasAnimated) {
+        _hasAnimated = true;
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Pulsing shimmer container — animates opacity of children.
+class _ShimmerContainer extends StatefulWidget {
+  final Widget child;
+  const _ShimmerContainer({required this.child});
+
+  @override
+  State<_ShimmerContainer> createState() => _ShimmerContainerState();
+}
+
+class _ShimmerContainerState extends State<_ShimmerContainer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: 0.4 + (_controller.value * 0.6),
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
   }
 }
