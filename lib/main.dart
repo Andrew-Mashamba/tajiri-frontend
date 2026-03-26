@@ -11,6 +11,7 @@ import 'screens/feed/create_post_screen.dart';
 import 'screens/clips/createstory_screen.dart';
 import 'screens/campaigns/create_campaign_screen.dart';
 import 'screens/feed/post_detail_screen.dart';
+import 'screens/feed/thread_viewer_screen.dart';
 import 'screens/feed/saved_posts_screen.dart';
 import 'screens/feed/musicgallerywidget_screen.dart';
 import 'screens/michangogallerywidget_screen.dart';
@@ -264,6 +265,28 @@ class _TajiriAppState extends State<TajiriApp> {
                       }
                       return PostDetailScreen(
                         postId: postId,
+                        currentUserId: snapshot.data!,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            break;
+
+          case 'thread':
+            if (pathSegments.length > 1) {
+              final threadId = int.tryParse(pathSegments[1]) ?? 0;
+              if (threadId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return ThreadViewerScreen(
+                        threadId: threadId,
                         currentUserId: snapshot.data!,
                       );
                     },
