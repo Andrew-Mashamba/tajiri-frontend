@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../models/post_models.dart';
@@ -44,6 +45,11 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
   int? _currentPostId;
   int? _currentCreatorId;
 
+  int _postsViewed = 0;
+  bool _autoPlayEnabled = false;
+  Timer? _countdownTimer;
+  int _countdownSeconds = 0;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +76,7 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
   @override
   void dispose() {
     _emitDwellForCurrentPost();
+    _countdownTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -87,6 +94,31 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
           );
         });
       }
+    }
+  }
+
+  void _startAutoPlayCountdown() {
+    _countdownTimer?.cancel();
+    if (!_autoPlayEnabled) return;
+    setState(() => _countdownSeconds = 3);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) { timer.cancel(); return; }
+      setState(() => _countdownSeconds--);
+      if (_countdownSeconds <= 0) {
+        timer.cancel();
+        _autoAdvance();
+      }
+    });
+  }
+
+  void _autoAdvance() {
+    final currentPage = _pageController.page?.round() ?? 0;
+    if (currentPage < _posts.length - 1) {
+      _pageController.animateToPage(
+        currentPage + 1,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
@@ -330,6 +362,13 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
                   creatorId: post.userId,
                 );
               });
+              _postsViewed++;
+              if (_postsViewed >= 3 && !_autoPlayEnabled) {
+                _autoPlayEnabled = true;
+              }
+              if (_autoPlayEnabled) {
+                _startAutoPlayCountdown();
+              }
             },
             itemCount: _posts.length,
             itemBuilder: (context, index) {
@@ -353,6 +392,26 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
               );
             },
           ),
+          // Autoplay "Up Next" countdown overlay
+          if (_countdownSeconds > 0)
+            Positioned(
+              bottom: 100,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xCC1A1A1A),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Up Next in $_countdownSeconds...',
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
           // Global close button (top-left) with tap effect
           SafeArea(
             child: Align(

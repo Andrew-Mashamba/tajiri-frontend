@@ -13,6 +13,7 @@ import '../../services/story_service.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_post_sheet.dart';
+import '../../widgets/teaser_card.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../clips/streams_screen.dart';
 import '../clips/storyviewer_screen.dart';
@@ -626,20 +627,25 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         ),
         itemExtentBuilder: (int index, SliverLayoutDimensions dimensions) {
           if (index == 0 && showStoriesRow) return _kStoriesRowHeight;
-          final postIndex = index - storiesSlot;
-          if (postIndex >= postCount) return _kLoadingSlotHeight;
+          final contentIndex = index - storiesSlot;
+          final teaserCount = postCount > 0 ? (postCount - 1) ~/ 10 : 0;
+          if (contentIndex >= postCount + teaserCount) return _kLoadingSlotHeight;
+          // Teaser cards appear after every 10 posts (at content positions 10, 21, 32, ...)
+          final isTeaser = contentIndex > 0 && contentIndex % 11 == 10;
+          if (isTeaser) return 100.0;
           return _kEstimatedPostHeight;
         },
         addAutomaticKeepAlives: false,
         addRepaintBoundaries: true,
         addSemanticIndexes: false,
-        itemCount: storiesSlot + postCount + loadingSlot,
+        itemCount: storiesSlot + postCount + (postCount > 0 ? (postCount - 1) ~/ 10 : 0) + loadingSlot,
         itemBuilder: (context, index) {
           if (index == 0 && showStoriesRow) {
             return _buildStoriesRow(context);
           }
-          final postIndex = index - storiesSlot;
-          if (postIndex >= postCount) {
+          final contentIndex = index - storiesSlot;
+          final teaserCount = postCount > 0 ? (postCount - 1) ~/ 10 : 0;
+          if (contentIndex >= postCount + teaserCount) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
@@ -649,6 +655,32 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
                 ),
               ),
             );
+          }
+
+          // Determine if this is a teaser slot
+          // Pattern: 10 posts, teaser, 10 posts, teaser, ...
+          // In a group of 11, indices 0-9 are posts, index 10 is teaser
+          final isTeaser = contentIndex > 0 && contentIndex % 11 == 10;
+          if (isTeaser) {
+            final strings = AppStringsScope.of(context);
+            return TeaserCard(
+              key: ValueKey('teaser_$contentIndex'),
+              text: strings?.viralPostAlert ?? 'A post is going viral right now!',
+              onTap: () {
+                // Find the next post after this teaser and open it
+                final nextPostIndex = (contentIndex ~/ 11) * 10 + 10;
+                if (nextPostIndex < _posts.length) {
+                  _openFullScreenPostViewer(_posts[nextPostIndex]);
+                }
+              },
+            );
+          }
+
+          // Map content index to actual post index (subtract teaser slots before this position)
+          final teasersBefore = contentIndex > 0 ? contentIndex ~/ 11 : 0;
+          final postIndex = contentIndex - teasersBefore;
+          if (postIndex < 0 || postIndex >= _posts.length) {
+            return const SizedBox.shrink();
           }
 
           final post = _posts[postIndex];
