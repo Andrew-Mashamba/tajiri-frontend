@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:tajiri/calls/call_channel_service.dart';
 import 'package:tajiri/screens/calls/incoming_call_flow_screen.dart';
 import 'local_storage_service.dart';
+import '../widgets/milestone_overlay.dart';
 
 class FcmService {
   static final FcmService instance = FcmService._();
@@ -60,7 +61,15 @@ class FcmService {
       _openThread(data, navigator);
       return;
     }
-    if (type == 'streak_warning' || type == 'weekly_report' || type == 'milestone') {
+    if (type == 'weekly_report') {
+      _openWeeklyReport(data, navigator);
+      return;
+    }
+    if (type == 'milestone') {
+      _showMilestone(data, navigator);
+      return;
+    }
+    if (type == 'streak_warning') {
       _openProfile(data, navigator);
       return;
     }
@@ -113,10 +122,10 @@ class FcmService {
     }
   }
 
-  /// Opens digest screen (Phase 3 — for now navigates to feed).
+  /// Opens digest screen.
   void _openDigest(Map<String, dynamic> data, NavigatorState navigator) {
     if (navigator.mounted) {
-      navigator.pushNamed('/feed');
+      navigator.pushNamed('/digest');
     }
   }
 
@@ -133,6 +142,22 @@ class FcmService {
     if (userId != null && navigator.mounted) {
       navigator.pushNamed('/profile/$userId');
     }
+  }
+
+  /// Opens weekly report screen.
+  Future<void> _openWeeklyReport(Map<String, dynamic> data, NavigatorState navigator) async {
+    final userId = await _currentUserId();
+    if (userId != null && navigator.mounted) {
+      navigator.pushNamed('/weekly-report/$userId');
+    }
+  }
+
+  /// Shows milestone overlay.
+  void _showMilestone(Map<String, dynamic> data, NavigatorState navigator) {
+    final milestoneText = data['milestone'] as String? ?? data['message'] as String? ?? '';
+    if (milestoneText.isEmpty) return;
+    final context = navigator.context;
+    MilestoneOverlay.show(context, milestone: milestoneText);
   }
 
   int? _intFrom(Map<String, dynamic> data, String key) {

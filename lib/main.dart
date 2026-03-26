@@ -12,7 +12,9 @@ import 'screens/clips/createstory_screen.dart';
 import 'screens/campaigns/create_campaign_screen.dart';
 import 'screens/feed/post_detail_screen.dart';
 import 'screens/feed/thread_viewer_screen.dart';
+import 'screens/feed/digest_screen.dart';
 import 'screens/feed/saved_posts_screen.dart';
+import 'screens/profile/weekly_report_screen.dart';
 import 'screens/feed/musicgallerywidget_screen.dart';
 import 'screens/michangogallerywidget_screen.dart';
 import 'screens/friends/friends_screen.dart';
@@ -291,6 +293,30 @@ class _TajiriAppState extends State<TajiriApp> {
                       );
                     },
                   ),
+                );
+              }
+            }
+            break;
+
+          case 'digest':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return DigestScreen(currentUserId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'weekly-report':
+            if (pathSegments.length > 1) {
+              final userId = int.tryParse(pathSegments[1]) ?? 0;
+              if (userId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => WeeklyReportScreen(userId: userId),
                 );
               }
             }
