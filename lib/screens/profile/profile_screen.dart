@@ -38,6 +38,7 @@ import '../../models/file_models.dart';
 import '../../services/group_service.dart';
 import '../../services/file_service.dart';
 import 'profile_stats_bottom_sheet.dart';
+import 'creator_dashboard_section.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -1041,6 +1042,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             ],
           ),
         ),
+        const SizedBox(height: sectionSpacing),
+      ],
+
+      // Creator dashboard (own profile only)
+      if (_isOwnProfile) ...[
+        CreatorDashboardSection(userId: widget.userId),
         const SizedBox(height: sectionSpacing),
       ],
 
