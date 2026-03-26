@@ -147,4 +147,16 @@ class LocalStorageService {
       await _userBox.put(_authTokenKey, token);
     }
   }
+
+  /// Generic bool getter for preference keys.
+  bool? getBool(String key) {
+    final value = _userBox.get(key);
+    if (value is bool) return value;
+    return null;
+  }
+
+  /// Generic bool setter for preference keys.
+  Future<void> saveBool(String key, bool value) async {
+    await _userBox.put(key, value);
+  }
 }

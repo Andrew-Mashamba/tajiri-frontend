@@ -118,6 +118,11 @@ class Post {
   /// Whether commenting is allowed on this post (post author can disable).
   final bool allowComments;
 
+  // Sponsored post fields
+  final bool isSponsored;
+  final int? sponsorId;
+  final String? sponsorName;
+
   Post({
     required this.id,
     required this.userId,
@@ -170,6 +175,9 @@ class Post {
     this.allowComments = true,
     this.threadId,
     this.threadTitle,
+    this.isSponsored = false,
+    this.sponsorId,
+    this.sponsorName,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -243,6 +251,9 @@ class Post {
       videoFilter: json['video_filter'],
       pollId: json['poll_id'] != null ? _parseInt(json['poll_id']) : null,
       allowComments: _parseBool(json['allow_comments'], true),
+      isSponsored: _parseBool(json['is_sponsored']),
+      sponsorId: json['sponsor_id'] != null ? _parseInt(json['sponsor_id']) : null,
+      sponsorName: json['sponsor_name'] as String?,
     );
   }
 
@@ -278,6 +289,9 @@ class Post {
       'text_overlays': textOverlays?.map((t) => t.toJson()).toList(),
       'video_filter': videoFilter,
       if (pollId != null) 'poll_id': pollId,
+      'is_sponsored': isSponsored,
+      if (sponsorId != null) 'sponsor_id': sponsorId,
+      if (sponsorName != null) 'sponsor_name': sponsorName,
     };
   }
 
@@ -401,6 +415,9 @@ class Post {
     String? videoFilter,
     int? pollId,
     bool? allowComments,
+    bool? isSponsored,
+    int? sponsorId,
+    String? sponsorName,
   }) {
     return Post(
       id: id ?? this.id,
@@ -451,6 +468,9 @@ class Post {
       videoFilter: videoFilter ?? this.videoFilter,
       pollId: pollId ?? this.pollId,
       allowComments: allowComments ?? this.allowComments,
+      isSponsored: isSponsored ?? this.isSponsored,
+      sponsorId: sponsorId ?? this.sponsorId,
+      sponsorName: sponsorName ?? this.sponsorName,
     );
   }
 }

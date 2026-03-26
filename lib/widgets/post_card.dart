@@ -12,6 +12,7 @@ import 'poll_vote_widget.dart';
 import '../l10n/app_strings_scope.dart';
 import '../services/event_tracking_service.dart';
 import 'thread_badge.dart';
+import 'sponsored_badge.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -249,6 +250,11 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               threadTitle: post.threadTitle,
               onTap: widget.onThreadTap,
             ),
+          ),
+        if (post.isSponsored)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 6),
+            child: SponsoredBadge(sponsorName: post.sponsorName),
           ),
         if (post.isColoredTextPost)
           _buildColoredTextContent(context)

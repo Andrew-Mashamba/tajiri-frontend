@@ -73,6 +73,14 @@ class FcmService {
       _openProfile(data, navigator);
       return;
     }
+    if (type == 'battle_invitation') {
+      _openBattle(data, navigator);
+      return;
+    }
+    if (type == 'collaboration_suggestion') {
+      _openProfile(data, navigator);
+      return;
+    }
   }
 
   /// Opens new incoming call flow (IncomingCallFlowScreen + CallSignalingService).
@@ -149,6 +157,13 @@ class FcmService {
     final userId = await _currentUserId();
     if (userId != null && navigator.mounted) {
       navigator.pushNamed('/weekly-report/$userId');
+    }
+  }
+
+  void _openBattle(Map<String, dynamic> data, NavigatorState navigator) {
+    final battleId = _intFrom(data, 'battle_id');
+    if (battleId != null && battleId > 0 && navigator.mounted) {
+      navigator.pushNamed('/battle/$battleId');
     }
   }
 

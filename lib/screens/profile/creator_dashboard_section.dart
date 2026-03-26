@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/flywheel_models.dart';
+import '../../models/collaboration_models.dart';
 import '../../services/creator_service.dart';
+import '../../services/collaboration_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../widgets/creator_tier_badge.dart';
 import '../../widgets/streak_indicator.dart';
+import '../../widgets/collaboration_card.dart';
 import '../../l10n/app_strings_scope.dart';
 
 class CreatorDashboardSection extends StatefulWidget {
@@ -17,9 +20,11 @@ class CreatorDashboardSection extends StatefulWidget {
 
 class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
   final CreatorService _creatorService = CreatorService();
+  final CollaborationService _collaborationService = CollaborationService();
   CreatorScore? _score;
   CreatorStreak? _streak;
   FundPayoutProjection? _projection;
+  List<CollaborationSuggestion> _collaborations = [];
   bool _loading = true;
 
   @override
@@ -37,6 +42,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
       _creatorService.getCreatorScore(creatorId: widget.userId, token: token),
       _creatorService.getCreatorStreak(creatorId: widget.userId, token: token),
       _creatorService.getFundPayoutProjection(creatorId: widget.userId, token: token),
+      _collaborationService.getSuggestions(token: token, creatorId: widget.userId),
     ]);
 
     if (mounted) {
@@ -44,6 +50,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
         _score = results[0] as CreatorScore?;
         _streak = results[1] as CreatorStreak?;
         _projection = results[2] as FundPayoutProjection?;
+        _collaborations = results[3] as List<CollaborationSuggestion>? ?? [];
         _loading = false;
       });
     }
@@ -142,6 +149,20 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                 ],
               ),
             ],
+            // Collaboration radar
+            if (_collaborations.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                strings?.collaborationRadar ?? 'Collaboration Radar',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF999999)),
+              ),
+              const SizedBox(height: 8),
+              ..._collaborations.take(2).map((c) => CollaborationCard(
+                suggestion: c,
+                onAccept: () => _respondToCollab(c.id, 'accepted'),
+                onDismiss: () => _respondToCollab(c.id, 'dismissed'),
+              )),
+            ],
             const SizedBox(height: 12),
             // Action buttons
             Row(
@@ -160,12 +181,39 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pushNamed(context, '/analytics/${widget.userId}'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1A1A1A),
+                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(strings?.viewAnalytics ?? 'Analytics', style: const TextStyle(fontSize: 13)),
+                    ),
+                  ),
+                ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _respondToCollab(int suggestionId, String action) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    if (token == null) return;
+    await _collaborationService.respond(token: token, suggestionId: suggestionId, action: action);
+    if (mounted) {
+      setState(() {
+        _collaborations.removeWhere((c) => c.id == suggestionId);
+      });
+    }
   }
 
   Widget _buildMultiplierItem(String label, double value) {

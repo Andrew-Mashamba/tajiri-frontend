@@ -36,6 +36,9 @@ import 'screens/shop/seller_orders_screen.dart';
 import 'screens/shop/order_detail_screen.dart';
 import 'screens/shop/cart_screen.dart';
 import 'screens/shop/checkout_screen.dart';
+import 'screens/analytics/analytics_dashboard_screen.dart';
+import 'screens/feed/battle_thread_screen.dart';
+import 'screens/sponsored/sponsored_posts_screen.dart';
 import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
 import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
@@ -321,6 +324,45 @@ class _TajiriAppState extends State<TajiriApp> {
               }
             }
             break;
+
+          case 'analytics':
+            if (pathSegments.length > 1) {
+              final userId = int.tryParse(pathSegments[1]) ?? 0;
+              if (userId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => AnalyticsDashboardScreen(userId: userId),
+                );
+              }
+            }
+            break;
+
+          case 'battle':
+            if (pathSegments.length > 1) {
+              final battleId = int.tryParse(pathSegments[1]) ?? 0;
+              if (battleId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      return BattleThreadScreen(battleId: battleId, currentUserId: snapshot.data!);
+                    },
+                  ),
+                );
+              }
+            }
+            break;
+
+          case 'sponsored-posts':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  return SponsoredPostsScreen(currentUserId: snapshot.data!);
+                },
+              ),
+            );
 
           case 'create-post':
             return MaterialPageRoute(

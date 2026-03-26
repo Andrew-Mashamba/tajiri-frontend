@@ -35,6 +35,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _darkMode;
   late bool _isSwahili;
 
+  // Creator opt-out toggles
+  bool _optOutSponsored = false;
+  bool _optOutCollaboration = false;
+  bool _optOutBattles = false;
+  bool _optOutThreads = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +53,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _darkMode = storage.getThemeMode() == ThemeMode.dark;
         _isSwahili = storage.getLanguageCode() == 'sw';
+        _optOutSponsored = storage.getBool('opt_out_sponsored') ?? false;
+        _optOutCollaboration = storage.getBool('opt_out_collaboration') ?? false;
+        _optOutBattles = storage.getBool('opt_out_battles') ?? false;
+        _optOutThreads = storage.getBool('opt_out_threads') ?? false;
         _isLoadingTheme = false;
       });
     }
@@ -145,6 +155,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: s.security,
                 subtitle: s.securitySubtitle,
                 onTap: () {},
+              ),
+
+              _buildSectionHeader(s.creatorSettings),
+              _buildSwitchTile(
+                icon: Icons.campaign_rounded,
+                title: s.optOutSponsored,
+                subtitle: s.starLegendOnly,
+                value: _optOutSponsored,
+                onChanged: (value) async {
+                  setState(() => _optOutSponsored = value);
+                  final storage = await LocalStorageService.getInstance();
+                  await storage.saveBool('opt_out_sponsored', value);
+                },
+              ),
+              _buildSwitchTile(
+                icon: Icons.people_rounded,
+                title: s.optOutCollaboration,
+                subtitle: s.collaborationRadar,
+                value: _optOutCollaboration,
+                onChanged: (value) async {
+                  setState(() => _optOutCollaboration = value);
+                  final storage = await LocalStorageService.getInstance();
+                  await storage.saveBool('opt_out_collaboration', value);
+                },
+              ),
+              _buildSwitchTile(
+                icon: Icons.sports_mma_rounded,
+                title: s.optOutBattles,
+                subtitle: s.creatorBattles,
+                value: _optOutBattles,
+                onChanged: (value) async {
+                  setState(() => _optOutBattles = value);
+                  final storage = await LocalStorageService.getInstance();
+                  await storage.saveBool('opt_out_battles', value);
+                },
+              ),
+              _buildSwitchTile(
+                icon: Icons.forum_rounded,
+                title: s.optOutThreads,
+                subtitle: '',
+                value: _optOutThreads,
+                onChanged: (value) async {
+                  setState(() => _optOutThreads = value);
+                  final storage = await LocalStorageService.getInstance();
+                  await storage.saveBool('opt_out_threads', value);
+                },
               ),
 
               _buildSectionHeader(s.display),

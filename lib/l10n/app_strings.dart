@@ -1282,4 +1282,46 @@ class AppStrings {
   String get trendStable => isSwahili ? 'Imara' : 'Stable';
   String get viralAlert => isSwahili ? 'Chapisho kinachoenea!' : 'Post going viral!';
   String get viralPostAlert => isSwahili ? 'Chapisho kinachoenea sasa!' : 'A post is going viral right now!';
+
+  // ——— Phase 4: Sponsored, Battles, Collaboration, Analytics ———
+  String get sponsored => isSwahili ? 'Imedhaminiwa' : 'Sponsored';
+  String get sponsoredPost => isSwahili ? 'Chapisho cha Udhamini' : 'Sponsored Post';
+  String get createSponsoredPost => isSwahili ? 'Unda Chapisho cha Udhamini' : 'Create Sponsored Post';
+  String get browseSponsorableCreators => isSwahili ? 'Tafuta Waundaji' : 'Browse Creators';
+  String get sponsorshipBudget => isSwahili ? 'Bajeti ya Udhamini' : 'Sponsorship Budget';
+  String get impressionsTarget => isSwahili ? 'Lengo la Maonyesho' : 'Impressions Target';
+  String get impressionsDelivered => isSwahili ? 'Maonyesho Yaliyofikiwa' : 'Impressions Delivered';
+  String get starLegendOnly => isSwahili ? 'Star na Legend tu' : 'Star & Legend only';
+  String get collaborationRadar => isSwahili ? 'Rada ya Ushirikiano' : 'Collaboration Radar';
+  String get suggestedCollaborators => isSwahili ? 'Washirika Wanaopendekezwa' : 'Suggested Collaborators';
+  String get collaborate => isSwahili ? 'Shirikiana' : 'Collaborate';
+  String get dismissSuggestion => isSwahili ? 'Ondoa' : 'Dismiss';
+  String get sharedCategory => isSwahili ? 'Aina Inayoshirikiana' : 'Shared Category';
+  String get creatorBattles => isSwahili ? 'Mashindano ya Waundaji' : 'Creator Battles';
+  String get battleTopic => isSwahili ? 'Mada ya Mashindano' : 'Battle Topic';
+  String get sideA => isSwahili ? 'Upande A' : 'Side A';
+  String get sideB => isSwahili ? 'Upande B' : 'Side B';
+  String get castVote => isSwahili ? 'Piga Kura' : 'Cast Vote';
+  String get voteCast => isSwahili ? 'Kura imepigwa!' : 'Vote cast!';
+  String get battleOpen => isSwahili ? 'Wazi' : 'Open';
+  String get battleVoting => isSwahili ? 'Kupigia Kura' : 'Voting';
+  String get battleClosed => isSwahili ? 'Imefungwa' : 'Closed';
+  String get analyticsDashboard => isSwahili ? 'Dashibodi ya Takwimu' : 'Analytics Dashboard';
+  String get avgEngagement => isSwahili ? 'Wastani wa Ushiriki' : 'Avg Engagement';
+  String get postsThisMonth => isSwahili ? 'Machapisho Mwezi Huu' : 'Posts This Month';
+  String get bestTime => isSwahili ? 'Muda Bora' : 'Best Time';
+  String get topFormat => isSwahili ? 'Umbizo Bora' : 'Top Format';
+  String get audienceInsights => isSwahili ? 'Maoni ya Hadhira' : 'Audience Insights';
+  String get topCity => isSwahili ? 'Jiji Kuu' : 'Top City';
+  String get activeFollowers => isSwahili ? 'Wafuasi Hai' : 'Active Followers';
+  String get peakActivity => isSwahili ? 'Kilele cha Shughuli' : 'Peak Activity';
+  String get last30Days => isSwahili ? 'Siku 30 Zilizopita' : 'Last 30 Days';
+  String get viewAnalytics => isSwahili ? 'Tazama Takwimu' : 'View Analytics';
+  String get creatorSettings => isSwahili ? 'Mipangilio ya Muundaji' : 'Creator Settings';
+  String get optOutSponsored => isSwahili ? 'Sitaki machapisho ya udhamini' : 'Opt out of sponsored posts';
+  String get optOutCollaboration => isSwahili ? 'Sitaki mapendekezo ya ushirikiano' : 'Opt out of collaboration suggestions';
+  String get optOutBattles => isSwahili ? 'Sitaki mashindano' : 'Opt out of battles';
+  String get optOutThreads => isSwahili ? 'Sitaki machapisho yangu kwenye mada' : 'Don\'t include my posts in threads';
+  String get votes => isSwahili ? 'kura' : 'votes';
+  String get vs => 'vs';
 }
