@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/flywheel_models.dart';
+import '../models/payment_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -74,6 +75,27 @@ class CreatorService {
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('[CreatorService] getViewerStreak error: $e');
+      return null;
+    }
+  }
+
+  /// GET /api/creators/{id}/weekly-report
+  Future<WeeklyReport?> getWeeklyReport(int creatorId, String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/creators/$creatorId/weekly-report'),
+        headers: ApiConfig.authHeaders(token),
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final data = body['data'] ?? body;
+        if (data is Map<String, dynamic>) {
+          return WeeklyReport.fromJson(data);
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[CreatorService] getWeeklyReport error: $e');
       return null;
     }
   }
