@@ -51,6 +51,19 @@ class FcmService {
       _openChat(data, navigator);
       return;
     }
+    // Flywheel notification types — route to appropriate screens
+    if (type == 'digest') {
+      _openDigest(data, navigator);
+      return;
+    }
+    if (type == 'thread_trending') {
+      _openThread(data, navigator);
+      return;
+    }
+    if (type == 'streak_warning' || type == 'weekly_report' || type == 'milestone') {
+      _openProfile(data, navigator);
+      return;
+    }
   }
 
   /// Opens new incoming call flow (IncomingCallFlowScreen + CallSignalingService).
@@ -97,6 +110,28 @@ class FcmService {
     final convId = _intFrom(data, 'conversation_id') ?? _intFrom(data, 'conversationId');
     if (convId != null && convId > 0 && navigator.mounted) {
       navigator.pushNamed('/chat/$convId');
+    }
+  }
+
+  /// Opens digest screen (Phase 3 — for now navigates to feed).
+  void _openDigest(Map<String, dynamic> data, NavigatorState navigator) {
+    if (navigator.mounted) {
+      navigator.pushNamed('/feed');
+    }
+  }
+
+  /// Opens gossip thread (Phase 2 — for now navigates to feed).
+  void _openThread(Map<String, dynamic> data, NavigatorState navigator) {
+    if (navigator.mounted) {
+      navigator.pushNamed('/feed');
+    }
+  }
+
+  /// Opens profile for streak/report/milestone notifications.
+  Future<void> _openProfile(Map<String, dynamic> data, NavigatorState navigator) async {
+    final userId = await _currentUserId();
+    if (userId != null && navigator.mounted) {
+      navigator.pushNamed('/profile/$userId');
     }
   }
 

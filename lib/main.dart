@@ -38,6 +38,7 @@ import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
 import 'services/language_notifier.dart';
 import 'services/fcm_service.dart';
+import 'services/event_tracking_service.dart';
 import 'l10n/app_strings.dart';
 import 'l10n/app_strings_scope.dart';
 
@@ -46,6 +47,9 @@ void main() async {
 
   // Initialize Hive for local storage
   await Hive.initFlutter();
+
+  // Initialize event tracking for Flywheel engine
+  await EventTrackingService.getInstance();
 
   // Initialize Firebase with options from firebase_options.dart (FlutterFire CLI)
   try {

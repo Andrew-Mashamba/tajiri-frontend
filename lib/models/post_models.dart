@@ -73,6 +73,10 @@ class Post {
   final bool isViral;
   final bool isFeatured;
 
+  // Gossip thread association (optional — set when post belongs to a thread)
+  final int? threadId;
+  final String? threadTitle;
+
   final int? originalPostId;
   final int? regionId;
   final DateTime createdAt;
@@ -164,6 +168,8 @@ class Post {
     this.videoFilter,
     this.pollId,
     this.allowComments = true,
+    this.threadId,
+    this.threadTitle,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -193,6 +199,8 @@ class Post {
       isFeatured: _parseBool(json['is_featured']),
       originalPostId: json['original_post_id'] != null ? _parseInt(json['original_post_id']) : null,
       regionId: json['region_id'] != null ? _parseInt(json['region_id']) : null,
+      threadId: json['thread_id'] != null ? _parseInt(json['thread_id']) : null,
+      threadTitle: json['thread_title'] as String?,
       createdAt: DateTime.parse(json['created_at'].toString()),
       updatedAt: DateTime.parse(json['updated_at'].toString()),
       user: json['user'] != null
