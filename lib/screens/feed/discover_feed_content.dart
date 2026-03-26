@@ -4,10 +4,15 @@
 // APIs: GET /api/feed/discover, GET /api/feed/trending, GET /api/feed/nearby
 
 import 'package:flutter/material.dart';
+import '../../models/gossip_models.dart';
 import '../../models/post_models.dart';
 import '../../services/feed_service.dart';
+import '../../services/gossip_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../services/post_service.dart';
+import '../../widgets/gossip_thread_card.dart';
 import '../../widgets/post_card.dart';
+import '../../l10n/app_strings_scope.dart';
 import '../groups/events_screen.dart';
 import 'comment_bottom_sheet.dart';
 import 'edit_post_screen.dart';
@@ -34,18 +39,22 @@ class DiscoverFeedContent extends StatefulWidget {
 class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
   final FeedService _feedService = FeedService();
   final PostService _postService = PostService();
+  final GossipService _gossipService = GossipService();
 
   List<Post> _discoverPosts = [];
   List<Post> _trendingPosts = [];
   List<Post> _nearbyPosts = [];
+  List<GossipThread> _threads = [];
 
   bool _loadingDiscover = true;
-  bool _loadingTrending = true;
   bool _loadingNearby = true;
+  bool _loadingThreads = true;
 
   String? _errorDiscover;
-  String? _errorTrending;
   String? _errorNearby;
+  String? _errorThreads;
+
+  String _selectedCategory = 'all';
 
   @override
   void initState() {
@@ -56,18 +65,41 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
   Future<void> _loadAll() async {
     setState(() {
       _loadingDiscover = true;
-      _loadingTrending = true;
       _loadingNearby = true;
+      _loadingThreads = true;
       _errorDiscover = null;
-      _errorTrending = null;
       _errorNearby = null;
+      _errorThreads = null;
     });
 
     await Future.wait([
       _loadDiscover(),
-      _loadTrending(),
       _loadNearby(),
+      _loadThreads(),
     ]);
+  }
+
+  Future<void> _loadThreads() async {
+    setState(() { _loadingThreads = true; _errorThreads = null; });
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null) {
+        if (mounted) setState(() { _loadingThreads = false; _errorThreads = 'Not authenticated'; });
+        return;
+      }
+      final threads = await _gossipService.getThreads(
+        token: token,
+        category: _selectedCategory == 'all' ? null : _selectedCategory,
+      );
+      if (mounted) {
+        setState(() { _threads = threads; _loadingThreads = false; });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _loadingThreads = false; _errorThreads = 'Error loading threads'; });
+      }
+    }
   }
 
   Future<void> _loadDiscover() async {
@@ -84,24 +116,6 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
         _errorDiscover = null;
       } else {
         _errorDiscover = result.message ?? 'Imeshindwa kupakia';
-      }
-    });
-  }
-
-  Future<void> _loadTrending() async {
-    final result = await _feedService.getTrendingFeed(
-      userId: widget.currentUserId,
-      page: 1,
-      perPage: 20,
-    );
-    if (!mounted) return;
-    setState(() {
-      _loadingTrending = false;
-      if (result.success) {
-        _trendingPosts = result.posts;
-        _errorTrending = null;
-      } else {
-        _errorTrending = result.message ?? 'Imeshindwa kupakia';
       }
     });
   }
@@ -471,15 +485,7 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
             section: DiscoverSection.discover,
             onRetry: _loadDiscover,
           ),
-          _buildSection(
-            title: 'Vinavyoongezeka',
-            subtitle: 'Machapisho yanayovuma',
-            posts: _trendingPosts,
-            loading: _loadingTrending,
-            error: _errorTrending,
-            section: DiscoverSection.trending,
-            onRetry: _loadTrending,
-          ),
+          _buildThreadsSection(),
           _buildSection(
             title: 'Karibu nawe',
             subtitle: 'Kutoka eneo lako',
@@ -491,6 +497,123 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThreadsSection() {
+    final strings = AppStringsScope.of(context);
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          // Section header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              strings?.trendingThreads ?? 'Trending Threads',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Filter chips
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildFilterChip('all', strings?.allCategories ?? 'All'),
+                _buildFilterChip('entertainment', strings?.entertainment ?? 'Entertainment'),
+                _buildFilterChip('business', strings?.business ?? 'Business'),
+                _buildFilterChip('music', strings?.music ?? 'Music'),
+                _buildFilterChip('sports', strings?.sports ?? 'Sports'),
+                _buildFilterChip('local', strings?.local ?? 'Local'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Content
+          if (_loadingThreads)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF1A1A1A))),
+            )
+          else if (_errorThreads != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Column(
+                  children: [
+                    Text(_errorThreads!, style: const TextStyle(color: Color(0xFF666666), fontSize: 12)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 48,
+                      child: TextButton(
+                        onPressed: _loadThreads,
+                        child: Text(strings?.retry ?? 'Retry'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_threads.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  strings?.noThreadsYet ?? 'No threads yet',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
+            )
+          else
+            ..._threads.map((thread) => GossipThreadCard(
+                  key: ValueKey('thread_${thread.id}'),
+                  thread: thread,
+                  onTap: () => Navigator.pushNamed(context, '/thread/${thread.id}'),
+                )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String category, String label) {
+    final isSelected = _selectedCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () {
+          if (_selectedCategory != category) {
+            setState(() => _selectedCategory = category);
+            _loadThreads();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF1A1A1A) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF1A1A1A) : const Color(0xFFE0E0E0),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : const Color(0xFF666666),
+            ),
+          ),
+        ),
       ),
     );
   }
