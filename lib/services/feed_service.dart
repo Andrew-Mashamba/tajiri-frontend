@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/post_models.dart';
 import '../config/api_config.dart';
 import 'post_service.dart';
+import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -194,6 +195,50 @@ class FeedService {
     } catch (e) {
       return PostListResult(success: false, message: 'Error: $e');
     }
+  }
+
+  /// Get ML-personalized feed using Bearer token auth.
+  /// Falls back to [getForYouFeed] on any failure (no token, non-200, parse error).
+  /// GET /api/feed/personalized
+  Future<PostListResult> getPersonalizedFeed({
+    required int userId,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('[FeedService] No auth token — falling back to For You feed');
+        return getForYouFeed(userId: userId, page: page, perPage: perPage);
+      }
+
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl/feed/personalized?page=$page&per_page=$perPage',
+        ),
+        headers: ApiConfig.authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data['success'] == true) {
+          final (posts, meta) = _parseFeedData(data);
+          return PostListResult(
+            success: true,
+            posts: posts,
+            meta: meta,
+            message: data['message']?.toString(),
+          );
+        }
+      }
+      debugPrint(
+        '[FeedService] Personalized feed returned ${response.statusCode} — falling back to For You feed',
+      );
+    } catch (e) {
+      debugPrint('[FeedService] Personalized feed error: $e — falling back to For You feed');
+    }
+    return getForYouFeed(userId: userId, page: page, perPage: perPage);
   }
 
   /// Get personalized feed for a user (all posts)
