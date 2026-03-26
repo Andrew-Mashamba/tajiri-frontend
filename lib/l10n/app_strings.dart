@@ -1248,4 +1248,38 @@ class AppStrings {
   String get postsInThread => isSwahili ? 'machapisho katika mada' : 'posts in thread';
   String get personalizedFeed => isSwahili ? 'Kwako' : 'For You';
   String get loadingThreads => isSwahili ? 'Inapakia mada...' : 'Loading threads...';
+
+  // ——— Creator Payments & Addiction ———
+  String get creatorDashboard => isSwahili ? 'Dashibodi ya Muundaji' : 'Creator Dashboard';
+  String get thisWeek => isSwahili ? 'Wiki Hii' : 'This Week';
+  String get weeklyReport => isSwahili ? 'Ripoti ya Wiki' : 'Weekly Report';
+  String get bestPost => isSwahili ? 'Chapisho Bora' : 'Best Post';
+  String get engagementTrend => isSwahili ? 'Mwenendo wa Ushiriki' : 'Engagement Trend';
+  String get followerChange => isSwahili ? 'Mabadiliko ya Wafuasi' : 'Follower Change';
+  String get threadsTriggered => isSwahili ? 'Mada Zilizoanzishwa' : 'Threads Triggered';
+  String get fundPool => isSwahili ? 'Mfuko wa Waundaji' : 'Creator Fund';
+  String get projectedPayout => isSwahili ? 'Malipo Yanayotarajiwa' : 'Projected Payout';
+  String get tierRising => isSwahili ? 'Anayeinuka' : 'Rising';
+  String get tierEstablished => isSwahili ? 'Imara' : 'Established';
+  String get tierStar => isSwahili ? 'Nyota' : 'Star';
+  String get tierLegend => isSwahili ? 'Hadithi' : 'Legend';
+  String get streakDays => isSwahili ? 'siku mfululizo' : 'day streak';
+  String get postingStreak => isSwahili ? 'Mfululizo wa Kuchapisha' : 'Posting Streak';
+  String get viewingStreak => isSwahili ? 'Mfululizo wa Kutazama' : 'Viewing Streak';
+  String get streakFrozen => isSwahili ? 'Mfululizo umegandishwa' : 'Streak frozen';
+  String get multipliers => isSwahili ? 'Vizidishi' : 'Multipliers';
+  String get tierMultiplier => isSwahili ? 'Kizidishi cha Ngazi' : 'Tier Multiplier';
+  String get streakMultiplier => isSwahili ? 'Kizidishi cha Mfululizo' : 'Streak Multiplier';
+  String get digest => isSwahili ? 'Muhtasari' : 'Digest';
+  String get goodMorning => isSwahili ? 'Asubuhi Njema!' : 'Good Morning!';
+  String get goodEvening => isSwahili ? 'Usiku Mwema!' : 'Good Evening!';
+  String get topThreadsToday => isSwahili ? 'Mada Kuu za Leo' : 'Top Threads Today';
+  String get milestone => isSwahili ? 'Hatua Muhimu!' : 'Milestone!';
+  String get followersReached => isSwahili ? 'wafuasi umefika!' : 'followers reached!';
+  String get keepGoing => isSwahili ? 'Endelea hivyo!' : 'Keep going!';
+  String get trendUp => isSwahili ? 'Inaongezeka' : 'Trending Up';
+  String get trendDown => isSwahili ? 'Inapungua' : 'Trending Down';
+  String get trendStable => isSwahili ? 'Imara' : 'Stable';
+  String get viralAlert => isSwahili ? 'Chapisho kinachoenea!' : 'Post going viral!';
+  String get viralPostAlert => isSwahili ? 'Chapisho kinachoenea sasa!' : 'A post is going viral right now!';
 }
