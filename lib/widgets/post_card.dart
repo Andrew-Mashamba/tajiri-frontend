@@ -11,6 +11,7 @@ import 'cached_media_image.dart';
 import 'poll_vote_widget.dart';
 import '../l10n/app_strings_scope.dart';
 import '../services/event_tracking_service.dart';
+import 'thread_badge.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -43,6 +44,8 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onTap;
   /// Called when user taps Subscribe button on subscribers-only content.
   final VoidCallback? onSubscribe;
+  /// Called when user taps the ThreadBadge (post belongs to a thread).
+  final VoidCallback? onThreadTap;
 
   const PostCard({
     super.key,
@@ -60,6 +63,7 @@ class PostCard extends StatefulWidget {
     this.onVideoTap,
     this.onTap,
     this.onSubscribe,
+    this.onThreadTap,
   });
 
   @override
@@ -237,6 +241,15 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (post.threadId != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ThreadBadge(
+              threadId: post.threadId!,
+              threadTitle: post.threadTitle,
+              onTap: widget.onThreadTap,
+            ),
+          ),
         if (post.isColoredTextPost)
           _buildColoredTextContent(context)
         else if (post.isAudioPost)
