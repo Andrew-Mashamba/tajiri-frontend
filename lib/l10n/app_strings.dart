@@ -1222,4 +1222,30 @@ class AppStrings {
   String get subscribersOnly => isSwahili ? 'Kwa Wasajili Pekee' : 'Subscribers Only';
   String subscribeTo(String name) => isSwahili ? 'Jisajili kwa $name\nkuona maudhui haya' : 'Subscribe to $name\nto see this content';
   String get thisCreator => isSwahili ? 'msanii huyu' : 'this creator';
+
+  // ——— Gossip / Threads ———
+  String get trendingThreads => isSwahili ? 'Mada Zinazovuma' : 'Trending Threads';
+  String get gossipDigest => isSwahili ? 'Muhtasari' : 'Digest';
+  String get activeThread => isSwahili ? 'Inaendelea' : 'Active';
+  String get coolingThread => isSwahili ? 'Inapoa' : 'Cooling';
+  String get archivedThread => isSwahili ? 'Imehifadhiwa' : 'Archived';
+  String get threadPosts => isSwahili ? 'Machapisho' : 'Posts';
+  String get threadParticipants => isSwahili ? 'Washiriki' : 'Participants';
+  String get viewThread => isSwahili ? 'Tazama Mada' : 'View Thread';
+  String get partOfThread => isSwahili ? 'Sehemu ya mada inayovuma' : 'Part of trending thread';
+  String get trendingNow => isSwahili ? 'Vinavyovuma Sasa' : 'Trending Now';
+  String get proverbOfTheDay => isSwahili ? 'Methali ya Leo' : 'Proverb of the Day';
+  String get morningDigest => isSwahili ? 'Muhtasari wa Asubuhi' : 'Morning Digest';
+  String get eveningDigest => isSwahili ? 'Muhtasari wa Jioni' : 'Evening Digest';
+  String get noThreadsYet => isSwahili ? 'Hakuna mada bado' : 'No threads yet';
+  String get allCategories => isSwahili ? 'Zote' : 'All';
+  String get entertainment => isSwahili ? 'Burudani' : 'Entertainment';
+  String get business => isSwahili ? 'Biashara' : 'Business';
+  // music already defined above
+  String get sports => isSwahili ? 'Michezo' : 'Sports';
+  String get local => isSwahili ? 'Mtaani' : 'Local';
+  String get peopleTalking => isSwahili ? 'watu wanazungumzia' : 'people talking';
+  String get postsInThread => isSwahili ? 'machapisho katika mada' : 'posts in thread';
+  String get personalizedFeed => isSwahili ? 'Kwako' : 'For You';
+  String get loadingThreads => isSwahili ? 'Inapakia mada...' : 'Loading threads...';
 }
