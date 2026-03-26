@@ -13,6 +13,7 @@ import '../../services/post_service.dart';
 import '../../services/friend_service.dart';
 import '../../services/message_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/event_tracking_service.dart';
 import '../../widgets/post_grid_cell.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/gallery/photo_gallery_widget.dart';
@@ -362,6 +363,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (!mounted) return;
         setState(() => _isSendingFriendRequest = false);
         if (result) {
+          EventTrackingService.getInstance().then((tracker) {
+            tracker.trackEvent(eventType: 'follow', creatorId: widget.userId);
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(AppStringsScope.of(context)?.friendRequestSent ?? 'Friend request sent')),
           );
@@ -433,6 +437,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                 widget.userId,
               );
               if (mounted && result) {
+                EventTrackingService.getInstance().then((tracker) {
+                  tracker.trackEvent(eventType: 'unfollow', creatorId: widget.userId);
+                });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(s?.friendRemoved ?? 'Friend removed')),
                 );

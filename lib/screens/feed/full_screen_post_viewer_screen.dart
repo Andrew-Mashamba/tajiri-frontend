@@ -11,6 +11,7 @@ import 'comment_bottom_sheet.dart';
 import 'edit_post_screen.dart';
 import '../../services/post_service.dart';
 import '../../services/poll_service.dart';
+import '../../services/event_tracking_service.dart';
 import '../../l10n/app_strings_scope.dart';
 
 /// Full-screen TikTok-style post viewer: one post per viewport, vertical swipe, snap.
@@ -39,17 +40,54 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
   int? _likingPostId;
   int? _savingPostId;
 
+  DateTime? _currentPostEnteredAt;
+  int? _currentPostId;
+  int? _currentCreatorId;
+
   @override
   void initState() {
     super.initState();
     _posts = List<Post>.from(widget.posts);
     _pageController = PageController(initialPage: widget.initialIndex.clamp(0, _posts.length - 1));
+
+    // Track initial post view
+    if (_posts.isNotEmpty) {
+      final initialIndex = widget.initialIndex.clamp(0, _posts.length - 1);
+      final initialPost = _posts[initialIndex];
+      _currentPostId = initialPost.id;
+      _currentCreatorId = initialPost.userId;
+      _currentPostEnteredAt = DateTime.now();
+      EventTrackingService.getInstance().then((tracker) {
+        tracker.trackEvent(
+          eventType: 'view',
+          postId: initialPost.id,
+          creatorId: initialPost.userId,
+        );
+      });
+    }
   }
 
   @override
   void dispose() {
+    _emitDwellForCurrentPost();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _emitDwellForCurrentPost() {
+    if (_currentPostEnteredAt != null && _currentPostId != null) {
+      final dwellMs = DateTime.now().difference(_currentPostEnteredAt!).inMilliseconds;
+      if (dwellMs > 1000) {
+        EventTrackingService.getInstance().then((tracker) {
+          tracker.trackEvent(
+            eventType: 'dwell',
+            postId: _currentPostId!,
+            creatorId: _currentCreatorId ?? 0,
+            durationMs: dwellMs,
+          );
+        });
+      }
+    }
   }
 
   static String _networkErrorMessage(Object e) {
@@ -279,6 +317,20 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
             physics: const BouncingScrollPhysics(
               parent: ClampingScrollPhysics(),
             ),
+            onPageChanged: (index) {
+              _emitDwellForCurrentPost();
+              final post = _posts[index];
+              _currentPostId = post.id;
+              _currentCreatorId = post.userId;
+              _currentPostEnteredAt = DateTime.now();
+              EventTrackingService.getInstance().then((tracker) {
+                tracker.trackEvent(
+                  eventType: 'view',
+                  postId: post.id,
+                  creatorId: post.userId,
+                );
+              });
+            },
             itemCount: _posts.length,
             itemBuilder: (context, index) {
               final post = _posts[index];
