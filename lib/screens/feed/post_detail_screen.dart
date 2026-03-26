@@ -11,6 +11,7 @@ import '../../widgets/user_avatar.dart';
 import '../../config/api_config.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'edit_post_screen.dart';
+import '../../services/event_tracking_service.dart';
 
 /// Instagram-style post detail screen with:
 /// - Scrollable feed of posts (when [posts] list provided)
@@ -347,6 +348,13 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         }
         _post = _post!.copyWith(
           commentsCount: _post!.commentsCount + 1,
+        );
+      });
+      EventTrackingService.getInstance().then((tracker) {
+        tracker.trackEvent(
+          eventType: 'comment',
+          postId: widget.postId,
+          creatorId: _post?.userId,
         );
       });
     } else {

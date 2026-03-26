@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../models/post_models.dart';
 import 'user_avatar.dart';
 import 'video_player_widget.dart';
@@ -9,6 +10,7 @@ import 'audio_player_widget.dart';
 import 'cached_media_image.dart';
 import 'poll_vote_widget.dart';
 import '../l10n/app_strings_scope.dart';
+import '../services/event_tracking_service.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -70,6 +72,10 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   AnimationController? _reactionController;
   Animation<double>? _reactionAnimation;
 
+  // View/dwell tracking state
+  DateTime? _visibleSince;
+  bool _viewTracked = false;
+
   AnimationController get reactionController {
     if (_reactionController == null) {
       _reactionController = AnimationController(
@@ -94,6 +100,54 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   void dispose() {
     _reactionController?.dispose();
     super.dispose();
+  }
+
+  void _onVisibilityChanged(VisibilityInfo info) {
+    if (info.visibleFraction >= 0.5) {
+      // Post is 50%+ visible
+      _visibleSince ??= DateTime.now();
+      if (!_viewTracked) {
+        _viewTracked = true;
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted && _visibleSince != null) {
+            EventTrackingService.getInstance().then((tracker) {
+              tracker.trackEvent(
+                eventType: 'view',
+                postId: widget.post.id,
+                creatorId: widget.post.userId,
+              );
+            });
+          }
+        });
+      }
+    } else {
+      // Post left viewport
+      if (_visibleSince != null) {
+        final dwellMs = DateTime.now().difference(_visibleSince!).inMilliseconds;
+        if (dwellMs > 1000) {
+          // Meaningful view — emit dwell
+          EventTrackingService.getInstance().then((tracker) {
+            tracker.trackEvent(
+              eventType: 'dwell',
+              postId: widget.post.id,
+              creatorId: widget.post.userId,
+              durationMs: dwellMs,
+            );
+          });
+        } else {
+          // Quick scroll past — emit scroll_past
+          EventTrackingService.getInstance().then((tracker) {
+            tracker.trackEvent(
+              eventType: 'scroll_past',
+              postId: widget.post.id,
+              creatorId: widget.post.userId,
+              durationMs: dwellMs,
+            );
+          });
+        }
+        _visibleSince = null;
+      }
+    }
   }
 
   void _toggleReactionPicker() {
@@ -162,14 +216,19 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       ),
     ),
     );
-    if (widget.onTap != null) {
-      return GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: cardContent,
-      );
-    }
-    return cardContent;
+    final Widget tappableCard = widget.onTap != null
+        ? GestureDetector(
+            onTap: widget.onTap,
+            behavior: HitTestBehavior.opaque,
+            child: cardContent,
+          )
+        : cardContent;
+
+    return VisibilityDetector(
+      key: Key('post_card_${widget.post.id}'),
+      onVisibilityChanged: _onVisibilityChanged,
+      child: tappableCard,
+    );
   }
 
   /// Body content (content, media, shared). Used inside scroll when height is bounded.
@@ -1079,6 +1138,9 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                             _toggleReactionPicker();
                           } else {
                             widget.onLike?.call();
+                            EventTrackingService.getInstance().then((tracker) {
+                              tracker.trackEvent(eventType: 'like', postId: widget.post.id, creatorId: widget.post.userId);
+                            });
                           }
                         },
                         icon: post.userReaction != null
@@ -1112,14 +1174,24 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               // Share button
               Expanded(
                 child: TextButton.icon(
-                  onPressed: widget.onShare,
+                  onPressed: () {
+                    widget.onShare?.call();
+                    EventTrackingService.getInstance().then((tracker) {
+                      tracker.trackEvent(eventType: 'share', postId: widget.post.id, creatorId: widget.post.userId);
+                    });
+                  },
                   icon: HeroIcon(HeroIcons.share, style: HeroIconStyle.outline, size: 20, color: _kSecondaryText),
                   label: Text(s?.share ?? 'Share', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
                 ),
               ),
               // Save/Bookmark button (48dp touch target per DESIGN.md)
               IconButton(
-                onPressed: widget.onSave,
+                onPressed: () {
+                  widget.onSave?.call();
+                  EventTrackingService.getInstance().then((tracker) {
+                    tracker.trackEvent(eventType: 'save', postId: widget.post.id, creatorId: widget.post.userId);
+                  });
+                },
                 icon: HeroIcon(
                   HeroIcons.bookmark,
                   style: post.isSaved ? HeroIconStyle.solid : HeroIconStyle.outline,
