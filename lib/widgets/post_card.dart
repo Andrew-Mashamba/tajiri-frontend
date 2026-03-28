@@ -50,6 +50,8 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onSubscribe;
   /// Called when user taps the ThreadBadge (post belongs to a thread).
   final VoidCallback? onThreadTap;
+  /// Called when user marks content as "not interested".
+  final VoidCallback? onNotInterested;
 
   const PostCard({
     super.key,
@@ -67,6 +69,7 @@ class PostCard extends StatefulWidget {
     this.onTap,
     this.onSubscribe,
     this.onThreadTap,
+    this.onNotInterested,
   });
 
   @override
