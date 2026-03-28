@@ -11,6 +11,7 @@ import '../../services/feed_service.dart';
 import '../../services/gossip_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/post_service.dart';
+import '../../services/content_engine_service.dart';
 import '../../widgets/gossip_thread_card.dart';
 import '../../widgets/post_card.dart';
 import '../../l10n/app_strings_scope.dart';
@@ -107,21 +108,30 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
   }
 
   Future<void> _loadDiscover() async {
-    final result = await _feedService.getDiscoverFeed(
-      userId: widget.currentUserId,
-      page: 1,
-      perPage: 20,
-    );
-    if (!mounted) return;
-    setState(() {
-      _loadingDiscover = false;
-      if (result.success) {
-        _discoverPosts = result.posts;
+    // Use Content Engine v2 for discover feed (auto-fallback to v1)
+    try {
+      final engineResult = await ContentEngineService.feed(
+        feedType: 'discover',
+        userId: widget.currentUserId,
+        page: 1,
+        perPage: 20,
+      );
+      if (!mounted) return;
+      setState(() {
+        _loadingDiscover = false;
+        _discoverPosts = engineResult.items
+            .where((item) => item.post != null)
+            .map((item) => item.post!)
+            .toList();
         _errorDiscover = null;
-      } else {
-        _errorDiscover = result.message ?? 'Imeshindwa kupakia';
-      }
-    });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingDiscover = false;
+        _errorDiscover = 'Imeshindwa kupakia';
+      });
+    }
   }
 
   Future<void> _loadNearby() async {

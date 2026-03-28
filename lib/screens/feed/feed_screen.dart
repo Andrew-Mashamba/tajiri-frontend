@@ -34,6 +34,7 @@ import '../../services/live_update_service.dart';
 import '../../services/engagement_level_service.dart';
 import '../../services/event_tracking_service.dart';
 import '../../services/creator_service.dart';
+import '../../services/content_engine_service.dart';
 import '../../models/flywheel_models.dart';
 import '../../widgets/posting_nudge_card.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
@@ -587,22 +588,42 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       _error = null;
     });
 
-    final result = await _feedService.getFeed(
-      userId: widget.currentUserId,
-      page: 1,
-      feedType: _currentFeedType,
-    );
-
-    setState(() {
-      _isLoading = false;
-      if (result.success) {
-        _posts = result.posts;
+    if (_currentFeedType == 'posts') {
+      // Use Content Engine v2 for the main "For You" feed (auto-fallback to v1)
+      final engineResult = await ContentEngineService.feed(
+        feedType: 'for_you',
+        userId: widget.currentUserId,
+        page: 1,
+      );
+      setState(() {
+        _isLoading = false;
+        _posts = engineResult.items
+            .where((item) => item.post != null)
+            .map((item) => item.post!)
+            .toList();
         _currentPage = 1;
-        _hasMore = result.meta?.hasMore ?? false;
-      } else {
-        _error = result.message;
-      }
-    });
+        _hasMore = engineResult.meta.hasMore;
+        if (_posts.isEmpty && engineResult.items.isEmpty) {
+          _error = null; // Just empty, not an error
+        }
+      });
+    } else {
+      final result = await _feedService.getFeed(
+        userId: widget.currentUserId,
+        page: 1,
+        feedType: _currentFeedType,
+      );
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _posts = result.posts;
+          _currentPage = 1;
+          _hasMore = result.meta?.hasMore ?? false;
+        } else {
+          _error = result.message;
+        }
+      });
+    }
     _buildFeedItems();
   }
 
@@ -611,20 +632,37 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 
     setState(() => _isLoadingMore = true);
 
-    final result = await _feedService.getFeed(
-      userId: widget.currentUserId,
-      page: _currentPage + 1,
-      feedType: _currentFeedType,
-    );
-
-    setState(() {
-      _isLoadingMore = false;
-      if (result.success) {
-        _posts.addAll(result.posts);
+    if (_currentFeedType == 'posts') {
+      final engineResult = await ContentEngineService.feed(
+        feedType: 'for_you',
+        userId: widget.currentUserId,
+        page: _currentPage + 1,
+      );
+      setState(() {
+        _isLoadingMore = false;
+        final newPosts = engineResult.items
+            .where((item) => item.post != null)
+            .map((item) => item.post!)
+            .toList();
+        _posts.addAll(newPosts);
         _currentPage++;
-        _hasMore = result.meta?.hasMore ?? false;
-      }
-    });
+        _hasMore = engineResult.meta.hasMore;
+      });
+    } else {
+      final result = await _feedService.getFeed(
+        userId: widget.currentUserId,
+        page: _currentPage + 1,
+        feedType: _currentFeedType,
+      );
+      setState(() {
+        _isLoadingMore = false;
+        if (result.success) {
+          _posts.addAll(result.posts);
+          _currentPage++;
+          _hasMore = result.meta?.hasMore ?? false;
+        }
+      });
+    }
     _buildFeedItems();
   }
 
