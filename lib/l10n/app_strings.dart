@@ -1379,4 +1379,32 @@ class AppStrings {
       default: return reaction;
     }
   }
+
+  // ——— Content Engine ———
+  String get whatsHappeningNow => isSwahili ? 'Kinachoendelea Sasa' : "What's Happening Now";
+  String get searchEverything => isSwahili ? 'Tafuta kila kitu...' : 'Search everything...';
+  String get ceAllTypes => isSwahili ? 'Zote' : 'All';
+  String get musicType => isSwahili ? 'Muziki' : 'Music';
+  String get people => isSwahili ? 'Watu' : 'People';
+  String get eventsType => isSwahili ? 'Matukio' : 'Events';
+  String get groupsType => isSwahili ? 'Makundi' : 'Groups';
+  String get productsType => isSwahili ? 'Bidhaa' : 'Products';
+  String get campaignsType => isSwahili ? 'Michango' : 'Campaigns';
+  String get notInterestedInThis => isSwahili ? 'Sipendezwi na hii' : 'Not interested in this';
+  String get showingYouThis => isSwahili ? 'Tunakuonyesha hii kwa sababu' : 'Showing you this because';
+  String get trendingContent => isSwahili ? 'Inavuma' : 'Trending';
+  String get forYouContent => isSwahili ? 'Kwa ajili yako' : 'For you';
+  String get friendsLikeThis => isSwahili ? 'Marafiki wako wanapenda' : 'Your friends like this';
+  String get discoverSomethingNew => isSwahili ? 'Gundua kitu kipya' : 'Discover something new';
+  String get moreLikeThis => isSwahili ? 'Zaidi kama hii' : 'More like this';
+  String get trendingSearches => isSwahili ? 'Tafuta zinazovuma' : 'Trending searches';
+  String get recentSearches => isSwahili ? 'Ulizotafuta hivi karibuni' : 'Recent searches';
+  String get nGoingCount => isSwahili ? 'wanaenda' : 'going';
+  String get ceMembersCount => isSwahili ? 'wanachama' : 'members';
+  String get followersCount => isSwahili ? 'wafuasi' : 'followers';
+  String get joinGroup => isSwahili ? 'Jiunge' : 'Join';
+  String get followPage => isSwahili ? 'Fuata' : 'Follow';
+  String get ceDaysRemaining => isSwahili ? 'siku zimebaki' : 'days remaining';
+  String get funded => isSwahili ? 'imekusanywa' : 'funded';
+  String get viewerCount => isSwahili ? 'watazamaji' : 'viewers';
 }
