@@ -28,7 +28,9 @@ import 'screens/photos/album_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/clips/clips_screen.dart';
 import 'screens/groups/events_screen.dart';
-import 'screens/search/search_screen.dart';
+// ignore: unused_import
+import 'screens/search/search_screen.dart'; // Retained: used by other screens
+import 'screens/search/universal_search_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/shop/create_product_screen.dart';
 import 'screens/shop/product_detail_screen.dart';
@@ -566,7 +568,7 @@ class _TajiriAppState extends State<TajiriApp> {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  return SearchScreen(currentUserId: snapshot.data!);
+                  return UniversalSearchScreen(currentUserId: snapshot.data!);
                 },
               ),
             );
