@@ -99,6 +99,22 @@ class EventTrackingService with WidgetsBindingObserver {
     _buffer.add(event);
   }
 
+  /// Track a content view with dwell time measurement.
+  void trackView({required int postId, required int creatorId, required int dwellMs}) {
+    final eventType = dwellMs < 500 ? 'view_glance' : (dwellMs < 3000 ? 'view_partial' : 'view_deep');
+    trackEvent(eventType: eventType, postId: postId, creatorId: creatorId, durationMs: dwellMs);
+  }
+
+  /// Track when a user scrolls past content quickly (< 500ms visible).
+  void trackScrollPast({required int postId, required int creatorId}) {
+    trackEvent(eventType: 'scroll_past', postId: postId, creatorId: creatorId);
+  }
+
+  /// Track explicit "not interested" signal.
+  void trackNotInterested({required int postId, required int creatorId}) {
+    trackEvent(eventType: 'not_interested', postId: postId, creatorId: creatorId);
+  }
+
   /// For testing: add an event directly.
   void addEventDirectly(UserEvent event) {
     _buffer.add(event);
