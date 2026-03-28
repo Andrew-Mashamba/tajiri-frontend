@@ -39,6 +39,7 @@ import 'screens/shop/checkout_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'screens/sponsored/sponsored_posts_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
 import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
@@ -253,6 +254,19 @@ class _TajiriAppState extends State<TajiriApp> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   return SavedPostsScreen(currentUserId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'notifications':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return NotificationsScreen(currentUserId: snapshot.data!);
                 },
               ),
             );

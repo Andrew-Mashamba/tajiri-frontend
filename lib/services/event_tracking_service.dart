@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -224,9 +225,14 @@ class EventTrackingService with WidgetsBindingObserver {
     }
   }
 
+  /// Generate a UUID v4 string. Backend validates session_id as 'uuid'.
   static String _generateSessionId() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final random = now.hashCode.toRadixString(36);
-    return 'ses_${now.toRadixString(36)}_$random';
+    final rng = math.Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    // Set version (4) and variant (RFC 4122)
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
   }
 }

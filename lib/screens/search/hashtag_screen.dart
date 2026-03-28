@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../models/post_models.dart';
 import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_post_sheet.dart';
+import '../feed/comment_bottom_sheet.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
+import 'search_screen.dart';
 
 // DESIGN.md: background #FAFAFA, primary #1A1A1A, secondary #666666, accent #999999, min touch 48dp
 const Color _kBg = Color(0xFFFAFAFA);
@@ -131,6 +135,102 @@ class _HashtagScreenState extends State<HashtagScreen> {
     }
   }
 
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    setState(() {
+      _posts[index] = post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      );
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.name,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    } else if (result.likesCount != null) {
+      setState(() {
+        _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
+      });
+    }
+  }
+
+  void _onComment(Post post) {
+    CommentBottomSheet.show(
+      context,
+      postId: post.id,
+      currentUserId: widget.currentUserId,
+      initialPost: post,
+      onCommentsCountUpdated: (newCount) {
+        final idx = _posts.indexWhere((p) => p.id == post.id);
+        if (idx >= 0 && mounted) {
+          setState(() {
+            _posts[idx] = _posts[idx].copyWith(commentsCount: newCount);
+          });
+        }
+      },
+    );
+  }
+
+  void _onShare(Post post) {
+    showSharePostBottomSheet(
+      context,
+      post: post,
+      userId: widget.currentUserId,
+      postService: _postService,
+    );
+  }
+
+  Future<void> _onSave(Post post) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    final wasSaved = post.isSaved;
+
+    setState(() {
+      _posts[index] = post.copyWith(
+        isSaved: !wasSaved,
+        savesCount: wasSaved ? post.savesCount - 1 : post.savesCount + 1,
+      );
+    });
+
+    final result = wasSaved
+        ? await _postService.unsavePost(post.id, widget.currentUserId)
+        : await _postService.savePost(post.id, widget.currentUserId);
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Failed to update save')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(wasSaved ? 'Removed from saved' : 'Saved')),
+      );
+    }
+  }
+
+  void _onMentionTap(String username) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(
+          currentUserId: widget.currentUserId,
+          initialQuery: username,
+          initialTab: 0,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -199,7 +299,7 @@ class _HashtagScreenState extends State<HashtagScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: _kAccent.withOpacity(0.2),
+                color: _kAccent.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.tag, size: 48, color: _kAccent),
@@ -246,15 +346,14 @@ class _HashtagScreenState extends State<HashtagScreen> {
           return PostCard(
             post: post,
             currentUserId: widget.currentUserId,
+            onTap: () => Navigator.pushNamed(context, '/post/${post.id}'),
             onLike: () => _onLike(post),
-            onComment: () {
-              // Navigate to post detail
-            },
-            onShare: () {},
+            onComment: () => _onComment(post),
+            onShare: () => _onShare(post),
+            onSave: () => _onSave(post),
             onUserTap: () {
               Navigator.pushNamed(context, '/profile/${post.userId}');
             },
-            onMenuTap: () {},
             onHashtagTap: (hashtag) {
               if (hashtag != widget.hashtag) {
                 Navigator.push(
@@ -268,8 +367,22 @@ class _HashtagScreenState extends State<HashtagScreen> {
                 );
               }
             },
-            onMentionTap: (username) {
-              // Navigate to user profile
+            onMentionTap: _onMentionTap,
+            onReaction: (reaction) => _onReaction(post, reaction),
+            onThreadTap: post.threadId != null
+                ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                : null,
+            onSubscribe: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SubscribeToCreatorScreen(
+                    creatorId: post.userId,
+                    currentUserId: widget.currentUserId,
+                    creatorDisplayName: post.user?.fullName,
+                  ),
+                ),
+              );
             },
           );
         },

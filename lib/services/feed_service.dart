@@ -101,7 +101,7 @@ class FeedService {
     try {
       final response = await http.get(
         Uri.parse(
-          '$_baseUrl/api/posts/feed/shorts?user_id=$userId&page=$page&per_page=$perPage',
+          '$_baseUrl/posts/feed/shorts?user_id=$userId&page=$page&per_page=$perPage',
         ),
       );
 
@@ -136,7 +136,7 @@ class FeedService {
     try {
       final response = await http.get(
         Uri.parse(
-          '$_baseUrl/api/posts/feed/following?user_id=$userId&page=$page&per_page=$perPage',
+          '$_baseUrl/posts/feed/following?user_id=$userId&page=$page&per_page=$perPage',
         ),
       );
 

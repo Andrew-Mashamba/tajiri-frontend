@@ -449,6 +449,46 @@ class LiveStreamService {
     }
   }
 
+  /// DELETE /streams/{id} — delete a stream.
+  Future<bool> deleteStream(int streamId) async {
+    try {
+      final response = await http.delete(Uri.parse('$_baseUrl/streams/$streamId'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// PUT /streams/{id} — update a stream's title/description.
+  Future<StreamResult> updateStream(int streamId, {String? title, String? description}) async {
+    try {
+      final body = <String, dynamic>{};
+      if (title != null) body['title'] = title;
+      if (description != null) body['description'] = description;
+
+      final response = await http.put(
+        Uri.parse('$_baseUrl/streams/$streamId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return StreamResult(success: true, stream: LiveStream.fromJson(data['data']));
+        }
+        return StreamResult(success: false, message: data['message'] ?? 'Failed to update stream');
+      }
+      return StreamResult(success: false, message: 'Failed to update stream');
+    } catch (e) {
+      return StreamResult(success: false, message: 'Error: $e');
+    }
+  }
+
   // User's streams
   Future<StreamsResult> getUserStreams(int userId) async {
     try {

@@ -8,23 +8,27 @@ String get _baseUrl => ApiConfig.baseUrl;
 
 class CollaborationService {
   Future<List<CollaborationSuggestion>> getSuggestions({
-    required String token,
+    String? token,
     required int creatorId,
   }) async {
+    final url = Uri.parse('$_baseUrl/creators/$creatorId/collaborations');
+    if (kDebugMode) debugPrint('[CollaborationService] getSuggestions → $url');
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/creators/$creatorId/collaborations'),
-        headers: ApiConfig.authHeaders(token),
+        url,
+        headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
+      if (kDebugMode) debugPrint('[CollaborationService] getSuggestions ← ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final rawList = data['data'] is List ? data['data'] as List : [];
         return rawList.whereType<Map<String, dynamic>>()
             .map((e) => CollaborationSuggestion.fromJson(e)).toList();
       }
+      if (kDebugMode) debugPrint('[CollaborationService] getSuggestions body: ${response.body.substring(0, (response.body.length).clamp(0, 200))}');
       return [];
     } catch (e) {
-      debugPrint('[CollaborationService] getSuggestions error: $e');
+      if (kDebugMode) debugPrint('[CollaborationService] getSuggestions error: $e');
       return [];
     }
   }
@@ -34,15 +38,18 @@ class CollaborationService {
     required int suggestionId,
     required String action, // 'accepted' or 'dismissed'
   }) async {
+    final url = Uri.parse('$_baseUrl/collaborations/$suggestionId/respond');
+    if (kDebugMode) debugPrint('[CollaborationService] respond → $url ($action)');
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/collaborations/$suggestionId/respond'),
+        url,
         headers: {...ApiConfig.authHeaders(token), 'Content-Type': 'application/json'},
         body: jsonEncode({'action': action}),
       );
+      if (kDebugMode) debugPrint('[CollaborationService] respond ← ${response.statusCode}');
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('[CollaborationService] respond error: $e');
+      if (kDebugMode) debugPrint('[CollaborationService] respond error: $e');
       return false;
     }
   }

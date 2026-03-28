@@ -1,22 +1,65 @@
 import 'package:flutter/material.dart';
+import '../../models/friend_models.dart';
 import '../../widgets/mention_text_field.dart';
 
+/// Result returned by [MentionTextFieldScreen] via Navigator.pop.
+class MentionTextFieldResult {
+  final String text;
+  final List<int> mentionedUserIds;
+
+  const MentionTextFieldResult({
+    required this.text,
+    required this.mentionedUserIds,
+  });
+}
+
 /// Screen that provides @mentions and #hashtags in a post text field.
-/// Navigation: Create Post (any type) → @ and # in text field (Story 86).
+/// Navigation: Create Post (any type) -> @ and # in text field (Story 86).
 /// Design: DOCS/DESIGN.md (SafeArea, 48dp touch targets, monochrome).
 class MentionTextFieldScreen extends StatefulWidget {
   final int currentUserId;
   final String? initialText;
   final String? hintText;
-  final ValueChanged<String>? onContentChanged;
 
   const MentionTextFieldScreen({
     super.key,
     required this.currentUserId,
     this.initialText,
     this.hintText,
-    this.onContentChanged,
   });
+
+  /// Push this screen and await the composed text + mentioned user IDs.
+  /// Returns null if the user pops without confirming.
+  ///
+  /// Example:
+  /// ```dart
+  /// final result = await MentionTextFieldScreen.navigate(
+  ///   context,
+  ///   currentUserId: userId,
+  ///   initialText: existingCaption,
+  /// );
+  /// if (result != null) {
+  ///   print(result.text);
+  ///   print(result.mentionedUserIds);
+  /// }
+  /// ```
+  static Future<MentionTextFieldResult?> navigate(
+    BuildContext context, {
+    required int currentUserId,
+    String? initialText,
+    String? hintText,
+  }) {
+    return Navigator.push<MentionTextFieldResult?>(
+      context,
+      MaterialPageRoute<MentionTextFieldResult?>(
+        builder: (_) => MentionTextFieldScreen(
+          currentUserId: currentUserId,
+          initialText: initialText,
+          hintText: hintText,
+        ),
+      ),
+    );
+  }
 
   @override
   State<MentionTextFieldScreen> createState() => _MentionTextFieldScreenState();
@@ -25,6 +68,7 @@ class MentionTextFieldScreen extends StatefulWidget {
 class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  final List<int> _mentionedUserIds = [];
 
   @override
   void initState() {
@@ -38,6 +82,29 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _onMentionSelected(UserProfile user) {
+    if (!_mentionedUserIds.contains(user.id)) {
+      setState(() {
+        _mentionedUserIds.add(user.id);
+      });
+    }
+  }
+
+  void _onDone() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
+    Navigator.pop(
+      context,
+      MentionTextFieldResult(
+        text: text,
+        mentionedUserIds: List<int>.unmodifiable(_mentionedUserIds),
+      ),
+    );
   }
 
   static const Color _kPrimaryBg = Color(0xFFFAFAFA);
@@ -61,6 +128,25 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: _onDone,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 48),
+              ),
+              child: const Text(
+                'Done',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: _kPrimaryText,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -72,7 +158,7 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Andika chapisho lako. Tumia @ kutaja rafiki na # kwa hashtag.',
                       style: TextStyle(
                         fontSize: 12,
@@ -85,10 +171,10 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF999999).withOpacity(0.3)),
+                        border: Border.all(color: const Color(0xFF999999).withValues(alpha: 0.3)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -102,7 +188,7 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
                         minLines: 4,
                         maxLines: 12,
                         focusNode: _focusNode,
-                        onChanged: widget.onContentChanged,
+                        onMentionSelected: _onMentionSelected,
                       ),
                     ),
                   ],
@@ -118,7 +204,7 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: MentionHashtagBarWithTouchTargets(
+                  child: MentionHashtagBar(
                     controller: _controller,
                     onMentionTap: () => _focusNode.requestFocus(),
                     onHashtagTap: () => _focusNode.requestFocus(),
@@ -127,113 +213,6 @@ class _MentionTextFieldScreenState extends State<MentionTextFieldScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Wrapper that applies DESIGN.md: min 48dp touch targets for bar actions.
-/// Use this when embedding the bar in create post screens.
-class MentionHashtagBarWithTouchTargets extends StatelessWidget {
-  final TextEditingController controller;
-  final VoidCallback? onMentionTap;
-  final VoidCallback? onHashtagTap;
-
-  const MentionHashtagBarWithTouchTargets({
-    super.key,
-    required this.controller,
-    this.onMentionTap,
-    this.onHashtagTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _BarButton(
-          icon: Icons.alternate_email,
-          label: 'Taja',
-          onPressed: () {
-            final t = controller.text;
-            final s = controller.selection;
-            if (s.isValid) {
-              controller.text =
-                  '${t.substring(0, s.baseOffset)}@${t.substring(s.extentOffset)}';
-              controller.selection =
-                  TextSelection.collapsed(offset: s.baseOffset + 1);
-            } else {
-              controller.text = t + '@';
-              controller.selection =
-                  TextSelection.collapsed(offset: controller.text.length);
-            }
-            onMentionTap?.call();
-          },
-        ),
-        const SizedBox(width: 8),
-        _BarButton(
-          icon: Icons.tag,
-          label: 'Hashtag',
-          onPressed: () {
-            final t = controller.text;
-            final s = controller.selection;
-            if (s.isValid) {
-              controller.text =
-                  '${t.substring(0, s.baseOffset)}#${t.substring(s.extentOffset)}';
-              controller.selection =
-                  TextSelection.collapsed(offset: s.baseOffset + 1);
-            } else {
-              controller.text = t + '#';
-              controller.selection =
-                  TextSelection.collapsed(offset: controller.text.length);
-            }
-            onHashtagTap?.call();
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _BarButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _BarButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  static const Color _kPrimaryText = Color(0xFF1A1A1A);
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 24, color: _kPrimaryText),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: _kPrimaryText,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

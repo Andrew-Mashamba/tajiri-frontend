@@ -3,12 +3,10 @@
 /// DESIGN: docs/DESIGN.md — TajiriAppBar, Heroicons, empty/error states, 48dp, monochrome.
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
-import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/livestream_models.dart';
 import '../../services/livestream_service.dart';
 import '../../widgets/cached_media_image.dart';
-import '../../widgets/tajiri_app_bar.dart';
 import 'streamviewer_screen.dart';
 import 'golive_screen.dart';
 
@@ -22,6 +20,7 @@ const Color _kSecondaryText = Color(0xFF666666);
 const Color _kTertiaryText = Color(0xFF999999);
 const Color _kDivider = Color(0xFFE0E0E0);
 const Color _kSurface = Color(0xFFFFFFFF);
+const Color _kLiveRed = Color(0xFFE53935);
 
 class StreamsScreen extends StatefulWidget {
   final int currentUserId;
@@ -110,43 +109,87 @@ class _StreamsScreenState extends State<StreamsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
     return Scaffold(
       backgroundColor: _kBackground,
-      appBar: TajiriAppBar(
-        title: null,
-        titleWidget: Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: _LiveTabSegments(
-            controller: _tabController,
-            labels: const ['Live now', 'All'],
-          ),
-        ),
-      ),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: _kPrimaryText))
-            : _error != null
-                ? _buildErrorState()
-                : TabBarView(
+        child: Column(
+          children: [
+            // Tab bar header
+            Container(
+              color: _kSurface,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
+                children: [
+                  _LiveTabSegments(
                     controller: _tabController,
-                    children: [
-                      _buildLiveStreamsList(),
-                      _buildAllStreamsList(),
+                    labels: [
+                      s?.liveNow ?? 'Live now',
+                      s?.all ?? 'All',
                     ],
                   ),
+                  const Spacer(),
+                  // Go Live button in header
+                  SizedBox(
+                    height: _kMinTouchTarget,
+                    child: TextButton.icon(
+                      onPressed: _goLive,
+                      icon: const HeroIcon(
+                        HeroIcons.videoCamera,
+                        style: HeroIconStyle.solid,
+                        size: 18,
+                        color: _kSurface,
+                      ),
+                      label: Text(
+                        s?.startBroadcast ?? 'Start',
+                        style: const TextStyle(
+                          color: _kSurface,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        backgroundColor: _kPrimaryText,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 0.5, color: _kDivider),
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: _kPrimaryText, strokeWidth: 2))
+                  : _error != null
+                      ? _buildErrorState()
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildLiveStreamsList(),
+                            _buildAllStreamsList(),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// DESIGN.md §10: error state — tertiary icon, bodySmall, retry with primary.
   Widget _buildErrorState() {
+    final s = AppStringsScope.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            HeroIcon(
+            const HeroIcon(
               HeroIcons.exclamationTriangle,
               style: HeroIconStyle.outline,
               size: 64,
@@ -165,15 +208,15 @@ class _StreamsScreenState extends State<StreamsScreen>
               height: _kMinTouchTarget,
               child: TextButton.icon(
                 onPressed: _loadStreams,
-                icon: HeroIcon(
+                icon: const HeroIcon(
                   HeroIcons.arrowPath,
                   style: HeroIconStyle.outline,
                   size: 20,
                   color: _kPrimaryText,
                 ),
-                label: const Text(
-                  'Jaribu tena',
-                  style: TextStyle(
+                label: Text(
+                  s?.retry ?? 'Retry',
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: _kPrimaryText,
                     fontSize: 14,
@@ -187,8 +230,8 @@ class _StreamsScreenState extends State<StreamsScreen>
     );
   }
 
-  /// DESIGN.md §10: empty state — tertiary icon, title 18/600, bodySmall, 48dp CTA.
   Widget _buildLiveStreamsList() {
+    final s = AppStringsScope.of(context);
     if (_liveStreams.isEmpty) {
       return Center(
         child: Padding(
@@ -196,7 +239,7 @@ class _StreamsScreenState extends State<StreamsScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              HeroIcon(
+              const HeroIcon(
                 HeroIcons.signal,
                 style: HeroIconStyle.outline,
                 size: 64,
@@ -204,7 +247,7 @@ class _StreamsScreenState extends State<StreamsScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Hakuna matangazo ya moja kwa moja',
+                s?.noLiveBroadcastsMessage ?? 'No live broadcasts',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kPrimaryText,
@@ -216,7 +259,7 @@ class _StreamsScreenState extends State<StreamsScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Anza tangazo lako ili watazamaji waone moja kwa moja',
+                s?.liveStreamsEmptyHint ?? 'Your followers are not live yet.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kSecondaryText,
@@ -230,15 +273,15 @@ class _StreamsScreenState extends State<StreamsScreen>
                 height: _kMinTouchTarget,
                 child: TextButton.icon(
                   onPressed: _goLive,
-                  icon: HeroIcon(
+                  icon: const HeroIcon(
                     HeroIcons.videoCamera,
                     style: HeroIconStyle.outline,
                     size: 20,
                     color: _kSurface,
                   ),
-                  label: const Text(
-                    'Anza Tangazo',
-                    style: TextStyle(
+                  label: Text(
+                    s?.startBroadcast ?? 'Start broadcast',
+                    style: const TextStyle(
                       color: _kSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -246,6 +289,9 @@ class _StreamsScreenState extends State<StreamsScreen>
                   ),
                   style: TextButton.styleFrom(
                     backgroundColor: _kPrimaryText,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -259,26 +305,28 @@ class _StreamsScreenState extends State<StreamsScreen>
       onRefresh: _loadStreams,
       color: _kPrimaryText,
       child: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+          childAspectRatio: 0.7,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
         ),
         itemCount: _liveStreams.length,
         itemBuilder: (context, index) {
-          return _LiveStreamCard(
-            stream: _liveStreams[index],
-            onTap: () => _watchStream(_liveStreams[index]),
+          return RepaintBoundary(
+            child: _LiveStreamCard(
+              stream: _liveStreams[index],
+              onTap: () => _watchStream(_liveStreams[index]),
+            ),
           );
         },
       ),
     );
   }
 
-  /// DESIGN.md §10: empty state for All tab.
   Widget _buildAllStreamsList() {
+    final s = AppStringsScope.of(context);
     if (_allStreams.isEmpty) {
       return Center(
         child: Padding(
@@ -286,7 +334,7 @@ class _StreamsScreenState extends State<StreamsScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              HeroIcon(
+              const HeroIcon(
                 HeroIcons.signal,
                 style: HeroIconStyle.outline,
                 size: 64,
@@ -294,7 +342,7 @@ class _StreamsScreenState extends State<StreamsScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Hakuna matangazo',
+                s?.noBroadcasts ?? 'No broadcasts',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kPrimaryText,
@@ -306,7 +354,7 @@ class _StreamsScreenState extends State<StreamsScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Matangazo yote yataonekana hapa',
+                s?.scheduleBroadcastHint ?? 'All broadcasts will appear here',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kSecondaryText,
@@ -324,14 +372,17 @@ class _StreamsScreenState extends State<StreamsScreen>
     return RefreshIndicator(
       onRefresh: _loadStreams,
       color: _kPrimaryText,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _allStreams.length,
+        separatorBuilder: (_, __) => const Divider(height: 0.5, indent: 108, color: _kDivider),
         itemBuilder: (context, index) {
           final stream = _allStreams[index];
-          return _StreamListTile(
-            stream: stream,
-            onTap: () => _watchStream(stream),
+          return RepaintBoundary(
+            child: _StreamListTile(
+              stream: stream,
+              onTap: () => _watchStream(stream),
+            ),
           );
         },
       ),
@@ -345,7 +396,8 @@ class _StreamsScreenState extends State<StreamsScreen>
   }
 }
 
-/// Custom segment control: pill wraps only the label content (no TabBar indicator constraints).
+// ─── Tab Segments ──────────────────────────────────────────
+
 class _LiveTabSegments extends StatelessWidget {
   const _LiveTabSegments({
     required this.controller,
@@ -354,11 +406,6 @@ class _LiveTabSegments extends StatelessWidget {
 
   final TabController controller;
   final List<String> labels;
-
-  static const double _pillPaddingH = 14.0;
-  static const double _pillPaddingV = 6.0;
-  static const double _pillRadius = 20.0;
-  static const double _gap = 8.0;
 
   @override
   Widget build(BuildContext context) {
@@ -369,7 +416,7 @@ class _LiveTabSegments extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (int i = 0; i < labels.length; i++) ...[
-              if (i > 0) const SizedBox(width: _gap),
+              if (i > 0) const SizedBox(width: 6),
               _Segment(
                 label: labels[i],
                 selected: controller.index == i,
@@ -397,16 +444,14 @@ class _Segment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? _kPrimaryText.withOpacity(0.08) : Colors.transparent,
-      borderRadius: BorderRadius.circular(_LiveTabSegments._pillRadius),
+      color: selected ? _kPrimaryText.withValues(alpha: 0.08) : Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(_LiveTabSegments._pillRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: _LiveTabSegments._pillPaddingH,
-            vertical: _LiveTabSegments._pillPaddingV,
-          ),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: _kMinTouchTarget),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Text(
             label,
             style: TextStyle(
@@ -423,6 +468,8 @@ class _Segment extends StatelessWidget {
   }
 }
 
+// ─── Live Stream Card (grid) ───────────────────────────────
+
 class _LiveStreamCard extends StatelessWidget {
   final LiveStream stream;
   final VoidCallback onTap;
@@ -431,196 +478,159 @@ class _LiveStreamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _kSurface,
-      borderRadius: BorderRadius.circular(12),
-      elevation: 0,
-      shadowColor: const Color(0xFF000000),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: _kDivider,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF000000).withOpacity(0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: _kPrimaryText,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Thumbnail with adaptive treatment
+            _buildThumbnail(),
+            // Bottom gradient for text readability
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.4, 1.0],
+                  colors: [
+                    Colors.transparent,
+                    Colors.black87,
+                  ],
+                ),
               ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              stream.thumbnailUrl.isNotEmpty
-                  ? CachedMediaImage(
-                      imageUrl: stream.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      borderRadius: BorderRadius.circular(12),
-                      errorWidget: Container(
-                        color: _kDivider,
-                        child: HeroIcon(
-                          HeroIcons.signal,
-                          style: HeroIconStyle.outline,
-                          size: 48,
-                          color: _kTertiaryText,
-                        ),
-                      ),
-                      placeholder: Container(
-                        color: _kDivider,
-                        child: HeroIcon(
-                          HeroIcons.signal,
-                          style: HeroIconStyle.outline,
-                          size: 48,
-                          color: _kTertiaryText,
-                        ),
-                      ),
-                    )
-                  : Container(
-                      color: _kDivider,
-                      child: HeroIcon(
-                        HeroIcons.signal,
-                        style: HeroIconStyle.outline,
-                        size: 48,
-                        color: _kTertiaryText,
-                      ),
-                    ),
-              Container(
+            ),
+            // Live badge (top-left)
+            if (stream.isLive)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: _LiveBadge(),
+              ),
+            // Viewer count (top-right)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.8),
-                    ],
-                  ),
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryText,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        'MOJA KWA MOJA',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryText.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      HeroIcon(
-                        HeroIcons.eye,
-                        style: HeroIconStyle.outline,
-                        size: 12,
-                        color: _kSurface,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatCount(stream.viewersCount),
-                        style: const TextStyle(
-                          color: _kSurface,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 8,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: _kTertiaryText,
-                          backgroundImage: stream.user?.avatarUrl.isNotEmpty ==
-                                  true
-                              ? NetworkImage(stream.user!.avatarUrl)
-                              : null,
-                          child: stream.user?.avatarUrl.isEmpty == true
-                              ? Text(
-                                  stream.user!.firstName.isNotEmpty
-                                      ? stream.user!.firstName[0]
-                                      : '?',
-                                  style: const TextStyle(color: _kSurface),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            stream.user?.displayName ?? 'Mtumiaji',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    const HeroIcon(
+                      HeroIcons.eye,
+                      style: HeroIconStyle.solid,
+                      size: 12,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 4),
                     Text(
-                      stream.title,
+                      _formatCount(stream.viewersCount),
                       style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
+            // User info + title (bottom)
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: _kTertiaryText,
+                        backgroundImage: stream.user?.avatarUrl.isNotEmpty == true
+                            ? NetworkImage(stream.user!.avatarUrl)
+                            : null,
+                        child: stream.user?.avatarUrl.isEmpty == true
+                            ? Text(
+                                stream.user!.firstName.isNotEmpty
+                                    ? stream.user!.firstName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(color: _kSurface, fontSize: 11),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          stream.user?.displayName ?? 'Mtumiaji',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (stream.title.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      stream.title,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThumbnail() {
+    if (stream.thumbnailUrl.isEmpty) {
+      return Container(
+        color: _kPrimaryText,
+        child: const Center(
+          child: HeroIcon(
+            HeroIcons.signal,
+            style: HeroIconStyle.outline,
+            size: 48,
+            color: Colors.white24,
           ),
+        ),
+      );
+    }
+
+    return CachedMediaImage(
+      imageUrl: stream.thumbnailUrl,
+      fit: BoxFit.cover,
+      backgroundColor: _kPrimaryText,
+      placeholder: Container(
+        color: _kPrimaryText,
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white24, strokeWidth: 2),
         ),
       ),
     );
@@ -636,6 +646,77 @@ class _LiveStreamCard extends StatelessWidget {
     return count.toString();
   }
 }
+
+// ─── Live Badge with pulsing dot ───────────────────────────
+
+class _LiveBadge extends StatefulWidget {
+  @override
+  State<_LiveBadge> createState() => _LiveBadgeState();
+}
+
+class _LiveBadgeState extends State<_LiveBadge> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _kLiveRed,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Opacity(
+                opacity: 0.4 + (_controller.value * 0.6),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            'LIVE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Stream List Tile (All tab) ────────────────────────────
 
 class _StreamListTile extends StatelessWidget {
   final LiveStream stream;
@@ -662,6 +743,7 @@ class _StreamListTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Thumbnail
               Stack(
                 children: [
                   ClipRRect(
@@ -673,14 +755,17 @@ class _StreamListTile extends StatelessWidget {
                           ? CachedMediaImage(
                               imageUrl: stream.thumbnailUrl,
                               fit: BoxFit.cover,
+                              backgroundColor: _kPrimaryText,
                             )
                           : Container(
-                              color: _kDivider,
-                              child: HeroIcon(
-                                HeroIcons.signal,
-                                style: HeroIconStyle.outline,
-                                size: 32,
-                                color: _kTertiaryText,
+                              color: _kPrimaryText,
+                              child: const Center(
+                                child: HeroIcon(
+                                  HeroIcons.signal,
+                                  style: HeroIconStyle.outline,
+                                  size: 28,
+                                  color: Colors.white24,
+                                ),
                               ),
                             ),
                     ),
@@ -690,10 +775,9 @@ class _StreamListTile extends StatelessWidget {
                       left: 4,
                       top: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _kPrimaryText,
+                          color: _kLiveRed,
                           borderRadius: BorderRadius.circular(2),
                         ),
                         child: Text(
@@ -709,6 +793,7 @@ class _StreamListTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 12),
+              // Title + user
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -737,6 +822,7 @@ class _StreamListTile extends StatelessWidget {
                   ],
                 ),
               ),
+              // Viewers + status
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -745,7 +831,7 @@ class _StreamListTile extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      HeroIcon(
+                      const HeroIcon(
                         HeroIcons.eye,
                         style: HeroIconStyle.outline,
                         size: 14,
@@ -767,9 +853,12 @@ class _StreamListTile extends StatelessWidget {
                   Text(
                     s != null ? _getStatusText(stream, s) : stream.status,
                     style: TextStyle(
-                      color: stream.isLive ? _kPrimaryText : _kSecondaryText,
+                      color: stream.isLive ? _kLiveRed : _kSecondaryText,
                       fontSize: 12,
+                      fontWeight: stream.isLive ? FontWeight.w600 : FontWeight.normal,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

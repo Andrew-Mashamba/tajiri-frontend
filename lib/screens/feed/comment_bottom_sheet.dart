@@ -6,6 +6,8 @@ import '../../services/post_service.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/rich_comment_content.dart';
 import '../../widgets/user_avatar.dart';
+import '../search/search_screen.dart';
+import '../search/hashtag_screen.dart';
 
 void _log(String message) => debugPrint('[CommentBottomSheet] $message');
 
@@ -60,7 +62,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   final TextEditingController _commentController = TextEditingController();
 
   List<Comment> _comments = [];
-  bool _isLoadingComments = true;
+  bool _isLoadingComments = false;
   bool _hasMoreComments = true;
   int _commentsPage = 1;
   static const int _commentsPerPage = 20;
@@ -260,11 +262,11 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
     final parentId = _replyingTo?.id;
     final mentionIds = List<int>.from(_mentionedUserIds);
     _commentController.clear();
+    final wasReplyingTo = _replyingTo;
     setState(() {
       _replyingTo = null;
       _mentionedUserIds = [];
     });
-    final wasReplyingTo = _replyingTo;
 
     final result = await _postService.addComment(
       widget.postId,
@@ -799,10 +801,17 @@ class _CommentTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          UserAvatar(
-            photoUrl: comment.user?.profilePhotoUrl,
-            name: comment.user?.fullName,
-            radius: 20,
+          GestureDetector(
+            onTap: () {
+              if (comment.userId > 0) {
+                Navigator.pushNamed(context, '/profile/${comment.userId}');
+              }
+            },
+            child: UserAvatar(
+              photoUrl: comment.user?.profilePhotoUrl,
+              name: comment.user?.fullName,
+              radius: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -812,15 +821,22 @@ class _CommentTile extends StatelessWidget {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(
-                        comment.user?.fullName ?? 'Unknown',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: Color(0xFF1A1A1A),
+                      child: GestureDetector(
+                        onTap: () {
+                          if (comment.userId > 0) {
+                            Navigator.pushNamed(context, '/profile/${comment.userId}');
+                          }
+                        },
+                        child: Text(
+                          comment.user?.fullName ?? 'Unknown',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (comment.isPinned) ...[
@@ -869,8 +885,30 @@ class _CommentTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 RichCommentContent(
                   text: comment.content,
-                  onMentionTap: (_) {},
-                  onHashtagTap: (_) {},
+                  onMentionTap: (username) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SearchScreen(
+                          currentUserId: currentUserId,
+                          initialQuery: username,
+                          initialTab: 0,
+                        ),
+                      ),
+                    );
+                  },
+                  onHashtagTap: (hashtag) {
+                    final tag = hashtag.startsWith('#') ? hashtag.substring(1) : hashtag;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HashtagScreen(
+                          hashtag: tag,
+                          currentUserId: currentUserId,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 if (comment.editedAt != null)
                   Padding(

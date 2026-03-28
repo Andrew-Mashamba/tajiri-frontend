@@ -13,8 +13,9 @@ const double _kMinTouchHeight = 48.0;
 /// Users tab content for global search. Search by name, username via GET /api/users/search.
 class UserSearchTab extends StatefulWidget {
   final int currentUserId;
+  final String? initialQuery;
 
-  const UserSearchTab({super.key, required this.currentUserId});
+  const UserSearchTab({super.key, required this.currentUserId, this.initialQuery});
 
   @override
   State<UserSearchTab> createState() => _UserSearchTabState();
@@ -30,6 +31,18 @@ class _UserSearchTabState extends State<UserSearchTab> {
   bool _isLoading = false;
   String? _error;
   bool _hasSearched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
+      _queryController.text = widget.initialQuery!;
+      // Trigger search after build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _performSearch(widget.initialQuery!.trim());
+      });
+    }
+  }
 
   @override
   void dispose() {

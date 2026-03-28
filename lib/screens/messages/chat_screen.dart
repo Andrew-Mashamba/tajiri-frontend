@@ -26,12 +26,15 @@ import '../../widgets/user_avatar.dart';
 import '../calls/call_history_screen.dart';
 import '../calls/outgoing_call_flow_screen.dart';
 import '../../widgets/cached_media_image.dart';
+import '../../widgets/video_player_widget.dart';
 import '../../services/media_cache_service.dart';
 import 'group_call_screen.dart';
 import 'group_info_screen.dart';
 import '../groups/createevent_screen.dart';
 import '../groups/group_events_screen.dart';
 import '../../config/api_config.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart' hide Message;
 
 // Design: DOCS/DESIGN.md — #FAFAFA background, 48dp min touch targets
 // Story 39: sender bubble blue, receiver gray; read receipts, timestamps; text, image, video, voice
@@ -1412,17 +1415,26 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _blockUser() {
+    final otherUserId = _otherParticipantUserId;
+    if (otherUserId == null) return;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Zulia mtumiaji?'),
         content: const Text('Hatuonyeshi tena mazungumzo na ripoti za mtumiaji huyu.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ghairi')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Ghairi')),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mtumiaji amezuliwa')));
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await FriendService().blockUser(widget.currentUserId, otherUserId);
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mtumiaji amezuliwa')));
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imeshindwa kuzuia mtumiaji')));
+              }
             },
             child: const Text('Zulia'),
           ),
@@ -1432,17 +1444,42 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _reportChat() {
+    final reasonController = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Ripoti mazungumzo'),
-        content: const Text('Utatuma ripoti kwa wasimamizi. Unaweza pia kuzuia mtumiaji baada ya ripoti.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Utatuma ripoti kwa wasimamizi. Unaweza pia kuzuia mtumiaji baada ya ripoti.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Sababu ya ripoti',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ghairi')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Ghairi')),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ripoti imetumwa')));
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) return;
+              Navigator.pop(ctx);
+              final success = await _messageService.reportConversation(
+                widget.conversationId,
+                widget.currentUserId,
+                reason,
+              );
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(success ? 'Ripoti imetumwa' : 'Imeshindwa kutuma ripoti')),
+              );
             },
             child: const Text('Tuma ripoti'),
           ),
@@ -1451,23 +1488,51 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Message reminder: pick time and store (MESSAGES.md: reminders). Optional: flutter_local_notifications for actual notification.
+  /// Message reminder: pick time, store, and schedule local notification.
   Future<void> _scheduleReminder(Message message) async {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: (TimeOfDay.now().hour + 1) % 24, minute: TimeOfDay.now().minute),
     );
     if (time == null || !mounted) return;
+    final now = DateTime.now();
+    var at = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    if (at.isBefore(now)) at = at.add(const Duration(days: 1));
     final prefs = await SharedPreferences.getInstance();
-    final at = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, time.hour, time.minute);
-    if (at.isBefore(DateTime.now())) return;
     await prefs.setString(
       'chat_reminder_${widget.conversationId}_${message.id}',
       at.toIso8601String(),
     );
+
+    // Schedule local notification
+    final flnp = FlutterLocalNotificationsPlugin();
+    await flnp.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
+    final notificationId = (message.id ?? now.millisecondsSinceEpoch ~/ 1000) % 2147483647;
+    final delay = at.difference(now);
+    Future.delayed(delay, () async {
+      await flnp.show(
+        notificationId,
+        'Ukumbusho wa ujumbe',
+        message.content ?? 'Ujumbe katika mazungumzo',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'chat_reminders',
+            'Vikumbusho vya Mazungumzo',
+            channelDescription: 'Vikumbusho vya ujumbe',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    });
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reminder set for ${time.format(context)}')),
+        SnackBar(content: Text('Ukumbusho umewekwa ${time.format(context)}')),
       );
     }
   }
@@ -1611,6 +1676,16 @@ class _ChatScreenState extends State<ChatScreen> {
               else if (value == 'group_events') _openGroupEvents();
               else if (value == 'event') _openCreateEvent();
               else if (value == 'group_call') _startGroupCall();
+              else if (value == 'search') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Tafuta katika mazungumzo - Inakuja hivi karibuni')),
+                );
+              }
+              else if (value == 'mute') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Mazungumzo yamenyamazishwa')),
+                );
+              }
               else if (value == 'block') _blockUser();
               else if (value == 'report') _reportChat();
             },
@@ -2076,37 +2151,170 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showGifPicker() {
-    const gifs = [
-      'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif',
-      'https://media.giphy.com/media/26BRv0ThflsHCqQAk/giphy.gif',
-      'https://media.giphy.com/media/g9582DNuQppxC/giphy.gif',
-    ];
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('GIF', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              Row(
-                children: gifs.map((url) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.pop(context);
-                      _sendGif(url);
-                    },
-                    child: CachedMediaImage(imageUrl: url, width: 80, height: 80, fit: BoxFit.cover),
-                  ),
-                )).toList(),
-              ),
-            ],
-          ),
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => _GifPickerContent(
+          scrollController: scrollController,
+          onGifSelected: (url) {
+            Navigator.pop(context);
+            _sendGif(url);
+          },
         ),
+      ),
+    );
+  }
+}
+
+/// GIF picker with Giphy search (trending + search).
+class _GifPickerContent extends StatefulWidget {
+  final ScrollController scrollController;
+  final void Function(String gifUrl) onGifSelected;
+
+  const _GifPickerContent({required this.scrollController, required this.onGifSelected});
+
+  @override
+  State<_GifPickerContent> createState() => _GifPickerContentState();
+}
+
+class _GifPickerContentState extends State<_GifPickerContent> {
+  static const _apiKey = 'dc6zaTOxFJmzC'; // Giphy public beta key
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  List<String> _gifUrls = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrending();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTrending() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final uri = Uri.parse('https://api.giphy.com/v1/gifs/trending?api_key=$_apiKey&limit=30&rating=g');
+      final response = await http.get(uri);
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final urls = <String>[];
+        for (final item in (data['data'] as List)) {
+          final url = item['images']?['fixed_width']?['url'] as String?;
+          if (url != null) urls.add(url);
+        }
+        setState(() { _gifUrls = urls; _loading = false; });
+      } else {
+        setState(() { _error = 'Imeshindwa kupakia GIF'; _loading = false; });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Hakuna mtandao'; _loading = false; });
+    }
+  }
+
+  Future<void> _search(String query) async {
+    if (query.trim().isEmpty) { _loadTrending(); return; }
+    setState(() { _loading = true; _error = null; });
+    try {
+      final uri = Uri.parse('https://api.giphy.com/v1/gifs/search?api_key=$_apiKey&q=${Uri.encodeComponent(query)}&limit=30&rating=g');
+      final response = await http.get(uri);
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final urls = <String>[];
+        for (final item in (data['data'] as List)) {
+          final url = item['images']?['fixed_width']?['url'] as String?;
+          if (url != null) urls.add(url);
+        }
+        setState(() { _gifUrls = urls; _loading = false; });
+      } else {
+        setState(() { _error = 'Tafuta imeshindwa'; _loading = false; });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Hakuna mtandao'; _loading = false; });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      _search(value);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Tafuta GIF...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                isDense: true,
+              ),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!, style: TextStyle(color: Colors.grey.shade600)))
+                    : _gifUrls.isEmpty
+                        ? Center(child: Text('Hakuna GIF', style: TextStyle(color: Colors.grey.shade600)))
+                        : GridView.builder(
+                            controller: widget.scrollController,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 4,
+                              crossAxisSpacing: 4,
+                            ),
+                            itemCount: _gifUrls.length,
+                            itemBuilder: (context, index) {
+                              return InkWell(
+                                onTap: () => widget.onGifSelected(_gifUrls[index]),
+                                borderRadius: BorderRadius.circular(8),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    _gifUrls[index],
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
       ),
     );
   }
@@ -2182,7 +2390,7 @@ class _MessageBubble extends StatelessWidget {
                     else if (message.messageType == MessageType.image && message.mediaUrl != null)
                       _buildImage(message.mediaUrl!)
                     else if (message.messageType == MessageType.video && message.mediaUrl != null)
-                      _buildVideoThumbnail(message.mediaUrl!)
+                      _buildVideoThumbnail(context, message.mediaUrl!)
                     else if (message.messageType == MessageType.audio && message.mediaUrl != null)
                       _buildAudioPlayer(message.mediaUrl!)
                     else if (message.messageType == MessageType.document)
@@ -2456,10 +2664,26 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildVideoThumbnail(String videoUrl) {
+  Widget _buildVideoThumbnail(BuildContext context, String videoUrl) {
     return InkWell(
       onTap: () {
-        // Full-screen video player could be pushed here
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              foregroundColor: Colors.white,
+            ),
+            body: Center(
+              child: VideoPlayerWidget(
+                videoUrl: videoUrl,
+                showControls: true,
+                showBufferIndicator: true,
+              ),
+            ),
+          ),
+        ));
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(

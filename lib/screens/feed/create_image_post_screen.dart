@@ -221,6 +221,14 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(publishResult.message ?? 'Failed to schedule'), backgroundColor: Colors.red));
           }
         }
+      } else {
+        if (mounted) {
+          setState(() => _isPosting = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message ?? 'Failed to save draft for scheduling'),
+            backgroundColor: Colors.red,
+          ));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -257,7 +265,10 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
         ));
       }
     } catch (e) {
-      if (mounted) setState(() => _isSavingDraft = false);
+      if (mounted) {
+        setState(() => _isSavingDraft = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving draft: $e'), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -560,8 +571,10 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
                         onPressed: () {
                           final text = _contentController.text;
                           final selection = _contentController.selection;
-                          _contentController.text = '${text.substring(0, selection.baseOffset)}#${text.substring(selection.extentOffset)}';
-                          _contentController.selection = TextSelection.collapsed(offset: selection.baseOffset + 1);
+                          final offset = selection.baseOffset < 0 ? text.length : selection.baseOffset;
+                          final end = selection.extentOffset < 0 ? text.length : selection.extentOffset;
+                          _contentController.text = '${text.substring(0, offset)}#${text.substring(end)}';
+                          _contentController.selection = TextSelection.collapsed(offset: offset + 1);
                           _contentFocusNode.requestFocus();
                         },
                         tooltip: 'Hashtag',
@@ -572,8 +585,10 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
                         onPressed: () {
                           final text = _contentController.text;
                           final selection = _contentController.selection;
-                          _contentController.text = '${text.substring(0, selection.baseOffset)}@${text.substring(selection.extentOffset)}';
-                          _contentController.selection = TextSelection.collapsed(offset: selection.baseOffset + 1);
+                          final offset = selection.baseOffset < 0 ? text.length : selection.baseOffset;
+                          final end = selection.extentOffset < 0 ? text.length : selection.extentOffset;
+                          _contentController.text = '${text.substring(0, offset)}@${text.substring(end)}';
+                          _contentController.selection = TextSelection.collapsed(offset: offset + 1);
                           _contentFocusNode.requestFocus();
                         },
                         tooltip: 'Mention',

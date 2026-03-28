@@ -137,6 +137,7 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
       rotation: _rotation,
       flipHorizontal: _flipHorizontal,
       flipVertical: _flipVertical,
+      aspectRatio: _aspectRatio,
       textOverlays: List.from(_textOverlays),
       stickerOverlays: List.from(_stickerOverlays),
       drawingPaths: List.from(_drawingPaths),
@@ -162,6 +163,7 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
         _rotation = state.rotation;
         _flipHorizontal = state.flipHorizontal;
         _flipVertical = state.flipVertical;
+        _aspectRatio = state.aspectRatio;
         _textOverlays = List.from(state.textOverlays);
         _stickerOverlays = List.from(state.stickerOverlays);
         _drawingPaths = List.from(state.drawingPaths);
@@ -185,6 +187,7 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
       _rotation = 0.0;
       _flipHorizontal = false;
       _flipVertical = false;
+      _aspectRatio = 'free';
       _textOverlays.clear();
       _stickerOverlays.clear();
       _drawingPaths.clear();
@@ -345,7 +348,63 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
       matrix[14] -= warmthValue; // Blue
     }
 
+    // Apply highlights (boost bright values via offset + slight scale increase)
+    if (_highlights != 0) {
+      final h = _highlights;
+      // Approximate highlights: scale up slightly and add offset for bright pixels
+      final hScale = 1.0 + h * 0.15;
+      final hOffset = h * 20.0;
+      matrix = _multiplyMatrix(matrix, [
+        hScale, 0, 0, 0, hOffset,
+        0, hScale, 0, 0, hOffset,
+        0, 0, hScale, 0, hOffset,
+        0, 0, 0, 1, 0,
+      ]);
+    }
+
+    // Apply shadows (lift dark values by adding a small positive offset)
+    if (_shadows != 0) {
+      final sOffset = _shadows * 40.0;
+      matrix[4] += sOffset;
+      matrix[9] += sOffset;
+      matrix[14] += sOffset;
+    }
+
+    // Apply fade (reduce contrast and lift blacks towards middle gray)
+    if (_fade != 0) {
+      final f = _fade;
+      final fScale = 1.0 - f * 0.3; // reduce contrast
+      final fOffset = f * 40.0; // lift blacks
+      matrix = _multiplyMatrix(matrix, [
+        fScale, 0, 0, 0, fOffset,
+        0, fScale, 0, 0, fOffset,
+        0, 0, fScale, 0, fOffset,
+        0, 0, 0, 1, 0,
+      ]);
+    }
+
     return matrix;
+  }
+
+  Widget _wrapWithAspectRatio({required Widget child}) {
+    final ratio = _parseAspectRatio(_aspectRatio);
+    if (ratio == null) return child;
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: child,
+    );
+  }
+
+  double? _parseAspectRatio(String ratio) {
+    switch (ratio) {
+      case '1:1': return 1.0;
+      case '4:5': return 4.0 / 5.0;
+      case '16:9': return 16.0 / 9.0;
+      case '9:16': return 9.0 / 16.0;
+      case '4:3': return 4.0 / 3.0;
+      case '3:4': return 3.0 / 4.0;
+      default: return null; // 'free'
+    }
   }
 
   List<double> _multiplyMatrix(List<double> a, List<double> b) {
@@ -541,42 +600,55 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
               child: Center(
                 child: RepaintBoundary(
                   key: _imageKey,
-                  child: Stack(
-                    children: [
-                      // Main image with filters and adjustments
-                      Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.identity()
-                          ..rotateZ(_rotation * math.pi / 180)
-                          ..scale(_flipHorizontal ? -1.0 : 1.0, _flipVertical ? -1.0 : 1.0, 1.0),
-                        child: ColorFiltered(
-                          colorFilter: ColorFilter.matrix(_getAdjustmentMatrix()),
-                          child: ColorFiltered(
-                            colorFilter: _getFilterMatrix(_selectedFilter) ?? const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
-                            child: Image.file(
-                              widget.imageFile,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Vignette overlay
-                      if (_vignette > 0)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: RadialGradient(
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withValues(alpha: _vignette * 0.7),
-                                  ],
-                                  stops: const [0.5, 1.0],
+                  child: _wrapWithAspectRatio(
+                    child: ClipRect(
+                      child: Stack(
+                        children: [
+                          // Main image with filters and adjustments
+                          Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()
+                              ..rotateZ(_rotation * math.pi / 180)
+                              ..scale(_flipHorizontal ? -1.0 : 1.0, _flipVertical ? -1.0 : 1.0, 1.0),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.matrix(_getAdjustmentMatrix()),
+                              child: ColorFiltered(
+                                colorFilter: _getFilterMatrix(_selectedFilter) ?? const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                                child: Image.file(
+                                  widget.imageFile,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                          // Vignette overlay
+                          if (_vignette > 0)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: RadialGradient(
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withValues(alpha: _vignette * 0.7),
+                                      ],
+                                      stops: const [0.5, 1.0],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Grain overlay
+                          if (_grain > 0)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _GrainPainter(intensity: _grain),
+                                ),
+                              ),
+                            ),
                       // Text overlays
                       ..._textOverlays.asMap().entries.map((entry) {
                         final index = entry.key;
@@ -653,6 +725,8 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
                         ),
                     ],
                   ),
+                ),
+              ),
                 ),
               ),
             ),
@@ -766,6 +840,8 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
           _buildAdjustSlider('Highlights', _highlights * 100, -100, 100, (v) => setState(() => _highlights = v / 100)),
           _buildAdjustSlider('Shadows', _shadows * 100, -100, 100, (v) => setState(() => _shadows = v / 100)),
           _buildAdjustSlider('Fade', _fade * 100, 0, 100, (v) => setState(() => _fade = v / 100)),
+          _buildAdjustSlider('Sharpness', _sharpness * 100, 0, 100, (v) => setState(() => _sharpness = v / 100)),
+          _buildAdjustSlider('Grain', _grain * 100, 0, 100, (v) => setState(() => _grain = v / 100)),
         ],
       ),
     );
@@ -822,7 +898,10 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> with TickerProvid
                 child: ChoiceChip(
                   label: Text(ratio == 'free' ? 'Free' : ratio),
                   selected: isSelected,
-                  onSelected: (_) => setState(() => _aspectRatio = ratio),
+                  onSelected: (_) {
+                    setState(() => _aspectRatio = ratio);
+                    _saveState();
+                  },
                   selectedColor: Colors.white,
                   backgroundColor: Colors.grey.shade800,
                   labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white),
@@ -1095,6 +1174,7 @@ class EditorState {
   final double rotation;
   final bool flipHorizontal;
   final bool flipVertical;
+  final String aspectRatio;
   final List<TextOverlay> textOverlays;
   final List<StickerOverlay> stickerOverlays;
   final List<DrawingPath> drawingPaths;
@@ -1114,6 +1194,7 @@ class EditorState {
     required this.rotation,
     required this.flipHorizontal,
     required this.flipVertical,
+    required this.aspectRatio,
     required this.textOverlays,
     required this.stickerOverlays,
     required this.drawingPaths,
@@ -1301,6 +1382,7 @@ class _AddTextDialogState extends State<_AddTextDialog> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText ?? '');
+    _controller.addListener(() => setState(() {}));
     _selectedColor = widget.initialColor ?? Colors.white;
     _fontSize = widget.initialFontSize ?? 24;
     _fontWeight = widget.initialFontWeight ?? FontWeight.bold;
@@ -1397,4 +1479,32 @@ class _AddTextDialogState extends State<_AddTextDialog> {
       ],
     );
   }
+}
+
+/// Paints random semi-transparent dots to simulate film grain
+class _GrainPainter extends CustomPainter {
+  final double intensity;
+
+  _GrainPainter({required this.intensity});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final random = math.Random(42); // fixed seed for stable grain pattern
+    final dotCount = (size.width * size.height * intensity * 0.002).toInt().clamp(0, 50000);
+    final paint = Paint();
+
+    for (int i = 0; i < dotCount; i++) {
+      final x = random.nextDouble() * size.width;
+      final y = random.nextDouble() * size.height;
+      final isLight = random.nextBool();
+      paint.color = isLight
+          ? Colors.white.withValues(alpha: intensity * 0.3 * random.nextDouble())
+          : Colors.black.withValues(alpha: intensity * 0.4 * random.nextDouble());
+      canvas.drawCircle(Offset(x, y), 0.5 + random.nextDouble() * 0.5, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GrainPainter oldDelegate) =>
+      oldDelegate.intensity != intensity;
 }

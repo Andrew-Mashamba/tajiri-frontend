@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/payment_models.dart';
 import '../../services/creator_service.dart';
-import '../../services/local_storage_service.dart';
 import '../../l10n/app_strings_scope.dart';
 
 class WeeklyReportScreen extends StatefulWidget {
@@ -27,14 +27,10 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
 
   Future<void> _loadReport() async {
     setState(() { _loading = true; _error = null; });
+    if (kDebugMode) debugPrint('[WeeklyReportScreen] Loading report for user ${widget.userId}');
     try {
-      final storage = await LocalStorageService.getInstance();
-      final token = storage.getAuthToken();
-      if (token == null) {
-        if (mounted) setState(() { _error = 'Not authenticated'; _loading = false; });
-        return;
-      }
-      final report = await _creatorService.getWeeklyReport(widget.userId, token);
+      final report = await _creatorService.getWeeklyReport(widget.userId);
+      if (kDebugMode) debugPrint('[WeeklyReportScreen] Report loaded: ${report != null}');
       if (mounted) {
         setState(() {
           _report = report;
@@ -43,6 +39,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
         });
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('[WeeklyReportScreen] Error: $e');
       if (mounted) setState(() { _error = 'Error: $e'; _loading = false; });
     }
   }
@@ -156,6 +153,33 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                             ),
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      // Posting tip
+                      _buildCard(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.lightbulb_outline_rounded, size: 20, color: Color(0xFF999999)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    strings?.postingTip ?? 'Tip of the Week',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _report!.postingTip ?? (strings?.defaultPostingTip ?? 'Post during peak hours when your audience is most active for better engagement.'),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A), height: 1.4),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -23,6 +23,10 @@ class CachedMediaImage extends StatelessWidget {
   final Widget? errorWidget;
   final BorderRadius? borderRadius;
   final Color? backgroundColor;
+  /// Override fade-in duration (default 200ms). Set to Duration.zero for blur layers.
+  final Duration? fadeInDuration;
+  /// Override fade-out duration (default 200ms). Set to Duration.zero for blur layers.
+  final Duration? fadeOutDuration;
 
   const CachedMediaImage({
     super.key,
@@ -36,6 +40,8 @@ class CachedMediaImage extends StatelessWidget {
     this.errorWidget,
     this.borderRadius,
     this.backgroundColor,
+    this.fadeInDuration,
+    this.fadeOutDuration,
   });
 
   @override
@@ -55,8 +61,8 @@ class CachedMediaImage extends StatelessWidget {
       cacheManager: MediaCacheManager.instance,
       placeholder: (context, url) => _buildPlaceholder(),
       errorWidget: (context, url, error) => _buildErrorWidget(),
-      fadeInDuration: const Duration(milliseconds: 200),
-      fadeOutDuration: const Duration(milliseconds: 200),
+      fadeInDuration: fadeInDuration ?? const Duration(milliseconds: 200),
+      fadeOutDuration: fadeOutDuration ?? const Duration(milliseconds: 200),
       memCacheWidth: memW,
       memCacheHeight: memH,
     );

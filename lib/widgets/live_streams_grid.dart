@@ -3,7 +3,6 @@
 /// Optimized for: 60fps scrolling, sub-100ms updates, minimal battery drain
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import '../l10n/app_strings.dart';
 import '../l10n/app_strings_scope.dart';
 import '../models/livestream_models.dart';
@@ -81,8 +80,6 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
     });
 
     try {
-      print('[LiveStreamsGrid] 🔄 Loading live streams from backend...');
-
       // Fetch both live and upcoming streams in parallel
       final results = await Future.wait([
         _streamService.getLiveStreams(currentUserId: widget.currentUserId),
@@ -97,13 +94,10 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
           _liveStreams = liveResult.success ? liveResult.streams : [];
           _upcomingStreams = upcomingResult.success ? upcomingResult.streams : [];
           _isLoading = false;
-
-          print('[LiveStreamsGrid] ✅ Loaded ${_liveStreams.length} live streams');
-          print('[LiveStreamsGrid] ✅ Loaded ${_upcomingStreams.length} upcoming streams');
         });
       }
     } catch (e) {
-      print('[LiveStreamsGrid] ❌ Error loading streams: $e');
+      debugPrint('[LiveStreamsGrid] Error loading streams: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -115,8 +109,6 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
 
   /// Connect WebSocket for real-time updates (viewer counts, stream status)
   void _connectWebSocket() {
-    print('[LiveStreamsGrid] 🔌 Connecting WebSocket for real-time updates...');
-
     _webSocketService.connect(widget.currentUserId);
 
     // Listen to viewer count updates
@@ -144,20 +136,16 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
     _streamStatusSubscription = _webSocketService.streamStatusStream.listen((update) {
       if (!mounted) return;
 
-      print('[LiveStreamsGrid] 📢 Stream status changed: $update');
-
       // Refresh streams list when status changes
       _loadStreams();
     });
 
-    print('[LiveStreamsGrid] ✅ WebSocket connected for real-time updates');
   }
 
   /// Auto-refresh streams every 30 seconds
   void _startAutoRefresh() {
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
-        print('[LiveStreamsGrid] 🔄 Auto-refreshing streams...');
         _loadStreams();
       }
     });
@@ -180,18 +168,7 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
     if (startIndex != _firstVisibleIndex || endIndex != _lastVisibleIndex) {
       _firstVisibleIndex = startIndex;
       _lastVisibleIndex = endIndex;
-
-      // Preload thumbnails for visible range
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _preloadThumbnails(startIndex, endIndex);
-      });
     }
-  }
-
-  /// Preload stream thumbnails for smooth scrolling
-  void _preloadThumbnails(int start, int end) {
-    // Thumbnails are already cached by CachedMediaImage widget
-    // This is just for additional optimization if needed
   }
 
   @override
@@ -538,16 +515,19 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
     return GestureDetector(
       onTap: () {
         if (isStartingSoon || stream.status == 'pre_live') {
-          // TODO: Navigate to standby screen when ready
-          // Navigator.push(context, MaterialPageRoute(builder: (context) => StandbyScreen(stream: stream)));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tangazo linaanza hivi karibuni!')),
+          // Navigate to stream viewer (standby/waiting mode)
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => StreamViewerScreen(
+                stream: stream,
+                currentUserId: widget.currentUserId,
+              ),
+            ),
           );
         } else {
-          // TODO: Show stream details/remind me dialog
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tangazo bado halijawa tayari')),
-          );
+          // Show stream details bottom sheet with "Remind Me" option
+          _showRemindMeSheet(context, stream, timeRemaining);
         }
       },
       child: Container(
@@ -691,6 +671,144 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
     );
   }
 
+  void _showRemindMeSheet(BuildContext context, LiveStream stream, Duration? timeRemaining) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheduledLabel = stream.scheduledAt != null
+        ? '${stream.scheduledAt!.day}/${stream.scheduledAt!.month}/${stream.scheduledAt!.year} '
+          '${stream.scheduledAt!.hour.toString().padLeft(2, '0')}:'
+          '${stream.scheduledAt!.minute.toString().padLeft(2, '0')}'
+        : 'Unknown';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFFAFAFA),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Title
+                Text(
+                  stream.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Creator
+                if (stream.user != null)
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline, size: 18, color: Colors.grey.shade500),
+                      const SizedBox(width: 6),
+                      Text(
+                        stream.user!.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 8),
+                // Scheduled time
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 18, color: Colors.grey.shade500),
+                    const SizedBox(width: 6),
+                    Text(
+                      scheduledLabel,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    if (timeRemaining != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '(${_formatTimeRemaining(timeRemaining)})',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.amber,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                // Description
+                if (stream.description != null && stream.description!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    stream.description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                // Remind Me button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Utakumbushwa tangazo linapoanza!',
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text('Nikumbushe'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      foregroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _navigateToGoLive() {
     if (widget.currentUserId <= 0) return;
     Navigator.push(
@@ -751,7 +869,7 @@ class _LiveStreamsGridState extends State<LiveStreamsGrid> with AutomaticKeepAli
               ),
             ElevatedButton.icon(
               onPressed: () {
-                // TODO: Navigate to discover live streams
+                Navigator.pushNamed(context, '/search');
               },
               icon: const Icon(Icons.explore),
               label: const Text('Gundua Matangazo'),

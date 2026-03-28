@@ -124,6 +124,7 @@ class WeeklyReport {
   final int totalLikes;
   final String weekStart;
   final String weekEnd;
+  final String? postingTip;
 
   WeeklyReport({
     required this.totalEarnings,
@@ -137,6 +138,7 @@ class WeeklyReport {
     required this.totalLikes,
     required this.weekStart,
     required this.weekEnd,
+    this.postingTip,
   });
 
   factory WeeklyReport.fromJson(Map<String, dynamic> json) {
@@ -154,6 +156,7 @@ class WeeklyReport {
       totalLikes: _parseInt(json['total_likes']),
       weekStart: (json['week_start'] as String?) ?? '',
       weekEnd: (json['week_end'] as String?) ?? '',
+      postingTip: json['posting_tip'] as String?,
     );
   }
 }

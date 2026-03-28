@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +13,7 @@ import '../../models/profile_tab_config.dart';
 import '../../services/profile_service.dart';
 import '../../services/post_service.dart';
 import '../../services/friend_service.dart';
+import '../../models/friend_models.dart' hide FriendshipStatus;
 import '../../services/message_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/event_tracking_service.dart';
@@ -28,6 +31,7 @@ import '../wallet/wallet_screen.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
 import '../messages/callhistory_screen.dart';
 import '../feed/create_post_screen.dart';
+import '../feed/edit_post_screen.dart';
 import '../feed/post_detail_screen.dart';
 import '../feed/videogallerywidget_screen.dart';
 import '../groups/groups_screen.dart';
@@ -39,6 +43,9 @@ import '../../services/group_service.dart';
 import '../../services/file_service.dart';
 import 'profile_stats_bottom_sheet.dart';
 import 'creator_dashboard_section.dart';
+import 'edit_profile_screen.dart';
+import '../../services/creator_service.dart';
+import '../../models/flywheel_models.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -84,6 +91,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isUploadingCoverPhoto = false;
   // Send friend request in progress
   bool _isSendingFriendRequest = false;
+
+  // Streak data for profile (visible on all profiles)
+  CreatorStreak? _profileStreak;
+
+  // Viral assists count (own profile or when > 0)
+  int _viralAssistsCount = 0;
 
   int get _currentUserId => widget.currentUserId ?? widget.userId;
   bool get _isOwnProfile => widget.userId == _currentUserId;
@@ -206,6 +219,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           debugPrint('[ProfileScreen] Profile loaded: ${_profile?.fullName}');
           // Load initial posts
           _loadPosts();
+          // Load streak for all profiles (visible to visitors)
+          _loadProfileStreak();
+          // Load viral assists count
+          _loadViralAssists();
         } else {
           _error = result.message;
           debugPrint('[ProfileScreen] Profile error: $_error');
@@ -250,6 +267,35 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+
+  Future<void> _loadProfileStreak() async {
+    try {
+      final creatorService = CreatorService();
+      final streak = await creatorService.getCreatorStreak(creatorId: widget.userId);
+      if (mounted && streak != null) {
+        setState(() => _profileStreak = streak);
+      }
+    } catch (e) {
+      // Non-critical — silently ignore
+    }
+  }
+
+  Future<void> _loadViralAssists() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final creatorService = CreatorService();
+      final count = await creatorService.getViralAssists(
+        creatorId: widget.userId,
+        token: token,
+      );
+      if (mounted) {
+        setState(() => _viralAssistsCount = count);
+      }
+    } catch (e) {
+      // Non-critical — silently ignore
+    }
+  }
 
   Future<void> _updateProfilePhoto() async {
     if (_isUploadingPhoto || !_isOwnProfile) return;
@@ -455,10 +501,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _showEditProfileDialog() {
-    final s = AppStringsScope.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.editProfileComingSoon ?? 'Edit profile - Coming soon')),
-    );
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(
+          currentUserId: _currentUserId,
+          initialProfile: _profile,
+        ),
+      ),
+    ).then((saved) {
+      if (saved == true && mounted) _loadProfile();
+    });
   }
 
   void _showLogoutDialog() {
@@ -504,6 +557,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   static const Color _secondaryText = Color(0xFF666666);
 
   /// Format count for profile stats (e.g. 1200 → 1.2K, 1500000 → 1.5M)
+  List<String> _getMilestoneBadges(int followerCount) {
+    final badges = <String>[];
+    if (followerCount >= 100) badges.add('100');
+    if (followerCount >= 500) badges.add('500');
+    if (followerCount >= 1000) badges.add('1K');
+    if (followerCount >= 5000) badges.add('5K');
+    if (followerCount >= 10000) badges.add('10K');
+    if (followerCount >= 50000) badges.add('50K');
+    if (followerCount >= 100000) badges.add('100K');
+    return badges;
+  }
+
   static String _formatStatCount(int value) {
     if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}M';
     if (value >= 1000) return '${(value / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}K';
@@ -962,36 +1027,90 @@ class _ProfileScreenState extends State<ProfileScreen>
     final subscribersCount = _profile?.stats.subscribersCount ?? 0;
     final friendsCount = _profile?.stats.friendsCount ?? 0;
 
+    final milestoneBadges = _getMilestoneBadges(followersCount);
+
     final List<Widget> columnChildren = <Widget>[
       // 1. Stats row
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: <Widget>[
-          _buildStatItem(
-            _formatStatCount(followersCount),
-            AppStringsScope.of(context)?.followers ?? 'Followers',
-            onTap: () => _openStatsBottomSheet(ProfileStatsType.followers, followersCount),
-          ),
-          _buildStatDivider(),
-          _buildStatItem(
-            _formatStatCount(followingCount),
-            AppStringsScope.of(context)?.following ?? 'Following',
-            onTap: () => _openStatsBottomSheet(ProfileStatsType.following, followingCount),
-          ),
-          _buildStatDivider(),
-          _buildStatItem(
-            _formatStatCount(subscribersCount),
-            AppStringsScope.of(context)?.subscribers ?? 'Subscribers',
-            onTap: () => _openStatsBottomSheet(ProfileStatsType.subscribers, subscribersCount),
-          ),
-          _buildStatDivider(),
-          _buildStatItem(
-            _formatStatCount(friendsCount),
-            AppStringsScope.of(context)?.friends ?? 'Friends',
-            onTap: () => _openStatsBottomSheet(ProfileStatsType.friends, friendsCount),
-          ),
-        ],
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            _buildStatItem(
+              _formatStatCount(followersCount),
+              AppStringsScope.of(context)?.followers ?? 'Followers',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.followers, followersCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(followingCount),
+              AppStringsScope.of(context)?.following ?? 'Following',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.following, followingCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(subscribersCount),
+              AppStringsScope.of(context)?.subscribers ?? 'Subscribers',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.subscribers, subscribersCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(friendsCount),
+              AppStringsScope.of(context)?.friends ?? 'Friends',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.friends, friendsCount),
+            ),
+            if (_isOwnProfile || _viralAssistsCount > 0) ...[
+              _buildStatDivider(),
+              _buildStatItem(
+                _formatStatCount(_viralAssistsCount),
+                AppStringsScope.of(context)?.viralAssists ?? 'Viral Assists',
+              ),
+            ],
+          ],
+        ),
       ),
+      // Streak badge (visible on all profiles)
+      if (_profileStreak != null && _profileStreak!.currentStreakDays > 0) ...[
+        const SizedBox(height: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_fire_department_rounded, size: 14, color: const Color(0xFF1A1A1A)),
+            const SizedBox(width: 2),
+            Text(
+              '${_profileStreak!.currentStreakDays}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              AppStringsScope.of(context)?.streakDays ?? 'day streak',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
+            ),
+          ],
+        ),
+      ],
+      // Follower milestone badge
+      if (milestoneBadges.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.verified_rounded, size: 12, color: Colors.white),
+              const SizedBox(width: 2),
+              Text(
+                milestoneBadges.last,
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
       const SizedBox(height: sectionSpacing),
 
       // 2. Me page: quick links (Edit left, Settings center, Wallet right) — each in Expanded for bounded layout
@@ -1864,7 +1983,130 @@ class _ProfilePostsPageState extends State<_ProfilePostsPage> {
   }
 
   void _onPostLongPress(Post post) {
-    showPostPeekPreview(context, post);
+    if (widget.isOwnProfile) {
+      _showPostOptionsMenu(post);
+    } else {
+      showPostPeekPreview(context, post);
+    }
+  }
+
+  void _showPostOptionsMenu(Post post) {
+    final s = AppStringsScope.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: Text(s?.edit ?? 'Edit'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _editPost(post);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                title: Text(
+                  s?.delete ?? 'Delete',
+                  style: const TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _confirmDeletePost(post);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editPost(Post post) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditPostScreen(post: post),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadPosts();
+    }
+  }
+
+  void _confirmDeletePost(Post post) {
+    final s = AppStringsScope.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(s?.deletePostConfirmTitle ?? 'Delete post'),
+          content: Text(s?.deletePostConfirmMessage ??
+              'Are you sure you want to delete this post?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(s?.cancel ?? 'Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _deletePost(post);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text(s?.delete ?? 'Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deletePost(Post post) async {
+    final result = await _postService.deletePost(
+      post.id,
+      userId: widget.currentUserId,
+    );
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        _posts.removeWhere((p) => p.id == post.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? 'Post deleted'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ??
+              AppStringsScope.of(context)?.deletePostFailed ??
+              'Failed to delete post'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -3214,6 +3456,147 @@ class _ProfileDocumentsPageState extends State<_ProfileDocumentsPage> {
     }
   }
 
+  Future<void> _shareFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    final link = await _fileService.shareFile(file.id, publicLink: true);
+    if (!mounted) return;
+    if (link != null && link.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: link));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s?.linkCopied ?? 'Kiungo kimenakiliwa')),
+        );
+      }
+      SharePlus.instance.share(ShareParams(text: link));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s?.actionFailed ?? 'Imeshindwa kushiriki')),
+      );
+    }
+  }
+
+  Future<void> _renameFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    final controller = TextEditingController(text: file.title);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.rename ?? 'Badilisha jina'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Ingiza jina',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(s?.save ?? 'Hifadhi'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != file.title) {
+      final result = await _fileService.renameFile(file.id, newName);
+      if (mounted) {
+        if (result.success) {
+          _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Imefanikiwa')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? (s?.actionFailed ?? 'Imeshindwa'))),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _moveFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    // Load root-level folders for the user
+    final result = await _fileService.getFiles(
+      userId: widget.userId,
+      path: '/',
+    );
+    if (!mounted) return;
+
+    final folders = result.success
+        ? result.files.where((f) => f.isFolder && f.id != file.id).toList()
+        : <UserFile>[];
+
+    final targetFolderId = await showDialog<int?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.moveTo ?? 'Hamisha'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: folders.isEmpty
+              ? Center(
+                  child: Text(
+                    'Hakuna folda',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: folders.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      // Root folder option
+                      return ListTile(
+                        leading: const Icon(Icons.folder_rounded),
+                        title: const Text('/ (Mzizi)'),
+                        onTap: () => Navigator.pop(context, 0),
+                      );
+                    }
+                    final folder = folders[index - 1];
+                    return ListTile(
+                      leading: const Icon(Icons.folder_rounded),
+                      title: Text(folder.title),
+                      onTap: () => Navigator.pop(context, folder.id),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+        ],
+      ),
+    );
+
+    if (targetFolderId != null) {
+      final moveResult = await _fileService.moveFile(
+        file.id,
+        targetFolderId: targetFolderId == 0 ? null : targetFolderId,
+        targetPath: targetFolderId == 0 ? '/' : null,
+      );
+      if (mounted) {
+        if (moveResult.success) {
+          _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Imehamishwa')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(moveResult.message ?? (s?.actionFailed ?? 'Imeshindwa'))),
+          );
+        }
+      }
+    }
+  }
+
   void _showFileOptions(UserFile file) {
     final s = AppStringsScope.of(context);
     showModalBottomSheet(
@@ -3250,7 +3633,7 @@ class _ProfileDocumentsPageState extends State<_ProfileDocumentsPage> {
                 title: Text(s?.share ?? 'Shiriki'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Share functionality
+                  _shareFile(file);
                 },
               ),
             ListTile(
@@ -3258,7 +3641,7 @@ class _ProfileDocumentsPageState extends State<_ProfileDocumentsPage> {
               title: Text(s?.rename ?? 'Badilisha jina'),
               onTap: () {
                 Navigator.pop(context);
-                // Rename functionality
+                _renameFile(file);
               },
             ),
             ListTile(
@@ -3266,7 +3649,7 @@ class _ProfileDocumentsPageState extends State<_ProfileDocumentsPage> {
               title: Text(s?.moveTo ?? 'Hamisha'),
               onTap: () {
                 Navigator.pop(context);
-                // Move functionality
+                _moveFile(file);
               },
             ),
             if (widget.isOwnProfile)
@@ -3831,7 +4214,7 @@ class _BreadcrumbItem {
 }
 
 /// Friends page content
-class _ProfileFriendsPage extends StatelessWidget {
+class _ProfileFriendsPage extends StatefulWidget {
   final int userId;
   final FullProfile? profile;
 
@@ -3841,23 +4224,176 @@ class _ProfileFriendsPage extends StatelessWidget {
   });
 
   @override
+  State<_ProfileFriendsPage> createState() => _ProfileFriendsPageState();
+}
+
+class _ProfileFriendsPageState extends State<_ProfileFriendsPage> {
+  final FriendService _friendService = FriendService();
+  final ScrollController _scrollController = ScrollController();
+
+  List<UserProfile> _friends = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _page = 1;
+  static const int _perPage = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadFriends();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoadingMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (currentScroll >= maxScroll * 0.7) {
+      _loadMoreFriends();
+    }
+  }
+
+  Future<void> _loadFriends() async {
+    setState(() {
+      _isLoading = true;
+      _page = 1;
+    });
+
+    final result = await _friendService.getFriends(
+      userId: widget.userId,
+      page: 1,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _friends = result.friends;
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.friends.length >= _perPage;
+          _page = 2;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadMoreFriends() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+
+    final result = await _friendService.getFriends(
+      userId: widget.userId,
+      page: _page,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoadingMore = false;
+        if (result.success) {
+          _friends.addAll(result.friends);
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.friends.length >= _perPage;
+          _page++;
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            'Marafiki ${profile?.stats.friendsCount ?? 0}',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Orodha ya marafiki inakuja hivi karibuni',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-        ],
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_friends.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Hakuna marafiki',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadFriends,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _friends.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _friends.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final friend = _friends[index];
+          return ListTile(
+            leading: CircleAvatar(
+              radius: 24,
+              backgroundImage: friend.profilePhotoUrl != null
+                  ? NetworkImage(friend.profilePhotoUrl!)
+                  : null,
+              child: friend.profilePhotoUrl == null
+                  ? Text(
+                      friend.fullName.isNotEmpty
+                          ? friend.fullName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : null,
+            ),
+            title: Text(
+              friend.fullName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: friend.location.isNotEmpty
+                ? Text(
+                    friend.location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  )
+                : null,
+            onTap: () {
+              Navigator.pushNamed(context, '/profile/${friend.id}');
+            },
+          );
+        },
       ),
     );
   }

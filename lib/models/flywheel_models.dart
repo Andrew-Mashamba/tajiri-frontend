@@ -208,3 +208,51 @@ class FundPayoutProjection {
     );
   }
 }
+
+/// Posting nudge suggestion from backend.
+class PostingNudge {
+  final String message;
+  final String messageSwahili;
+  final String nudgeType; // 'peak_hour', 'streak_warning', 'consistency', 'engagement_tip'
+  final int? hoursUntilStreakExpiry;
+
+  PostingNudge({
+    required this.message,
+    required this.messageSwahili,
+    required this.nudgeType,
+    this.hoursUntilStreakExpiry,
+  });
+
+  factory PostingNudge.fromJson(Map<String, dynamic> json) {
+    return PostingNudge(
+      message: (json['message'] as String?) ?? '',
+      messageSwahili: (json['message_sw'] as String?) ?? (json['message'] as String?) ?? '',
+      nudgeType: (json['nudge_type'] as String?) ?? 'engagement_tip',
+      hoursUntilStreakExpiry: json['hours_until_streak_expiry'] as int?,
+    );
+  }
+}
+
+/// Content calendar data for creator dashboard.
+class ContentCalendar {
+  final int draftsCount;
+  final int postsThisWeek;
+  final int scheduledCount;
+  final String? suggestedPostTime;
+
+  ContentCalendar({
+    required this.draftsCount,
+    required this.postsThisWeek,
+    required this.scheduledCount,
+    this.suggestedPostTime,
+  });
+
+  factory ContentCalendar.fromJson(Map<String, dynamic> json) {
+    return ContentCalendar(
+      draftsCount: (json['drafts_count'] as int?) ?? 0,
+      postsThisWeek: (json['posts_this_week'] as int?) ?? 0,
+      scheduledCount: (json['scheduled_count'] as int?) ?? 0,
+      suggestedPostTime: json['suggested_post_time'] as String?,
+    );
+  }
+}

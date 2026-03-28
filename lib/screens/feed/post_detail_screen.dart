@@ -12,6 +12,9 @@ import '../../config/api_config.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'edit_post_screen.dart';
 import '../../services/event_tracking_service.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 
 /// Instagram-style post detail screen with:
 /// - Scrollable feed of posts (when [posts] list provided)
@@ -153,6 +156,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
   String? _commentsError;
 
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
   bool _isSubmittingComment = false;
 
   /// Reply mode state.
@@ -196,6 +200,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -231,6 +236,8 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         _postError = result.message ?? (AppStringsScope.of(context)?.postNotFound ?? 'Post not found');
       }
     });
+    // Re-check earnings now that post ownership is known
+    if (result.success) _loadEarningsIfOwner();
   }
 
   Future<void> _loadPostInBackground() async {
@@ -247,8 +254,9 @@ class _PostDetailPageState extends State<_PostDetailPage> {
   Future<void> _loadEarningsIfOwner() async {
     // Check ownership from initialPost or wait for post to load
     final post = _post;
-    final isOwner = post != null && post.userId == widget.currentUserId;
-    if (!isOwner && post != null) return;
+    if (post == null) return;
+    final isOwner = post.userId == widget.currentUserId;
+    if (!isOwner) return;
 
     final result = await _postService.getPostEarnings(widget.postId);
     if (!mounted) return;
@@ -387,6 +395,28 @@ class _PostDetailPageState extends State<_PostDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s?.likeUpdateFailed ?? 'Failed to update like')),
       );
+    } else if (result.likesCount != null) {
+      setState(() => _post = _post!.copyWith(likesCount: result.likesCount!));
+    }
+  }
+
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    setState(() {
+      _post = post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      );
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.name,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _post = post);
     } else if (result.likesCount != null) {
       setState(() => _post = _post!.copyWith(likesCount: result.likesCount!));
     }
@@ -591,9 +621,10 @@ class _PostDetailPageState extends State<_PostDetailPage> {
     final result = await _postService.archivePost(post.id, widget.currentUserId);
     if (!mounted) return;
     if (result.success) {
-      Navigator.pop(context, post.id);
       final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.pop(context, post.id);
+      messenger.showSnackBar(
         SnackBar(content: Text(s?.postArchived ?? 'Post archived')),
       );
     } else {
@@ -623,9 +654,10 @@ class _PostDetailPageState extends State<_PostDetailPage> {
               final result = await _postService.deletePost(post.id, userId: widget.currentUserId);
               if (!mounted) return;
               if (result.success) {
-                Navigator.pop(context, post.id);
                 final s2 = AppStringsScope.of(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.pop(context, post.id);
+                messenger.showSnackBar(
                   SnackBar(content: Text(s2?.postDeleted ?? 'Post deleted')),
                 );
               } else {
@@ -718,7 +750,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
       if (rollbackIndex >= 0) {
         setState(() => _comments[rollbackIndex] = comment);
       }
-    } else if (result.likesCount > 0) {
+    } else if (result.likesCount >= 0) {
       // Sync with server count
       final syncIndex = _comments.indexWhere((c) => c.id == comment.id);
       if (syncIndex >= 0) {
@@ -788,11 +820,52 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                     post: post,
                     currentUserId: widget.currentUserId,
                     onLike: () => _onLike(post),
-                    onComment: () {},
+                    onComment: () {
+                      _commentFocusNode.requestFocus();
+                    },
                     onShare: () => _onShare(post),
                     onSave: () => _onSave(post),
                     onUserTap: () => _onUserTap(post),
                     onMenuTap: () => _onMenuTap(post),
+                    onHashtagTap: (hashtag) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => HashtagScreen(
+                            hashtag: hashtag,
+                            currentUserId: widget.currentUserId,
+                          ),
+                        ),
+                      );
+                    },
+                    onMentionTap: (username) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SearchScreen(
+                            currentUserId: widget.currentUserId,
+                            initialQuery: username,
+                            initialTab: 0,
+                          ),
+                        ),
+                      );
+                    },
+                    onSubscribe: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SubscribeToCreatorScreen(
+                            creatorId: post.userId,
+                            currentUserId: widget.currentUserId,
+                            creatorDisplayName: post.user?.fullName,
+                          ),
+                        ),
+                      );
+                    },
+                    onReaction: (reaction) => _onReaction(post, reaction),
+                    onThreadTap: post.threadId != null
+                        ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                        : null,
                   ),
                 ),
                 const Divider(height: 1),
@@ -1016,6 +1089,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
               Expanded(
                 child: TextField(
                   controller: _commentController,
+                  focusNode: _commentFocusNode,
                   decoration: InputDecoration(
                     hintText: _replyingTo != null
                         ? '${s?.replyToHint ?? 'Reply to'} ${_replyingTo!.user?.fullName ?? (s?.commentNoun ?? 'comment')}...'

@@ -176,6 +176,8 @@ class AppStrings {
   String get post => isSwahili ? 'Chapisho' : 'Post';
   String get posts => isSwahili ? 'Machapisho' : 'Posts';
   String get savedPosts => isSwahili ? 'Chapisho Zilizohifadhiwa' : 'Saved posts';
+  String get noNotifications => isSwahili ? 'Hakuna arifa bado' : 'No notifications yet';
+  String get notificationsHint => isSwahili ? 'Utakapopata likes, maoni, na wafuatiliaji wataonekana hapa' : 'When you get likes, comments, and follows they will show up here';
   String get noPosts => isSwahili ? 'Hakuna machapisho' : 'No posts';
   String get noPostsFromFriends => isSwahili ? 'Hakuna machapisho kutoka kwa marafiki' : 'No posts from friends';
   String get friendsFeedEmptyHint => isSwahili ? 'Ongeza marafiki ili kuona machapisho yao hapa' : 'Add friends to see their posts here';
@@ -1254,6 +1256,10 @@ class AppStrings {
   String get thisWeek => isSwahili ? 'Wiki Hii' : 'This Week';
   String get weeklyReport => isSwahili ? 'Ripoti ya Wiki' : 'Weekly Report';
   String get bestPost => isSwahili ? 'Chapisho Bora' : 'Best Post';
+  String get postingTip => isSwahili ? 'Kidokezo cha Wiki' : 'Tip of the Week';
+  String get defaultPostingTip => isSwahili
+      ? 'Chapisha wakati wa kilele ambapo hadhira yako inashiriki zaidi kwa ushiriki bora.'
+      : 'Post during peak hours when your audience is most active for better engagement.';
   String get engagementTrend => isSwahili ? 'Mwenendo wa Ushiriki' : 'Engagement Trend';
   String get followerChange => isSwahili ? 'Mabadiliko ya Wafuasi' : 'Follower Change';
   String get threadsTriggered => isSwahili ? 'Mada Zilizoanzishwa' : 'Threads Triggered';
@@ -1267,6 +1273,8 @@ class AppStrings {
   String get postingStreak => isSwahili ? 'Mfululizo wa Kuchapisha' : 'Posting Streak';
   String get viewingStreak => isSwahili ? 'Mfululizo wa Kutazama' : 'Viewing Streak';
   String get streakFrozen => isSwahili ? 'Mfululizo umegandishwa' : 'Streak frozen';
+  String get resumeStreak => isSwahili ? 'Endelea na mfululizo wako wa siku' : 'Resume your streak';
+  String get welcomeBackStreak => isSwahili ? 'Karibu tena! Endelea na mfululizo wako?' : 'Welcome back! Resume your streak?';
   String get multipliers => isSwahili ? 'Vizidishi' : 'Multipliers';
   String get tierMultiplier => isSwahili ? 'Kizidishi cha Ngazi' : 'Tier Multiplier';
   String get streakMultiplier => isSwahili ? 'Kizidishi cha Mfululizo' : 'Streak Multiplier';
@@ -1280,6 +1288,7 @@ class AppStrings {
   String get trendUp => isSwahili ? 'Inaongezeka' : 'Trending Up';
   String get trendDown => isSwahili ? 'Inapungua' : 'Trending Down';
   String get trendStable => isSwahili ? 'Imara' : 'Stable';
+  String get viralAssists => isSwahili ? 'Msaada wa Viral' : 'Viral Assists';
   String get viralAlert => isSwahili ? 'Chapisho kinachoenea!' : 'Post going viral!';
   String get viralPostAlert => isSwahili ? 'Chapisho kinachoenea sasa!' : 'A post is going viral right now!';
 
@@ -1316,6 +1325,7 @@ class AppStrings {
   String get activeFollowers => isSwahili ? 'Wafuasi Hai' : 'Active Followers';
   String get peakActivity => isSwahili ? 'Kilele cha Shughuli' : 'Peak Activity';
   String get last30Days => isSwahili ? 'Siku 30 Zilizopita' : 'Last 30 Days';
+  String get topPosts => isSwahili ? 'Machapisho Bora' : 'Top Posts';
   String get viewAnalytics => isSwahili ? 'Tazama Takwimu' : 'View Analytics';
   String get creatorSettings => isSwahili ? 'Mipangilio ya Muundaji' : 'Creator Settings';
   String get optOutSponsored => isSwahili ? 'Sitaki machapisho ya udhamini' : 'Opt out of sponsored posts';
@@ -1324,4 +1334,49 @@ class AppStrings {
   String get optOutThreads => isSwahili ? 'Sitaki machapisho yangu kwenye mada' : 'Don\'t include my posts in threads';
   String get votes => isSwahili ? 'kura' : 'votes';
   String get vs => 'vs';
+
+  // ——— Feature 5: Smart posting nudge ———
+  String get smartNudge => isSwahili ? 'Kidokezo' : 'Tip';
+
+  // ——— Feature 6: Evening digest ———
+  String get eveningRecap => isSwahili ? 'Muhtasari wa Jioni' : 'Evening Recap';
+  String get postsViewedToday => isSwahili ? 'Machapisho uliyotazama leo' : 'Posts you viewed today';
+  String get newThreadsToday => isSwahili ? 'Mada mpya leo' : 'New threads today';
+
+  // ——— Feature 7: Content calendar ———
+  String get contentCalendar => isSwahili ? 'Kalenda ya Maudhui' : 'Content Calendar';
+  String get bestTimeToPost => isSwahili ? 'Wakati bora wa kuchapisha' : 'Best time to post';
+
+  // ——— PostCard Instagram-style strings ———
+  String get justNow => isSwahili ? 'Sasa hivi' : 'Just now';
+  String minutesAgoShort(int n) => isSwahili ? 'Dakika $n' : '${n}m';
+  String hoursAgoShort(int n) => isSwahili ? 'Saa $n' : '${n}h';
+  String daysAgoShort(int n) => isSwahili ? 'Siku $n' : '${n}d';
+  String get views => isSwahili ? 'maoni' : 'views';
+  String likesCount(String n) => isSwahili ? 'Wapendaji $n' : '$n likes';
+  String viewsCount(String n) => isSwahili ? 'Watazamaji $n' : '$n views';
+  String viewAllComments(String n) => isSwahili ? 'Tazama maoni yote $n' : 'View all $n comments';
+  String get whatDoYouThink => isSwahili ? 'Unafikiri nini?' : 'What do you think?';
+  String get beenQuietToday => isSwahili ? 'Umekuwa kimya leo \u2014 unafikiri nini?' : 'You\'ve been quiet today \u2014 what do you think?';
+  String get someone => isSwahili ? 'Mtu fulani' : 'Someone';
+  String shortDate(int day, int month, int year) => '$day/$month/$year';
+
+  // Reaction labels (i18n-aware)
+  String get reactionLike => isSwahili ? 'Penda' : 'Like';
+  String get reactionLove => isSwahili ? 'Upendo' : 'Love';
+  String get reactionHaha => isSwahili ? 'Haha' : 'Haha';
+  String get reactionWow => isSwahili ? 'Wow' : 'Wow';
+  String get reactionSad => isSwahili ? 'Huzuni' : 'Sad';
+  String get reactionAngry => isSwahili ? 'Hasira' : 'Angry';
+  String reactionLabel(String reaction) {
+    switch (reaction) {
+      case 'like': return reactionLike;
+      case 'love': return reactionLove;
+      case 'haha': return reactionHaha;
+      case 'wow': return reactionWow;
+      case 'sad': return reactionSad;
+      case 'angry': return reactionAngry;
+      default: return reaction;
+    }
+  }
 }

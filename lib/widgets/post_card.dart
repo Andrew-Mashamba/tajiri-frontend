@@ -1,18 +1,20 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../models/post_models.dart';
 import 'user_avatar.dart';
-import 'video_player_widget.dart';
 import 'audio_player_widget.dart';
 import 'cached_media_image.dart';
 import 'poll_vote_widget.dart';
 import '../l10n/app_strings_scope.dart';
 import '../services/event_tracking_service.dart';
+import '../services/engagement_level_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'thread_badge.dart';
 import 'sponsored_badge.dart';
+import 'adaptive_media_zone.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -20,15 +22,17 @@ const Color _kPrimaryText = Color(0xFF1A1A1A);
 const Color _kSecondaryText = Color(0xFF666666);
 const Color _kTertiaryText = Color(0xFF999999);
 const Color _kDivider = Color(0xFFE0E0E0);
-const Color _kShadow = Color(0xFF000000);
-const double _kCardRadius = 16.0;
-const double _kCardMarginV = 6.0;
 const double _kCardPadding = 16.0;
 const double _kGapIconText = 8.0;
 
 /// PostCard widget optimized for smooth scrolling in feeds.
 /// DESIGN.md: surface, primary/secondary/tertiary text, 16px radius, 48dp touch targets.
 class PostCard extends StatefulWidget {
+  /// Session-level engagement level, set by FeedScreen on load.
+  /// Used to gate reaction prompts and other engagement features.
+  /// Static intentionally: shared across all PostCard instances for consistent session behavior.
+  static EngagementLevel sessionEngagementLevel = EngagementLevel.gentle;
+
   final Post post;
   final int currentUserId;
   final VoidCallback? onLike;
@@ -40,7 +44,6 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onMenuTap;
   final Function(String hashtag)? onHashtagTap;
   final Function(String username)? onMentionTap;
-  final VoidCallback? onVideoTap;
   /// When set, tapping the card (content/header/media) opens post detail.
   final VoidCallback? onTap;
   /// Called when user taps Subscribe button on subscribers-only content.
@@ -61,7 +64,6 @@ class PostCard extends StatefulWidget {
     this.onMenuTap,
     this.onHashtagTap,
     this.onMentionTap,
-    this.onVideoTap,
     this.onTap,
     this.onSubscribe,
     this.onThreadTap,
@@ -71,15 +73,32 @@ class PostCard extends StatefulWidget {
   State<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin {
+class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   bool _showReactionPicker = false;
+  bool _captionExpanded = false;
   // PERFORMANCE: Lazy-load animation controller only when needed
   AnimationController? _reactionController;
   Animation<double>? _reactionAnimation;
 
   // View/dwell tracking state
   DateTime? _visibleSince;
-  bool _viewTracked = false;
+  bool _viewTracked = false; // Intentionally single-track-per-lifecycle: reset only on widget rebuild
+  Timer? _viewTrackTimer; // Cancellable replacement for Future.delayed
+
+  // Reaction pulse prompt (flywheel: show after 3s dwell without action)
+  bool _showReactionPulse = false;
+  bool _hasActed = false;
+  Timer? _reactionPulseTimer;
+
+  // Session-level passive view counter (resets on app restart).
+  // Static intentionally: tracks cross-instance session engagement for "been quiet" prompt.
+  static int _sessionPassiveViews = 0;
+
+  // Cached TapGestureRecognizers to avoid memory leaks
+  final List<TapGestureRecognizer> _tapRecognizers = [];
+
+  // App lifecycle tracking for accurate dwell calculation
+  DateTime? _backgroundedAt;
 
   AnimationController get reactionController {
     if (_reactionController == null) {
@@ -101,10 +120,44 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     return _reactionAnimation!;
   }
 
+  void _markActed() {
+    _hasActed = true;
+    _reactionPulseTimer?.cancel();
+    _reactionPulseTimer = null;
+    if (_showReactionPulse && mounted) {
+      setState(() => _showReactionPulse = false);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _viewTrackTimer?.cancel();
+    _reactionPulseTimer?.cancel();
     _reactionController?.dispose();
+    for (final r in _tapRecognizers) {
+      r.dispose();
+    }
+    _tapRecognizers.clear();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _backgroundedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed && _backgroundedAt != null && _visibleSince != null) {
+      // Subtract background time from dwell calculation
+      final backgroundDuration = DateTime.now().difference(_backgroundedAt!);
+      _visibleSince = _visibleSince!.add(backgroundDuration);
+      _backgroundedAt = null;
+    }
   }
 
   void _onVisibilityChanged(VisibilityInfo info) {
@@ -113,7 +166,8 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       _visibleSince ??= DateTime.now();
       if (!_viewTracked) {
         _viewTracked = true;
-        Future.delayed(const Duration(seconds: 1), () {
+        _viewTrackTimer?.cancel();
+        _viewTrackTimer = Timer(const Duration(seconds: 1), () {
           if (mounted && _visibleSince != null) {
             EventTrackingService.getInstance().then((tracker) {
               tracker.trackEvent(
@@ -121,7 +175,19 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 postId: widget.post.id,
                 creatorId: widget.post.userId,
               );
-            });
+            }).catchError((_) {});
+          }
+        });
+      }
+      // Start reaction pulse timer if user hasn't acted (gated by engagement level)
+      if (!_hasActed && _reactionPulseTimer == null &&
+          EngagementLevelService.shouldShow(
+            level: PostCard.sessionEngagementLevel,
+            feature: EngagementFeature.reactionPrompts,
+          )) {
+        _reactionPulseTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted && !_hasActed) {
+            setState(() => _showReactionPulse = true);
           }
         });
       }
@@ -130,6 +196,10 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       if (_visibleSince != null) {
         final dwellMs = DateTime.now().difference(_visibleSince!).inMilliseconds;
         if (dwellMs > 1000) {
+          // Track passive view for session prompt
+          if (!_hasActed) {
+            _sessionPassiveViews++;
+          }
           // Meaningful view — emit dwell
           EventTrackingService.getInstance().then((tracker) {
             tracker.trackEvent(
@@ -138,7 +208,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               creatorId: widget.post.userId,
               durationMs: dwellMs,
             );
-          });
+          }).catchError((_) {});
         } else {
           // Quick scroll past — emit scroll_past
           EventTrackingService.getInstance().then((tracker) {
@@ -148,9 +218,15 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               creatorId: widget.post.userId,
               durationMs: dwellMs,
             );
-          });
+          }).catchError((_) {});
         }
         _visibleSince = null;
+      }
+      // Reset pulse state
+      _reactionPulseTimer?.cancel();
+      _reactionPulseTimer = null;
+      if (_showReactionPulse && mounted) {
+        setState(() => _showReactionPulse = false);
       }
     }
   }
@@ -167,6 +243,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   void _selectReaction(ReactionType reaction) {
+    _markActed();
     widget.onReaction?.call(reaction);
     setState(() {
       _showReactionPicker = false;
@@ -176,55 +253,51 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
 
   Post get post => widget.post;
 
+  Color? _postDominantColor() {
+    final firstMedia = post.media.isNotEmpty ? post.media.first : null;
+    if (firstMedia?.dominantColor != null) {
+      return parseDominantColor(firstMedia!.dominantColor);
+    }
+    return null;
+  }
+
+  TapGestureRecognizer _createTapRecognizer(VoidCallback onTap) {
+    final r = TapGestureRecognizer()..onTap = onTap;
+    _tapRecognizers.add(r);
+    return r;
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Dispose previous recognizers before rebuilding
+    for (final r in _tapRecognizers) {
+      r.dispose();
+    }
+    _tapRecognizers.clear();
+
     final cardContent = Container(
-      margin: const EdgeInsets.symmetric(vertical: _kCardMarginV),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: _kSurface,
-        boxShadow: [
-          BoxShadow(
-            color: _kShadow.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+        border: Border(bottom: BorderSide(color: _kDivider, width: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader(context),
+          _buildMediaZone(context),
+          _buildActionRow(context),
+          _buildLikesCount(context),
+          _buildCaption(context),
+          _buildViewComments(context),
+          _buildCommentPreview(context),
         ],
       ),
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        color: Colors.transparent,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        child: LayoutBuilder(
-        builder: (context, constraints) {
-          final hasBoundedHeight = constraints.maxHeight.isFinite;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: hasBoundedHeight ? MainAxisSize.max : MainAxisSize.min,
-            children: [
-              _buildHeader(context),
-              if (hasBoundedHeight)
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    child: _buildCardBody(context),
-                  ),
-                )
-              else
-                _buildCardBody(context),
-              _buildStats(context),
-              Divider(height: 1, color: _kDivider),
-              _buildActions(context),
-            ],
-          );
-        },
-      ),
-    ),
     );
     final Widget tappableCard = widget.onTap != null
         ? GestureDetector(
             onTap: widget.onTap,
-            behavior: HitTestBehavior.opaque,
+            behavior: HitTestBehavior.deferToChild,
             child: cardContent,
           )
         : cardContent;
@@ -236,15 +309,68 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     );
   }
 
-  /// Body content (content, media, shared). Used inside scroll when height is bounded.
-  Widget _buildCardBody(BuildContext context) {
-    final bodyContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+  /// Instagram-style media zone — full-bleed content area between header and actions.
+  /// Dispatches to the appropriate visual treatment based on post type.
+  Widget _buildMediaZone(BuildContext context) {
+    Widget content;
+
+    if (post.isColoredTextPost) {
+      content = _buildColoredTextContent(context);
+    } else if (post.isAudioPost) {
+      content = _buildAudioPostContent(context);
+    } else if (post.postType == PostType.poll && post.pollId != null) {
+      content = Container(
+        constraints: const BoxConstraints(minHeight: 200),
+        color: const Color(0xFFFAFAFA),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: PollVoteWidget(
+          pollId: post.pollId!,
+          currentUserId: widget.currentUserId,
+        ),
+      );
+    } else if (post.isShared && post.originalPost != null) {
+      content = _buildSharedPost(context);
+    } else if (post.hasMedia) {
+      final visualMedia = post.media.where((m) => m.mediaType == MediaType.image || m.mediaType == MediaType.video).toList();
+      if (visualMedia.isNotEmpty) {
+        content = AdaptiveMediaZone(
+          media: visualMedia,
+          dominantColor: _postDominantColor(),
+          onTap: widget.onTap,
+          onImageTap: (images, tapped) => widget.onTap?.call(),
+        );
+      } else {
+        // Only documents/audio — fall through to document/audio handling
+        content = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final m in post.media)
+              if (m.mediaType == MediaType.document)
+                _buildDocumentPreview(m)
+              else if (m.mediaType == MediaType.audio)
+                AudioPlayerWidget(audioUrl: m.fileUrl, duration: m.duration),
+          ],
+        );
+      }
+    } else if (post.content != null && post.content!.isNotEmpty) {
+      // Text-only post: render as styled media card
+      content = _buildTextOnlyMedia(context);
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    // Wrap in stack for overlays (thread badge, sponsored badge, subscriber lock)
+    final hasOverlays = post.threadId != null || post.isSponsored || _isContentLocked;
+
+    if (!hasOverlays) return content;
+
+    return Stack(
       children: [
+        content,
         if (post.threadId != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          Positioned(
+            top: 10,
+            left: 10,
             child: ThreadBadge(
               threadId: post.threadId!,
               threadTitle: post.threadTitle,
@@ -252,221 +378,122 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             ),
           ),
         if (post.isSponsored)
-          Padding(
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 6),
+          Positioned(
+            top: post.threadId != null ? 44 : 10,
+            left: 10,
             child: SponsoredBadge(sponsorName: post.sponsorName),
           ),
-        if (post.isColoredTextPost)
-          _buildColoredTextContent(context)
-        else if (post.isAudioPost)
-          _buildAudioPostContent(context)
-        else if (post.postType == PostType.poll && post.pollId != null)
-          PollVoteWidget(
-            pollId: post.pollId!,
-            currentUserId: widget.currentUserId,
-          )
-        else if (post.content != null && post.content!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: _buildRichContent(context, post.content!),
-          ),
-        if (post.postType == PostType.poll &&
-            post.content != null &&
-            post.content!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: _buildRichContent(context, post.content!),
-          ),
-        if (post.hasMedia) _buildMedia(context),
-        if (post.isShared && post.originalPost != null)
-          _buildSharedPost(context),
-      ],
-    );
-
-    // If content is locked (subscribers-only and not subscribed), show overlay
-    if (_isContentLocked) {
-      return Stack(
-        children: [
-          // Show blurred/dimmed content underneath
-          bodyContent,
-          // Overlay with subscribe prompt
+        if (_isContentLocked)
           Positioned.fill(
             child: _buildSubscriberOverlay(),
           ),
-        ],
-      );
-    }
+      ],
+    );
+  }
 
-    return bodyContent;
+  /// Text-only posts get a dark gradient background with large centered text.
+  Widget _buildTextOnlyMedia(BuildContext context) {
+    final text = post.content!;
+    final fontSize = text.length < 80 ? 24.0 : text.length < 200 ? 20.0 : 16.0;
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 280),
+      padding: const EdgeInsets.all(32),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A1A1A), Color(0xFF333333)],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          text.length > 300 ? '${text.substring(0, 300)}...' : text,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 12,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
   }
 
   Widget _buildHeader(BuildContext context) {
     final s = AppStringsScope.of(context);
+    final username = post.user?.username ?? post.user?.fullName ?? (s?.unknownUser ?? 'Unknown');
     return Padding(
-      padding: const EdgeInsets.all(_kCardPadding),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          UserAvatar(
-            photoUrl: post.user?.profilePhotoUrl,
-            name: post.user?.fullName,
-            radius: 22,
+          GestureDetector(
             onTap: widget.onUserTap,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: _kPrimaryText, width: 1.5),
+              ),
+              child: UserAvatar(
+                photoUrl: post.user?.profilePhotoUrl,
+                name: post.user?.fullName,
+                radius: 16,
+                onTap: widget.onUserTap,
+              ),
+            ),
           ),
-          const SizedBox(width: _kGapIconText),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: GestureDetector(
-                        onTap: widget.onUserTap,
-                        child: Text(
-                          post.user?.fullName ?? 'Unknown',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                            color: _kPrimaryText,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    if (post.isViral) ...[
-                      const SizedBox(width: 6),
-                      _buildBadge('Viral', HeroIcon(HeroIcons.fire, style: HeroIconStyle.solid, size: 12, color: _kPrimaryText)),
-                    ],
-                    if (post.isFeatured) ...[
-                      const SizedBox(width: 6),
-                      _buildBadge('Featured', HeroIcon(HeroIcons.star, style: HeroIconStyle.solid, size: 12, color: _kPrimaryText)),
-                    ],
-                    if (post.isTrending) ...[
-                      const SizedBox(width: 6),
-                      _buildBadge('Trending', HeroIcon(HeroIcons.arrowTrendingUp, style: HeroIconStyle.outline, size: 12, color: _kPrimaryText)),
-                    ],
-                  ],
-                ),
-                Row(
-                  children: [
-                    if (post.user?.username != null &&
-                        post.user!.username!.isNotEmpty) ...[
-                      Text(
-                        '@${post.user!.username}',
-                        style: const TextStyle(
-                          color: _kSecondaryText,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const Text(
-                        ' · ',
-                        style: TextStyle(color: _kSecondaryText, fontSize: 12),
-                      ),
-                    ],
-                    Text(
-                      _formatTime(post.createdAt),
+            child: GestureDetector(
+              onTap: widget.onUserTap,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      username,
                       style: const TextStyle(
-                        color: _kSecondaryText,
-                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: _kPrimaryText,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (post.isEdited) ...[
-                      const Text(' · ', style: TextStyle(color: _kSecondaryText, fontSize: 12)),
-                      Text(
-                        s?.edited ?? 'Edited',
-                        style: const TextStyle(
-                          color: _kSecondaryText,
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  ),
+                  if (post.isViral || post.isFeatured || post.isTrending) ...[
                     const SizedBox(width: 4),
                     HeroIcon(
-                      _getPrivacyHeroIcon(post.privacy),
-                      style: HeroIconStyle.outline,
-                      size: 12,
-                      color: _kSecondaryText,
+                      post.isViral ? HeroIcons.fire
+                          : post.isFeatured ? HeroIcons.star
+                          : HeroIcons.arrowTrendingUp,
+                      style: HeroIconStyle.solid,
+                      size: 14,
+                      color: _kPrimaryText,
                     ),
-                    if (post.isShortVideo) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _kPrimaryText.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Short',
-                          style: const TextStyle(
-                            color: _kPrimaryText,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                    if (post.locationName != null) ...[
-                      const SizedBox(width: 4),
-                      HeroIcon(HeroIcons.mapPin, style: HeroIconStyle.outline, size: 12, color: _kSecondaryText),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          post.locationName!,
-                          style: const TextStyle(color: _kSecondaryText, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
                   ],
-                ),
-              ],
+                  Text(
+                    ' · ${_formatTime(post.createdAt, s)}',
+                    style: const TextStyle(
+                      color: _kTertiaryText,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ),
-          if (post.userId == widget.currentUserId)
-            IconButton(
-              icon: HeroIcon(HeroIcons.ellipsisHorizontal, style: HeroIconStyle.outline, size: 20, color: _kPrimaryText),
-              onPressed: widget.onMenuTap,
-              padding: const EdgeInsets.all(12),
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          GestureDetector(
+            onTap: widget.onMenuTap,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: HeroIcon(HeroIcons.ellipsisHorizontal, style: HeroIconStyle.outline, size: 20, color: _kPrimaryText),
             ),
-        ],
-      ),
-    );
-  }
-
-  /// DESIGN.md: chip/badge — overlay 0.08, primary text, 12px radius.
-  Widget _buildBadge(String label, Widget icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _kPrimaryText.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: _kPrimaryText,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -499,14 +526,13 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           color: _kPrimaryText,
           fontWeight: FontWeight.w500,
         ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () {
+        recognizer: _createTapRecognizer(() {
             if (isHashtag) {
               widget.onHashtagTap?.call(matchText.substring(1));
             } else {
               widget.onMentionTap?.call(matchText.substring(1));
             }
-          },
+          }),
       ));
 
       lastMatchEnd = match.end;
@@ -522,12 +548,13 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
 
     return RichText(
       text: TextSpan(children: spans),
+      maxLines: 6,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
-  /// Build colored text content for text-only posts with background
+  /// Colored text post as full-bleed media zone content.
   Widget _buildColoredTextContent(BuildContext context) {
-    // Parse background color (fallback DESIGN.md grey if invalid)
     Color bgColor = _kSecondaryText;
     if (post.backgroundColor != null) {
       try {
@@ -538,13 +565,14 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       }
     }
 
-    // Determine text color based on background luminance
     final textColor = bgColor.computeLuminance() > 0.5 ? _kPrimaryText : _kSurface;
+    final text = post.content ?? '';
+    final fontSize = text.length < 80 ? 26.0 : text.length < 200 ? 20.0 : 16.0;
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 200),
-      padding: const EdgeInsets.all(24),
+      constraints: const BoxConstraints(minHeight: 300),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -552,36 +580,37 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           colors: [
             bgColor,
             HSLColor.fromColor(bgColor).withLightness(
-              (HSLColor.fromColor(bgColor).lightness - 0.1).clamp(0.0, 1.0),
+              (HSLColor.fromColor(bgColor).lightness - 0.12).clamp(0.0, 1.0),
             ).toColor(),
           ],
         ),
       ),
       child: Center(
         child: Text(
-          post.content ?? '',
+          text,
           style: TextStyle(
             color: textColor,
-            fontSize: post.content != null && post.content!.length < 100 ? 24 : 18,
-            fontWeight: FontWeight.w600,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
             height: 1.4,
+            shadows: [
+              Shadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8),
+            ],
           ),
           textAlign: TextAlign.center,
+          maxLines: 12,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
   }
 
-  /// Build audio post content with waveform visualization
+  /// Audio post as full-bleed media zone with dark background.
   Widget _buildAudioPostContent(BuildContext context) {
     final s = AppStringsScope.of(context);
-    // Try to get audio URL from multiple sources:
-    // 1. Direct audioPath on the post
-    // 2. Audio media item in media array
     String? audioUrl = post.audioUrl;
     int? audioDuration = post.audioDuration;
 
-    // If no direct audio path, check media array
     if (audioUrl == null || audioUrl.isEmpty) {
       final audioMedia = post.media.where((m) => m.mediaType == MediaType.audio).firstOrNull;
       if (audioMedia != null) {
@@ -592,61 +621,91 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
 
     if (audioUrl == null || audioUrl.isEmpty) {
       return Container(
-        margin: const EdgeInsets.symmetric(horizontal: _kCardPadding, vertical: 8),
-        padding: const EdgeInsets.all(_kCardPadding),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F5),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _kDivider),
-        ),
-        child: Row(
-          children: [
-            HeroIcon(HeroIcons.exclamationCircle, style: HeroIconStyle.outline, size: 20, color: _kTertiaryText),
-            const SizedBox(width: _kGapIconText),
-            Expanded(
-              child: Text(
-                s?.audioUnavailable ?? 'Audio unavailable - no audio_path',
-                style: const TextStyle(color: _kSecondaryText, fontSize: 12),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 200),
+        color: const Color(0xFF1A1A1A),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HeroIcon(HeroIcons.exclamationCircle, style: HeroIconStyle.outline, size: 32, color: _kTertiaryText),
+              const SizedBox(height: 8),
+              Text(
+                s?.audioUnavailable ?? 'Audio unavailable',
+                style: const TextStyle(color: _kTertiaryText, fontSize: 13),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: _kCardPadding, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _kDivider),
-      ),
+      width: double.infinity,
+      color: const Color(0xFF1A1A1A),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cover image if available
+          // Cover image if available — full-bleed
           if (post.coverImagePath != null)
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
+            AspectRatio(
+              aspectRatio: 1,
+              child: CachedMediaImage(
+                imageUrl: post.coverImageUrl,
+                fit: BoxFit.cover,
+                errorWidget: Container(
+                  color: const Color(0xFF1A1A1A),
+                  child: HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 50, color: _kTertiaryText),
+                ),
               ),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: CachedMediaImage(
-                  imageUrl: post.coverImageUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: Container(
-                    color: _kDivider,
-                    child: HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 50, color: _kTertiaryText),
-                  ),
+            )
+          else
+            // No cover image — show audio player centered on dark bg
+            Container(
+              constraints: const BoxConstraints(minHeight: 280),
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 2),
+                      ),
+                      child: const HeroIcon(HeroIcons.play, style: HeroIconStyle.solid, size: 32, color: Colors.white),
+                    ),
+                    const SizedBox(height: 16),
+                    if (audioDuration != null)
+                      Text(
+                        '${(audioDuration ~/ 60).toString().padLeft(2, '0')}:${(audioDuration % 60).toString().padLeft(2, '0')}',
+                        style: const TextStyle(color: _kTertiaryText, fontSize: 13),
+                      ),
+                    if (post.hasMusic && post.musicTrack != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 14, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              post.musicTrack!.title,
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
 
-          // Audio player - using the actual AudioPlayerWidget
+          // Audio player widget
           AudioPlayerWidget(
             audioUrl: audioUrl,
             duration: audioDuration,
@@ -654,103 +713,9 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 ? (s?.audioAndText ?? 'Audio + Text')
                 : (s?.audio ?? 'Audio'),
           ),
-
-          // Music info if present
-          if (post.hasMusic && post.musicTrack != null)
-            Padding(
-              padding: const EdgeInsets.only(left: _kCardPadding, right: _kCardPadding, bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _kPrimaryText.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 14, color: _kPrimaryText),
-                    const SizedBox(width: 4),
-                    Text(
-                      post.musicTrack!.title,
-                      style: const TextStyle(color: _kPrimaryText, fontSize: 11),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Caption/content for audio_text type
-          if (post.content != null && post.content!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  _buildRichContent(context, post.content!),
-                ],
-              ),
-            ),
         ],
       ),
     );
-  }
-
-  Widget _buildMedia(BuildContext context) {
-    // PERFORMANCE: Wrap media in RepaintBoundary for isolation
-    return RepaintBoundary(
-      child: post.media.length == 1
-          ? _buildSingleMedia(post.media.first)
-          : _buildMediaGrid(),
-    );
-  }
-
-  Widget _buildSingleMedia(PostMedia media) {
-    switch (media.mediaType) {
-      case MediaType.image:
-        return GestureDetector(
-          onTap: () {
-            // TODO: Open image viewer
-          },
-          child: AspectRatio(
-            aspectRatio: _calculateAspectRatio(media),
-            child: CachedMediaImage(
-              imageUrl: media.fileUrl,
-              fit: BoxFit.cover,
-              errorWidget: Container(
-                color: _kDivider,
-                child: HeroIcon(HeroIcons.photo, style: HeroIconStyle.outline, size: 50, color: _kTertiaryText),
-              ),
-            ),
-          ),
-        );
-
-      case MediaType.video:
-        return VideoPlayerWidget(
-          videoUrl: media.fileUrl,
-          thumbnailUrl: media.thumbnailUrl,
-          aspectRatio: _calculateAspectRatio(media),
-        );
-
-      case MediaType.audio:
-        return AudioPlayerWidget(
-          audioUrl: media.fileUrl,
-          duration: media.duration,
-        );
-
-      case MediaType.document:
-        return _buildDocumentPreview(media);
-    }
-  }
-
-  double _calculateAspectRatio(PostMedia media) {
-    if (media.width != null && media.height != null && media.height! > 0) {
-      return media.width! / media.height!;
-    }
-    return 16 / 9;
   }
 
   Widget _buildDocumentPreview(PostMedia media) {
@@ -760,7 +725,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(_kCardRadius),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kDivider),
       ),
       child: Row(
@@ -769,7 +734,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: _kPrimaryText.withOpacity(0.08),
+              color: _kPrimaryText.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
             child: HeroIcon(HeroIcons.document, style: HeroIconStyle.outline, size: 24, color: _kPrimaryText),
@@ -802,8 +767,15 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           ),
           IconButton(
             icon: HeroIcon(HeroIcons.arrowDownTray, style: HeroIconStyle.outline, size: 20, color: _kPrimaryText),
-            onPressed: () {
-              // TODO: Download file
+            onPressed: () async {
+              try {
+                final url = Uri.parse(media.fileUrl);
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              } catch (_) {
+                // Malformed URL or launch failure — silently ignore
+              }
             },
             padding: const EdgeInsets.all(12),
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -819,121 +791,16 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  Widget _buildMediaGrid() {
-    final mediaList = post.media.take(4).toList();
-    final hasMore = post.media.length > 4;
-
-    // If first item is video or audio, show it separately
-    if (mediaList.first.mediaType == MediaType.video) {
-      return Column(
-        children: [
-          VideoPlayerWidget(
-            videoUrl: mediaList.first.fileUrl,
-            thumbnailUrl: mediaList.first.thumbnailUrl,
-            aspectRatio: _calculateAspectRatio(mediaList.first),
-          ),
-          if (mediaList.length > 1)
-            _buildImageGrid(mediaList.skip(1).toList(), hasMore && mediaList.length == 4),
-        ],
-      );
-    }
-
-    if (mediaList.first.mediaType == MediaType.audio) {
-      return Column(
-        children: [
-          AudioPlayerWidget(
-            audioUrl: mediaList.first.fileUrl,
-            duration: mediaList.first.duration,
-          ),
-          if (mediaList.length > 1)
-            _buildImageGrid(mediaList.skip(1).toList(), hasMore && mediaList.length == 4),
-        ],
-      );
-    }
-
-    return _buildImageGrid(mediaList, hasMore);
-  }
-
-  Widget _buildImageGrid(List<PostMedia> mediaList, bool hasMore) {
-    if (mediaList.isEmpty) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: mediaList.length == 1 ? 200 : 300,
-      child: GridView.count(
-        crossAxisCount: mediaList.length == 1 ? 1 : 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        children: List.generate(mediaList.length.clamp(0, 4), (index) {
-          final media = mediaList[index];
-          final isLast = index == 3 && hasMore;
-
-          Widget child;
-          if (media.mediaType == MediaType.video) {
-            child = Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedMediaImage(
-                  imageUrl: media.thumbnailUrl ?? media.fileUrl,
-                  fit: BoxFit.cover,
-                  backgroundColor: _kPrimaryText,
-                ),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Colors.black54,
-                      shape: BoxShape.circle,
-                    ),
-                    child: HeroIcon(HeroIcons.play, style: HeroIconStyle.solid, size: 32, color: Colors.white),
-                  ),
-                ),
-              ],
-            );
-          } else {
-            child = CachedMediaImage(
-              imageUrl: media.thumbnailUrl ?? media.fileUrl,
-              fit: BoxFit.cover,
-              errorWidget: Container(
-                color: _kDivider,
-                child: HeroIcon(HeroIcons.photo, style: HeroIconStyle.outline, size: 50, color: _kTertiaryText),
-              ),
-            );
-          }
-
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              child,
-              if (isLast)
-                Container(
-                  color: Colors.black54,
-                  child: Center(
-                    child: Text(
-                      '+${post.media.length - 4}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
 
   Widget _buildSharedPost(BuildContext context) {
     final s = AppStringsScope.of(context);
     final original = post.originalPost!;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/post/${original.id}'),
+      child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: _kDivider),
+        border: Border.all(color: _kDivider, width: 1.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -966,7 +833,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        _formatTime(original.createdAt),
+                        _formatTime(original.createdAt, s),
                         style: const TextStyle(color: _kSecondaryText, fontSize: 11),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -988,83 +855,38 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 bottomLeft: Radius.circular(8),
                 bottomRight: Radius.circular(8),
               ),
-              child: _buildSingleMedia(original.media.first),
+              child: AdaptiveMediaZone(
+                media: original.media.where((m) => m.mediaType == MediaType.image || m.mediaType == MediaType.video).toList(),
+                dominantColor: parseDominantColor(original.media.first.dominantColor),
+                onTap: () => Navigator.pushNamed(context, '/post/${original.id}'),
+              ),
             ),
         ],
       ),
+    ),
     );
   }
 
-  Widget _buildStats(BuildContext context) {
-    final s = AppStringsScope.of(context);
-    final hasAnyStats = post.likesCount > 0 ||
-        post.commentsCount > 0 ||
-        post.sharesCount > 0 ||
-        post.viewsCount > 0 ||
-        post.savesCount > 0;
+  /// Instagram-style likes count: "42,300 likes"
+  Widget _buildLikesCount(BuildContext context) {
+    if (post.likesCount <= 0 && post.viewsCount <= 0) return const SizedBox.shrink();
 
-    if (!hasAnyStats) return const SizedBox.shrink();
+    final s = AppStringsScope.of(context);
+    final text = post.likesCount > 0
+        ? (s?.likesCount(_formatCount(post.likesCount)) ?? '${_formatCount(post.likesCount)} likes')
+        : (s?.viewsCount(_formatCount(post.viewsCount)) ?? '${_formatCount(post.viewsCount)} views');
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: _kCardPadding, vertical: 8),
-      child: Row(
-        children: [
-          if (post.likesCount > 0) ...[
-            if (post.userReaction != null)
-              Text(post.userReaction!.emoji, style: const TextStyle(fontSize: 14))
-            else
-              HeroIcon(
-                HeroIcons.handThumbUp,
-                style: HeroIconStyle.solid,
-                size: 16,
-                color: post.isLiked ? _kPrimaryText : _kSecondaryText,
-              ),
-            const SizedBox(width: 4),
-            Text(
-              _formatCount(post.likesCount),
-              style: const TextStyle(color: _kSecondaryText, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          if (post.viewsCount > 0) ...[
-            if (post.likesCount > 0) const SizedBox(width: 12),
-            HeroIcon(HeroIcons.eye, style: HeroIconStyle.outline, size: 14, color: _kSecondaryText),
-            const SizedBox(width: 2),
-            Text(
-              _formatCount(post.viewsCount),
-              style: const TextStyle(color: _kSecondaryText, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          const Spacer(),
-          if (post.savesCount > 0) ...[
-            Text(
-              '${s?.save ?? 'Save'} ${_formatCount(post.savesCount)}',
-              style: const TextStyle(color: _kSecondaryText, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(width: 12),
-          ],
-          if (post.commentsCount > 0)
-            Text(
-              '${s?.comments ?? 'Comments'} ${_formatCount(post.commentsCount)}',
-              style: const TextStyle(color: _kSecondaryText, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          if (post.sharesCount > 0) ...[
-            const SizedBox(width: 12),
-            Text(
-              '${s?.share ?? 'Share'} ${_formatCount(post.sharesCount)}',
-              style: const TextStyle(color: _kSecondaryText, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+          color: _kPrimaryText,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -1078,16 +900,47 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     return count.toString();
   }
 
-  Widget _buildActions(BuildContext context) {
-    final s = AppStringsScope.of(context);
+  /// Instagram-style action row: icon-only buttons (heart, comment, share, spacer, bookmark).
+  Widget _buildActionRow(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Reaction picker (animated)
+        // Reaction pulse prompt (flywheel: nudge after 3s dwell)
+        if (_showReactionPulse) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 12, right: 12),
+            child: Text(
+              _sessionPassiveViews >= 10
+                  ? (AppStringsScope.of(context)?.beenQuietToday ?? 'You\'ve been quiet today \u2014 what do you think?')
+                  : (AppStringsScope.of(context)?.whatDoYouThink ?? 'What do you think?'),
+              style: const TextStyle(
+                fontSize: 12,
+                color: _kSecondaryText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          if (_sessionPassiveViews >= 10)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 12, top: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: ReactionType.values.map((r) => GestureDetector(
+                  onTap: () {
+                    _markActed();
+                    widget.onReaction?.call(r);
+                  },
+                  child: Text(r.emoji, style: const TextStyle(fontSize: 22)),
+                )).toList(),
+              ),
+            ),
+        ],
+        // Reaction picker (animated, shown on long-press)
         if (_showReactionPicker)
           ScaleTransition(
             scale: reactionAnimation,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -1110,18 +963,15 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isSelected ? _kPrimaryText.withOpacity(0.08) : Colors.transparent,
+                        color: isSelected ? _kPrimaryText.withValues(alpha: 0.08) : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Text(reaction.emoji, style: TextStyle(fontSize: isSelected ? 28 : 24)),
                           Text(
-                            reaction.emoji,
-                            style: TextStyle(fontSize: isSelected ? 28 : 24),
-                          ),
-                          Text(
-                            reaction.label,
+                            AppStringsScope.of(context)?.reactionLabel(reaction.value) ?? reaction.label,
                             style: TextStyle(
                               fontSize: 10,
                               color: isSelected ? _kPrimaryText : _kSecondaryText,
@@ -1136,89 +986,86 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               ),
             ),
           ),
-        // Action buttons (touch targets min 48dp per DESIGN.md)
+        // Icon-only action buttons
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           child: Row(
             children: [
-              // Like/Reaction button with long press for picker
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: post.isLiked ? (s?.removeLike ?? 'Unlike') : (s?.like ?? 'Like'),
+              // Like — tap to like, long press for reaction picker
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  _markActed();
+                  if (_showReactionPicker) {
+                    _toggleReactionPicker();
+                  } else {
+                    widget.onLike?.call();
+                    EventTrackingService.getInstance().then((tracker) {
+                      tracker.trackEvent(eventType: 'like', postId: widget.post.id, creatorId: widget.post.userId);
+                    }).catchError((_) {});
+                  }
+                },
+                onLongPress: _toggleReactionPicker,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: GestureDetector(
-                      onLongPress: _toggleReactionPicker,
-                      behavior: HitTestBehavior.opaque,
-                      child: TextButton.icon(
-                        onPressed: () {
-                          if (_showReactionPicker) {
-                            _toggleReactionPicker();
-                          } else {
-                            widget.onLike?.call();
-                            EventTrackingService.getInstance().then((tracker) {
-                              tracker.trackEvent(eventType: 'like', postId: widget.post.id, creatorId: widget.post.userId);
-                            });
-                          }
-                        },
-                        icon: post.userReaction != null
-                            ? Text(post.userReaction!.emoji, style: const TextStyle(fontSize: 18))
-                            : HeroIcon(
-                                HeroIcons.handThumbUp,
-                                style: post.isLiked ? HeroIconStyle.solid : HeroIconStyle.outline,
-                                size: 20,
-                                color: post.isLiked ? _kPrimaryText : _kSecondaryText,
-                              ),
-                        label: Text(
-                          post.userReaction?.label ?? (s?.like ?? 'Like'),
-                          style: TextStyle(
-                            color: post.isLiked ? _kPrimaryText : _kSecondaryText,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    child: Center(
+                      child: post.userReaction != null
+                          ? Text(post.userReaction!.emoji, style: const TextStyle(fontSize: 24))
+                          : HeroIcon(
+                              HeroIcons.heart,
+                              style: post.isLiked ? HeroIconStyle.solid : HeroIconStyle.outline,
+                              size: 26,
+                              color: _kPrimaryText,
+                            ),
                     ),
                   ),
                 ),
               ),
-              // Comment button
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: widget.onComment,
-                  icon: HeroIcon(HeroIcons.chatBubbleLeft, style: HeroIconStyle.outline, size: 20, color: _kSecondaryText),
-                  label: Text(s?.comment ?? 'Comment', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
-                ),
-              ),
-              // Share button
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () {
-                    widget.onShare?.call();
-                    EventTrackingService.getInstance().then((tracker) {
-                      tracker.trackEvent(eventType: 'share', postId: widget.post.id, creatorId: widget.post.userId);
-                    });
-                  },
-                  icon: HeroIcon(HeroIcons.share, style: HeroIconStyle.outline, size: 20, color: _kSecondaryText),
-                  label: Text(s?.share ?? 'Share', style: TextStyle(color: _kSecondaryText, fontSize: 13)),
-                ),
-              ),
-              // Save/Bookmark button (48dp touch target per DESIGN.md)
+              // Comment
               IconButton(
                 onPressed: () {
+                  _markActed();
+                  widget.onComment?.call();
+                  EventTrackingService.getInstance().then((tracker) {
+                    tracker.trackEvent(eventType: 'comment', postId: widget.post.id, creatorId: widget.post.userId);
+                  }).catchError((_) {});
+                },
+                icon: const HeroIcon(HeroIcons.chatBubbleOvalLeft, style: HeroIconStyle.outline, size: 26, color: _kPrimaryText),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
+              // Share
+              IconButton(
+                onPressed: () {
+                  _markActed();
+                  widget.onShare?.call();
+                  EventTrackingService.getInstance().then((tracker) {
+                    tracker.trackEvent(eventType: 'share', postId: widget.post.id, creatorId: widget.post.userId);
+                  }).catchError((_) {});
+                },
+                icon: const HeroIcon(HeroIcons.paperAirplane, style: HeroIconStyle.outline, size: 26, color: _kPrimaryText),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
+              const Spacer(),
+              // Save / Bookmark
+              IconButton(
+                onPressed: () {
+                  _markActed();
                   widget.onSave?.call();
                   EventTrackingService.getInstance().then((tracker) {
                     tracker.trackEvent(eventType: 'save', postId: widget.post.id, creatorId: widget.post.userId);
-                  });
+                  }).catchError((_) {});
                 },
                 icon: HeroIcon(
                   HeroIcons.bookmark,
                   style: post.isSaved ? HeroIconStyle.solid : HeroIconStyle.outline,
-                  size: 22,
-                  color: post.isSaved ? _kPrimaryText : _kSecondaryText,
+                  size: 26,
+                  color: _kPrimaryText,
                 ),
-                tooltip: post.isSaved ? (s?.unsave ?? 'Unsave') : (s?.save ?? 'Save'),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               ),
             ],
@@ -1228,28 +1075,170 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     );
   }
 
-  String _formatTime(DateTime time) {
+  /// Instagram-style caption: bold username + content text with "...more" truncation.
+  Widget _buildCaption(BuildContext context) {
+    // For text-only and colored-text posts, content is shown in the media zone
+    if (post.isColoredTextPost) return const SizedBox.shrink();
+    if (!post.hasMedia && !post.isAudioPost && !post.isShared &&
+        post.postType != PostType.poll) {
+      return const SizedBox.shrink(); // text-only — already in media zone
+    }
+
+    final content = post.content;
+    if (content == null || content.isEmpty) return const SizedBox.shrink();
+
+    final cs = AppStringsScope.of(context);
+    final username = post.user?.username ?? post.user?.fullName ?? (cs?.unknownUser ?? 'Unknown');
+    final isLong = content.length > 120;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: isLong && !_captionExpanded
+                ? () => setState(() => _captionExpanded = true)
+                : null,
+            child: RichText(
+              maxLines: _captionExpanded ? 100 : 3,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$username ',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: _kPrimaryText,
+                    ),
+                    recognizer: _createTapRecognizer(() => widget.onUserTap?.call()),
+                  ),
+                  ..._buildCaptionSpans(content),
+                ],
+              ),
+            ),
+          ),
+          if (isLong && !_captionExpanded)
+            GestureDetector(
+              onTap: () => setState(() => _captionExpanded = true),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  AppStringsScope.of(context)?.more ?? 'more',
+                  style: const TextStyle(color: _kTertiaryText, fontSize: 13),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Build inline spans for caption text with clickable hashtags and @mentions.
+  List<InlineSpan> _buildCaptionSpans(String content) {
+    final spans = <InlineSpan>[];
+    final regex = RegExp(r'(#[\w\u0621-\u064A]+)|(@[\w\u0621-\u064A]+)');
+    int lastMatchEnd = 0;
+
+    for (final match in regex.allMatches(content)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: content.substring(lastMatchEnd, match.start),
+          style: const TextStyle(fontSize: 13, color: _kPrimaryText),
+        ));
+      }
+
+      final matchText = match.group(0)!;
+      final isHashtag = matchText.startsWith('#');
+      spans.add(TextSpan(
+        text: matchText,
+        style: const TextStyle(fontSize: 13, color: _kPrimaryText, fontWeight: FontWeight.w500),
+        recognizer: _createTapRecognizer(() {
+            if (isHashtag) {
+              widget.onHashtagTap?.call(matchText.substring(1));
+            } else {
+              widget.onMentionTap?.call(matchText.substring(1));
+            }
+          }),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < content.length) {
+      spans.add(TextSpan(
+        text: content.substring(lastMatchEnd),
+        style: const TextStyle(fontSize: 13, color: _kPrimaryText),
+      ));
+    }
+
+    return spans;
+  }
+
+  /// "View all X comments" link.
+  Widget _buildViewComments(BuildContext context) {
+    if (post.commentsCount <= 0) return const SizedBox.shrink();
+
+    final s = AppStringsScope.of(context);
+    return GestureDetector(
+      onTap: () {
+        _markActed();
+        widget.onComment?.call();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Text(
+          s?.viewAllComments(_formatCount(post.commentsCount)) ?? 'View all ${_formatCount(post.commentsCount)} comments',
+          style: const TextStyle(color: _kTertiaryText, fontSize: 13),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
+  /// Single comment preview (top comment if available).
+  Widget _buildCommentPreview(BuildContext context) {
+    if (post.topCommentText == null || post.topCommentText!.isEmpty) {
+      return const SizedBox(height: 8);
+    }
+    final s = AppStringsScope.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+      child: RichText(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '${post.topCommentAuthor ?? (s?.someone ?? 'Someone')} ',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: _kPrimaryText,
+              ),
+            ),
+            TextSpan(
+              text: post.topCommentText!,
+              style: const TextStyle(fontSize: 13, color: _kPrimaryText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time, AppStrings? s) {
     final now = DateTime.now();
     final diff = now.difference(time);
 
-    if (diff.inMinutes < 1) return 'Sasa hivi';
-    if (diff.inMinutes < 60) return 'Dakika ${diff.inMinutes}';
-    if (diff.inHours < 24) return 'Saa ${diff.inHours}';
-    if (diff.inDays < 7) return 'Siku ${diff.inDays}';
-    return '${time.day}/${time.month}/${time.year}';
-  }
-
-  HeroIcons _getPrivacyHeroIcon(PostPrivacy privacy) {
-    switch (privacy) {
-      case PostPrivacy.public:
-        return HeroIcons.globeAlt;
-      case PostPrivacy.friends:
-        return HeroIcons.userGroup;
-      case PostPrivacy.subscribers:
-        return HeroIcons.star;
-      case PostPrivacy.private:
-        return HeroIcons.lockClosed;
-    }
+    if (diff.inMinutes < 1) return s?.justNow ?? 'Just now';
+    if (diff.inMinutes < 60) return s?.minutesAgoShort(diff.inMinutes) ?? '${diff.inMinutes}m';
+    if (diff.inHours < 24) return s?.hoursAgoShort(diff.inHours) ?? '${diff.inHours}h';
+    if (diff.inDays < 7) return s?.daysAgoShort(diff.inDays) ?? '${diff.inDays}d';
+    return s?.shortDate(time.day, time.month, time.year) ?? '${time.day}/${time.month}/${time.year}';
   }
 
   /// Returns true if this is subscribers-only content and current user is NOT subscribed.
@@ -1276,19 +1265,19 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.star,
                   size: 40,
-                  color: Color(0xFFF59E0B),
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 s?.subscribersOnly ?? 'Subscribers Only',
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1304,16 +1293,17 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
+              if (widget.onSubscribe != null)
               ElevatedButton.icon(
                 onPressed: widget.onSubscribe,
                 icon: const Icon(Icons.star, size: 20),
                 label: Text(
                   s?.subscribe ?? 'Subscribe',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: _kPrimaryText,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),

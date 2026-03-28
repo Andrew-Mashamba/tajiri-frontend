@@ -389,6 +389,44 @@ class FriendService {
       return false;
     }
   }
+
+  /// Block a user. POST /api/users/block
+  Future<bool> blockUser(int userId, int blockedUserId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/block'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'blocked_user_id': blockedUserId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Unblock a user. POST /api/users/unblock
+  Future<bool> unblockUser(int userId, int blockedUserId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/unblock'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'blocked_user_id': blockedUserId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
 }
 
 // Result classes

@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 import '../../models/gossip_models.dart';
+import '../../models/post_models.dart';
 import '../../services/gossip_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/event_tracking_service.dart';
+import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_post_sheet.dart';
 import '../../l10n/app_strings_scope.dart';
+import 'comment_bottom_sheet.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 
 /// Full-screen view of a gossip thread showing the seed post and related posts.
 class ThreadViewerScreen extends StatefulWidget {
   final int threadId;
   final int currentUserId;
+  final List<int>? threadIds;
 
   const ThreadViewerScreen({
     super.key,
     required this.threadId,
     required this.currentUserId,
+    this.threadIds,
   });
 
   @override
@@ -22,10 +31,75 @@ class ThreadViewerScreen extends StatefulWidget {
 }
 
 class _ThreadViewerScreenState extends State<ThreadViewerScreen> {
+  PageController? _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.threadIds != null && widget.threadIds!.length > 1) {
+      final initialIndex = widget.threadIds!.indexOf(widget.threadId).clamp(0, widget.threadIds!.length - 1);
+      _pageController = PageController(initialPage: initialIndex);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Single thread mode (no threadIds or single item)
+    if (widget.threadIds == null || widget.threadIds!.length <= 1) {
+      return _SingleThreadView(
+        threadId: widget.threadId,
+        currentUserId: widget.currentUserId,
+      );
+    }
+
+    // Multi-thread swipe mode
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.threadIds!.length,
+        itemBuilder: (context, index) {
+          return _SingleThreadView(
+            threadId: widget.threadIds![index],
+            currentUserId: widget.currentUserId,
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Self-contained view for a single gossip thread. Used both standalone
+/// and as a page inside the swipeable PageView.
+class _SingleThreadView extends StatefulWidget {
+  final int threadId;
+  final int currentUserId;
+
+  const _SingleThreadView({
+    required this.threadId,
+    required this.currentUserId,
+  });
+
+  @override
+  State<_SingleThreadView> createState() => _SingleThreadViewState();
+}
+
+class _SingleThreadViewState extends State<_SingleThreadView> {
   final GossipService _gossipService = GossipService();
+  final PostService _postService = PostService();
   GossipThreadDetail? _detail;
   bool _loading = true;
   String? _error;
+
+  // Tracks in-flight like/save requests to prevent double-taps
+  final Set<int> _likingPostIds = {};
+  final Set<int> _savingPostIds = {};
 
   @override
   void initState() {
@@ -79,6 +153,183 @@ class _ThreadViewerScreenState extends State<ThreadViewerScreen> {
       }
     }
   }
+
+  // ─── Action helpers ────────────────────────────────────────────────
+
+  void _updatePost(Post updated) {
+    final posts = _detail?.posts;
+    if (posts == null) return;
+    final idx = posts.indexWhere((p) => p.id == updated.id);
+    if (idx >= 0 && mounted) {
+      setState(() {
+        final newPosts = List<Post>.from(posts);
+        newPosts[idx] = updated;
+        _detail = GossipThreadDetail(thread: _detail!.thread, posts: newPosts);
+      });
+    }
+  }
+
+  Future<void> _onLike(Post post) async {
+    if (_likingPostIds.contains(post.id)) return;
+    _likingPostIds.add(post.id);
+    final wasLiked = post.isLiked;
+    _updatePost(post.copyWith(
+      isLiked: !wasLiked,
+      likesCount: wasLiked ? post.likesCount - 1 : post.likesCount + 1,
+    ));
+
+    final result = wasLiked
+        ? await _postService.unlikePost(post.id, widget.currentUserId)
+        : await _postService.likePost(post.id, widget.currentUserId);
+
+    _likingPostIds.remove(post.id);
+    if (!mounted) return;
+    if (!result.success) {
+      _updatePost(post); // revert
+      final s = AppStringsScope.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s?.likeUpdateFailed ?? 'Failed to update like')),
+      );
+    } else if (result.likesCount != null) {
+      final posts = _detail?.posts;
+      if (posts != null) {
+        final idx = posts.indexWhere((p) => p.id == post.id);
+        if (idx >= 0) {
+          _updatePost(posts[idx].copyWith(likesCount: result.likesCount!));
+        }
+      }
+    }
+  }
+
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    _updatePost(post.copyWith(
+      isLiked: true,
+      likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+    ));
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.name,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      _updatePost(post);
+    } else if (result.likesCount != null) {
+      final posts = _detail?.posts;
+      if (posts != null) {
+        final idx = posts.indexWhere((p) => p.id == post.id);
+        if (idx >= 0) {
+          _updatePost(posts[idx].copyWith(likesCount: result.likesCount!));
+        }
+      }
+    }
+  }
+
+  void _onComment(Post post) {
+    CommentBottomSheet.show(
+      context,
+      postId: post.id,
+      currentUserId: widget.currentUserId,
+      initialPost: post,
+      onCommentsCountUpdated: (newCount) {
+        final posts = _detail?.posts;
+        if (posts == null) return;
+        final idx = posts.indexWhere((p) => p.id == post.id);
+        if (idx >= 0 && mounted) {
+          _updatePost(posts[idx].copyWith(commentsCount: newCount));
+        }
+      },
+    );
+  }
+
+  void _onShare(Post post) {
+    showSharePostBottomSheet(
+      context,
+      post: post,
+      userId: widget.currentUserId,
+      postService: _postService,
+      onShared: (Post? sharedPost) {
+        if (sharedPost != null) {
+          final posts = _detail?.posts;
+          if (posts == null) return;
+          final idx = posts.indexWhere((p) => p.id == post.id);
+          if (idx >= 0 && mounted) {
+            _updatePost(posts[idx].copyWith(sharesCount: posts[idx].sharesCount + 1));
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _onSave(Post post) async {
+    if (_savingPostIds.contains(post.id)) return;
+    _savingPostIds.add(post.id);
+    final wasSaved = post.isSaved;
+    _updatePost(post.copyWith(
+      isSaved: !wasSaved,
+      savesCount: wasSaved ? post.savesCount - 1 : post.savesCount + 1,
+    ));
+
+    final result = wasSaved
+        ? await _postService.unsavePost(post.id, widget.currentUserId)
+        : await _postService.savePost(post.id, widget.currentUserId);
+
+    _savingPostIds.remove(post.id);
+    if (!mounted) return;
+    if (!result.success) {
+      _updatePost(post); // revert
+      final s = AppStringsScope.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? (s?.saveUpdateFailed ?? 'Failed to update save')),
+        ),
+      );
+    } else {
+      final s = AppStringsScope.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            wasSaved
+                ? (s?.removedFromSaved ?? 'Removed from saved')
+                : (s?.savedSuccess ?? 'Saved'),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _onUserTap(Post post) {
+    Navigator.pushNamed(context, '/profile/${post.userId}');
+  }
+
+  void _onHashtagTap(String hashtag) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HashtagScreen(
+          hashtag: hashtag,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+  }
+
+  void _onMentionTap(String username) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(
+          currentUserId: widget.currentUserId,
+          initialQuery: username,
+          initialTab: 0,
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +389,29 @@ class _ThreadViewerScreenState extends State<ThreadViewerScreen> {
                           currentUserId: widget.currentUserId,
                           onTap: () {
                             Navigator.pushNamed(context, '/post/${post.id}');
+                          },
+                          onLike: () => _onLike(post),
+                          onComment: () => _onComment(post),
+                          onShare: () => _onShare(post),
+                          onSave: () => _onSave(post),
+                          onUserTap: () => _onUserTap(post),
+                          onHashtagTap: _onHashtagTap,
+                          onMentionTap: _onMentionTap,
+                          onThreadTap: post.threadId != null
+                              ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                              : null,
+                          onReaction: (reaction) => _onReaction(post, reaction),
+                          onSubscribe: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SubscribeToCreatorScreen(
+                                  creatorId: post.userId,
+                                  currentUserId: widget.currentUserId,
+                                  creatorDisplayName: post.user?.fullName,
+                                ),
+                              ),
+                            );
                           },
                         );
                       },

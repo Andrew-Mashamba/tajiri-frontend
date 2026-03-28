@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import '../../models/group_models.dart';
 import '../../models/post_models.dart';
 import '../../services/group_service.dart';
+import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_post_sheet.dart';
+import '../feed/comment_bottom_sheet.dart';
+import '../feed/edit_post_screen.dart';
 import '../feed/post_detail_screen.dart';
+import '../feed/thread_viewer_screen.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 import 'create_group_post_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
@@ -22,6 +30,7 @@ class GroupDetailScreen extends StatefulWidget {
 
 class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTickerProviderStateMixin {
   final GroupService _groupService = GroupService();
+  final PostService _postService = PostService();
   late TabController _tabController;
 
   Group? _group;
@@ -382,6 +391,213 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
     );
   }
 
+  // ── Post callbacks ──
+
+  Future<void> _onLike(Post post) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    final wasLiked = post.isLiked;
+    setState(() {
+      _posts[index] = post.copyWith(
+        isLiked: !wasLiked,
+        likesCount: wasLiked ? post.likesCount - 1 : post.likesCount + 1,
+      );
+    });
+
+    final result = wasLiked
+        ? await _postService.unlikePost(post.id, widget.currentUserId)
+        : await _postService.likePost(post.id, widget.currentUserId);
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    } else if (result.likesCount != null) {
+      setState(() {
+        _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
+      });
+    }
+  }
+
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    setState(() {
+      _posts[index] = post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      );
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.value,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    } else if (result.likesCount != null) {
+      setState(() {
+        _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
+      });
+    }
+  }
+
+  Future<void> _onSave(Post post) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    final wasSaved = post.isSaved;
+    setState(() {
+      _posts[index] = post.copyWith(
+        isSaved: !wasSaved,
+        savesCount: wasSaved ? post.savesCount - 1 : post.savesCount + 1,
+      );
+    });
+
+    final result = wasSaved
+        ? await _postService.unsavePost(post.id, widget.currentUserId)
+        : await _postService.savePost(post.id, widget.currentUserId);
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    }
+  }
+
+  void _onComment(Post post) {
+    CommentBottomSheet.show(
+      context,
+      postId: post.id,
+      currentUserId: widget.currentUserId,
+      initialPost: post,
+      onCommentsCountUpdated: (newCount) {
+        final idx = _posts.indexWhere((p) => p.id == post.id);
+        if (idx >= 0 && mounted) {
+          setState(() {
+            _posts[idx] = _posts[idx].copyWith(commentsCount: newCount);
+          });
+        }
+      },
+    );
+  }
+
+  void _onShare(Post post) {
+    showSharePostBottomSheet(
+      context,
+      post: post,
+      userId: widget.currentUserId,
+      postService: _postService,
+      onShared: (Post? sharedPost) {
+        if (sharedPost != null && mounted) {
+          setState(() {
+            _posts.insert(0, sharedPost);
+          });
+        }
+      },
+    );
+  }
+
+  void _onUserTap(Post post) {
+    Navigator.pushNamed(context, '/profile/${post.userId}');
+  }
+
+  void _onMenuTap(Post post) {
+    final isOwner = post.userId == widget.currentUserId;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isOwner) ...[
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Hariri'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push<Post>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditPostScreen(post: post),
+                    ),
+                  ).then((updated) {
+                    if (updated != null && mounted) {
+                      final index = _posts.indexWhere((p) => p.id == updated.id);
+                      if (index != -1) {
+                        setState(() => _posts[index] = updated);
+                      }
+                    }
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Futa', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(post);
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: const Icon(Icons.flag_rounded),
+                title: const Text('Ripoti'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _postService.reportPost(post.id, widget.currentUserId);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ripoti imetumwa')),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(Post post) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Futa chapisho'),
+        content: const Text('Una uhakika unataka kufuta chapisho hili?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Hapana'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final result = await _postService.deletePost(post.id, userId: widget.currentUserId);
+              if (!mounted) return;
+              if (result.success) {
+                setState(() => _posts.removeWhere((p) => p.id == post.id));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Chapisho limefutwa')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Imeshindwa kufuta chapisho')),
+                );
+              }
+            },
+            child: const Text('Futa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Posts tab ──
+
   Widget _buildPostsTab() {
     if (_isLoadingPosts) {
       return const Center(child: CircularProgressIndicator());
@@ -432,11 +648,61 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
                 ),
               );
             },
-            onLike: () {},
-            onComment: () {},
-            onShare: () {},
-            onUserTap: () {},
-            onMenuTap: () {},
+            onLike: () => _onLike(post),
+            onComment: () => _onComment(post),
+            onShare: () => _onShare(post),
+            onSave: () => _onSave(post),
+            onUserTap: () => _onUserTap(post),
+            onMenuTap: () => _onMenuTap(post),
+            onHashtagTap: (hashtag) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HashtagScreen(
+                    hashtag: hashtag,
+                    currentUserId: widget.currentUserId,
+                  ),
+                ),
+              );
+            },
+            onMentionTap: (username) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SearchScreen(
+                    currentUserId: widget.currentUserId,
+                    initialQuery: username,
+                    initialTab: 0,
+                  ),
+                ),
+              );
+            },
+            onThreadTap: () {
+              if (post.threadId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ThreadViewerScreen(
+                      threadId: post.threadId!,
+                      currentUserId: widget.currentUserId,
+                    ),
+                  ),
+                );
+              }
+            },
+            onReaction: (reaction) => _onReaction(post, reaction),
+            onSubscribe: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SubscribeToCreatorScreen(
+                    creatorId: post.userId,
+                    currentUserId: widget.currentUserId,
+                    creatorDisplayName: post.user?.fullName,
+                  ),
+                ),
+              );
+            },
           );
         },
       ),

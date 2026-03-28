@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../models/battle_models.dart';
 import '../../models/gossip_models.dart';
+import '../../models/post_models.dart';
 import '../../services/battle_service.dart';
 import '../../services/gossip_service.dart';
+import '../../services/post_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_post_sheet.dart';
 import '../../l10n/app_strings_scope.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
 
 class BattleThreadScreen extends StatefulWidget {
   final int battleId;
@@ -20,6 +25,7 @@ class BattleThreadScreen extends StatefulWidget {
 class _BattleThreadScreenState extends State<BattleThreadScreen> {
   final BattleService _battleService = BattleService();
   final GossipService _gossipService = GossipService();
+  final PostService _postService = PostService();
   CreatorBattle? _battle;
   GossipThreadDetail? _threadDetail;
   bool _loading = true;
@@ -64,7 +70,13 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
     setState(() => _voting = true);
     final storage = await LocalStorageService.getInstance();
     final token = storage.getAuthToken();
-    if (token == null) { setState(() => _voting = false); return; }
+    if (token == null) {
+      setState(() => _voting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to vote'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     final success = await _battleService.vote(token: token, battleId: _battle!.id, side: side);
     if (mounted) {
       setState(() => _voting = false);
@@ -72,6 +84,13 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
         _loadData();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppStringsScope.of(context)?.voteCast ?? 'Vote cast!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to cast vote'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -94,7 +113,19 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A1A)))
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Color(0xFF666666))))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_error!, style: const TextStyle(color: Color(0xFF666666))),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: _loadData,
+                        child: Text(strings?.retry ?? 'Retry'),
+                      ),
+                    ],
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _loadData,
                   color: const Color(0xFF1A1A1A),
@@ -154,12 +185,41 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
                           ],
                         ),
                       ),
-                      if (_threadDetail != null)
+                      if (_threadDetail != null && _threadDetail!.posts.isNotEmpty)
                         ..._threadDetail!.posts.map((post) => PostCard(
                               key: ValueKey('battle_post_${post.id}'),
                               post: post,
                               currentUserId: widget.currentUserId,
-                            )),
+                              onTap: () => Navigator.pushNamed(context, '/post/${post.id}'),
+                              onLike: () => _onLike(post),
+                              onComment: () => Navigator.pushNamed(context, '/post/${post.id}'),
+                              onShare: () => _onShare(post),
+                              onSave: () => _onSave(post),
+                              onUserTap: () => Navigator.pushNamed(context, '/profile/${post.userId}'),
+                              onHashtagTap: (hashtag) {
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => HashtagScreen(hashtag: hashtag, currentUserId: widget.currentUserId),
+                                ));
+                              },
+                              onMentionTap: (username) {
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => SearchScreen(currentUserId: widget.currentUserId, initialQuery: username, initialTab: 0),
+                                ));
+                              },
+                              onThreadTap: post.threadId != null
+                                  ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                                  : null,
+                            ))
+                      else if (_threadDetail == null || _threadDetail!.posts.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Center(
+                            child: Text(
+                              strings?.noPosts ?? 'No discussion posts yet',
+                              style: const TextStyle(color: Color(0xFF999999), fontSize: 14),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -172,7 +232,7 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
     required String side,
     required bool isSelected,
   }) {
-    final canVote = _battle!.userVote == null && _battle!.status == BattleStatus.open;
+    final canVote = _battle!.userVote == null && _battle!.status != BattleStatus.closed;
     return GestureDetector(
       onTap: canVote && !_voting ? () => _vote(side) : null,
       child: Container(
@@ -212,6 +272,61 @@ class _BattleThreadScreenState extends State<BattleThreadScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ─── PostCard action handlers ───────────────────────────────────────
+
+  Future<void> _onLike(Post post) async {
+    final index = _threadDetail?.posts.indexWhere((p) => p.id == post.id) ?? -1;
+    if (index < 0) return;
+
+    final wasLiked = post.isLiked;
+    setState(() {
+      _threadDetail!.posts[index] = post.copyWith(
+        isLiked: !wasLiked,
+        likesCount: wasLiked ? post.likesCount - 1 : post.likesCount + 1,
+      );
+    });
+
+    final result = wasLiked
+        ? await _postService.unlikePost(post.id, widget.currentUserId)
+        : await _postService.likePost(post.id, widget.currentUserId);
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _threadDetail!.posts[index] = post);
+    }
+  }
+
+  Future<void> _onSave(Post post) async {
+    final index = _threadDetail?.posts.indexWhere((p) => p.id == post.id) ?? -1;
+    if (index < 0) return;
+
+    final wasSaved = post.isSaved;
+    setState(() {
+      _threadDetail!.posts[index] = post.copyWith(
+        isSaved: !wasSaved,
+        savesCount: wasSaved ? post.savesCount - 1 : post.savesCount + 1,
+      );
+    });
+
+    final result = wasSaved
+        ? await _postService.unsavePost(post.id, widget.currentUserId)
+        : await _postService.savePost(post.id, widget.currentUserId);
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _threadDetail!.posts[index] = post);
+    }
+  }
+
+  void _onShare(Post post) {
+    showSharePostBottomSheet(
+      context,
+      post: post,
+      userId: widget.currentUserId,
+      postService: _postService,
     );
   }
 }

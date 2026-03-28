@@ -185,6 +185,22 @@ class UserService {
     }
   }
 
+  /// Delete user account. DELETE /api/account
+  Future<bool> deleteAccount(int userId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/account'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Map server response to RegistrationState
   RegistrationState _mapServerResponseToRegistrationState(Map<String, dynamic> data) {
     return RegistrationState(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../config/api_config.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/livestream_models.dart';
@@ -1203,9 +1206,122 @@ class _LiveGalleryWidgetState extends State<LiveGalleryWidget>
 
   void _showStreamDashboard(LiveStream stream) {
     final s = AppStringsScope.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.liveDashboardComingSoon ?? 'Coming soon')),
+    if (s == null) return;
+
+    final startedAt = stream.startedAt;
+    final durationStr = startedAt != null
+        ? _formatDurationFromStart(DateTime.now().difference(startedAt))
+        : '--';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              stream.title,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildDashboardStat(
+                  icon: Icons.visibility,
+                  value: _formatNumber(stream.viewersCount),
+                  label: s.viewers,
+                ),
+                const SizedBox(width: 24),
+                _buildDashboardStat(
+                  icon: Icons.timer_outlined,
+                  value: durationStr,
+                  label: s.isSwahili ? 'Muda' : 'Duration',
+                ),
+                const SizedBox(width: 24),
+                _buildDashboardStat(
+                  icon: Icons.favorite,
+                  value: _formatNumber(stream.likesCount),
+                  label: s.likes,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final result = await _streamService.endStream(stream.id);
+                  if (!mounted) return;
+                  if (result.success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(s.isSwahili ? 'Tangazo limesimamishwa' : 'Stream stopped')),
+                    );
+                    _loadStreams();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(s.isSwahili ? 'Imeshindwa kusimamisha' : 'Failed to stop stream'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.stop_rounded),
+                label: Text(s.isSwahili ? 'Simamisha Tangazo' : 'Stop Stream'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _buildDashboardStat({required IconData icon, required String value, required String label}) {
+    return Column(
+      children: [
+        Icon(icon, size: 24, color: Colors.grey.shade600),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  String _formatDurationFromStart(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+    if (hours > 0) return '${hours}h ${minutes}m';
+    return '${minutes}m ${seconds}s';
   }
 
   void _handleStreamAction(LiveStream stream, String action) {
@@ -1226,17 +1342,144 @@ class _LiveGalleryWidgetState extends State<LiveGalleryWidget>
   }
 
   void _editStream(LiveStream stream) {
-    final s = AppStringsScope.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.liveEditComingSoon ?? 'Coming soon')),
-    );
+    _showEditStreamSheet(stream);
   }
 
   void _editScheduledStream(LiveStream stream) {
+    _showEditStreamSheet(stream);
+  }
+
+  void _showEditStreamSheet(LiveStream stream) {
     final s = AppStringsScope.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.liveEditComingSoon ?? 'Coming soon')),
-    );
+    if (s == null) return;
+
+    final titleController = TextEditingController(text: stream.title);
+    final descriptionController = TextEditingController(text: stream.description ?? '');
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  s.isSwahili ? 'Hariri Tangazo' : 'Edit Broadcast',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: s.isSwahili ? 'Kichwa' : 'Title',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  decoration: InputDecoration(
+                    labelText: s.description,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(s.cancel),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                                  final newTitle = titleController.text.trim();
+                                  if (newTitle.isEmpty) return;
+
+                                  setSheetState(() => isSaving = true);
+                                  final result = await _streamService.updateStream(
+                                    stream.id,
+                                    title: newTitle,
+                                    description: descriptionController.text.trim(),
+                                  );
+                                  if (!mounted) return;
+
+                                  Navigator.pop(ctx);
+                                  if (result.success) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(s.isSwahili ? 'Tangazo limebadilishwa' : 'Broadcast updated')),
+                                    );
+                                    _loadStreams();
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(s.isSwahili ? 'Imeshindwa kubadilisha' : 'Failed to update'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A1A1A),
+                            foregroundColor: const Color(0xFFFAFAFA),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : Text(s.save),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ).then((_) {
+      titleController.dispose();
+      descriptionController.dispose();
+    });
   }
 
   Future<void> _startScheduledStream(LiveStream stream) async {
@@ -1295,17 +1538,40 @@ class _LiveGalleryWidgetState extends State<LiveGalleryWidget>
     });
   }
 
-  void _downloadRecording(LiveStream stream) {
+  Future<void> _downloadRecording(LiveStream stream) async {
     final s = AppStringsScope.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.liveDownloadComingSoon ?? 'Coming soon')),
-    );
+    if (s == null) return;
+
+    if (stream.recordingPath == null || stream.recordingPath!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s.isSwahili ? 'Hakuna rekodi inayopatikana' : 'No recording available')),
+      );
+      return;
+    }
+
+    final recordingUrl = '${ApiConfig.storageUrl}/${stream.recordingPath}';
+    final uri = Uri.parse(recordingUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.isSwahili ? 'Imeshindwa kufungua rekodi' : 'Could not open recording'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _shareStream(LiveStream stream) {
     final s = AppStringsScope.of(context);
+    if (s == null) return;
+
+    final shareLink = 'https://tajiri.app/stream/${stream.id}';
+    Clipboard.setData(ClipboardData(text: shareLink));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(s?.liveShareComingSoon ?? 'Coming soon')),
+      SnackBar(content: Text(s.linkCopied)),
     );
   }
 
@@ -1337,11 +1603,21 @@ class _LiveGalleryWidgetState extends State<LiveGalleryWidget>
     );
 
     if (confirm == true) {
-      // TODO: Call delete API
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(s.broadcastDeleted)),
-      );
-      _loadStreams();
+      final deleted = await _streamService.deleteStream(stream.id);
+      if (!mounted) return;
+      if (deleted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s.broadcastDeleted)),
+        );
+        _loadStreams();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(s.isSwahili ? 'Imeshindwa kufuta tangazo' : 'Failed to delete broadcast'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

@@ -518,6 +518,16 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
             );
           }
         }
+      } else {
+        if (mounted) {
+          setState(() => _isPosting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message ?? 'Failed to save draft for scheduling'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -563,7 +573,12 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _isSavingDraft = false);
+      if (mounted) {
+        setState(() => _isSavingDraft = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving draft: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 

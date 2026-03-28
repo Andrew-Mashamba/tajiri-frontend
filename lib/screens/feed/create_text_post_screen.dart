@@ -182,6 +182,16 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
             );
           }
         }
+      } else {
+        if (mounted) {
+          setState(() => _isPosting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message ?? 'Failed to save draft for scheduling'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -227,6 +237,9 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSavingDraft = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving draft: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -649,9 +662,11 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
                         onPressed: () {
                           final text = _contentController.text;
                           final selection = _contentController.selection;
-                          final newText = '${text.substring(0, selection.baseOffset)}#${text.substring(selection.extentOffset)}';
+                          final offset = selection.baseOffset < 0 ? text.length : selection.baseOffset;
+                          final end = selection.extentOffset < 0 ? text.length : selection.extentOffset;
+                          final newText = '${text.substring(0, offset)}#${text.substring(end)}';
                           _contentController.text = newText;
-                          _contentController.selection = TextSelection.collapsed(offset: selection.baseOffset + 1);
+                          _contentController.selection = TextSelection.collapsed(offset: offset + 1);
                           _contentFocusNode.requestFocus();
                         },
                         tooltip: 'Add hashtag',
@@ -665,9 +680,11 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
                         onPressed: () {
                           final text = _contentController.text;
                           final selection = _contentController.selection;
-                          final newText = '${text.substring(0, selection.baseOffset)}@${text.substring(selection.extentOffset)}';
+                          final offset = selection.baseOffset < 0 ? text.length : selection.baseOffset;
+                          final end = selection.extentOffset < 0 ? text.length : selection.extentOffset;
+                          final newText = '${text.substring(0, offset)}@${text.substring(end)}';
                           _contentController.text = newText;
-                          _contentController.selection = TextSelection.collapsed(offset: selection.baseOffset + 1);
+                          _contentController.selection = TextSelection.collapsed(offset: offset + 1);
                           _contentFocusNode.requestFocus();
                         },
                         tooltip: 'Mention someone',

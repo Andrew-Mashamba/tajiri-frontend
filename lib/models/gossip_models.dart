@@ -51,6 +51,7 @@ class GossipThread {
   final String geographicScope;
   final DateTime? createdAt;
   final Post? seedPost;
+  final String? topReaction;
 
   GossipThread({
     required this.id,
@@ -65,6 +66,7 @@ class GossipThread {
     required this.geographicScope,
     this.createdAt,
     this.seedPost,
+    this.topReaction,
   });
 
   /// Get title in the appropriate language with fallback.
@@ -91,6 +93,7 @@ class GossipThread {
       seedPost: json['seed_post'] is Map<String, dynamic>
           ? Post.fromJson(json['seed_post'] as Map<String, dynamic>)
           : null,
+      topReaction: json['top_reaction'] as String?,
     );
   }
 }

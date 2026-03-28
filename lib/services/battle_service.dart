@@ -10,7 +10,7 @@ class BattleService {
   Future<List<CreatorBattle>> getActiveBattles({required String token}) async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/battles'),
+        Uri.parse('$_baseUrl/creator-battles'),
         headers: ApiConfig.authHeaders(token),
       );
       if (response.statusCode == 200) {

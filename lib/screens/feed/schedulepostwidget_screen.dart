@@ -44,6 +44,15 @@ class _SchedulePostWidgetScreenState extends State<SchedulePostWidgetScreen> {
   }
 
   void _onConfirm() {
+    if (_scheduledAt != null && _scheduledAt!.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scheduled time must be in the future'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     Navigator.pop(context, _scheduledAt);
   }
 

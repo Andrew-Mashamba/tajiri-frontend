@@ -139,6 +139,17 @@ class GossipThreadCard extends StatelessWidget {
                           style: const TextStyle(
                               color: _kTertiaryText, fontSize: 12),
                         ),
+                        const SizedBox(width: 16),
+                        Text(
+                          thread.topReaction ?? '\u{1F525}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Top reaction',
+                          style: TextStyle(
+                              color: _kTertiaryText, fontSize: 12),
+                        ),
                       ],
                     ),
                   ],

@@ -14,8 +14,15 @@ const Color _kAccent = Color(0xFF999999);
 /// Global search screen. Navigation: Home → Search (global) → Users tab | Hashtags tab.
 class SearchScreen extends StatefulWidget {
   final int currentUserId;
+  final String? initialQuery;
+  final int initialTab; // 0 = Users, 1 = Hashtags
 
-  const SearchScreen({super.key, required this.currentUserId});
+  const SearchScreen({
+    super.key,
+    required this.currentUserId,
+    this.initialQuery,
+    this.initialTab = 0,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -28,7 +35,7 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab.clamp(0, 1));
   }
 
   @override
@@ -63,7 +70,7 @@ class _SearchScreenState extends State<SearchScreen>
         child: TabBarView(
           controller: _tabController,
           children: [
-            UserSearchTab(currentUserId: widget.currentUserId),
+            UserSearchTab(currentUserId: widget.currentUserId, initialQuery: widget.initialTab == 0 ? widget.initialQuery : null),
             _HashtagSearchTab(currentUserId: widget.currentUserId),
           ],
         ),

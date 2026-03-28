@@ -1,19 +1,25 @@
 import 'dart:async';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import '../../models/post_models.dart';
+import '../../models/gossip_models.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/story_models.dart';
 import '../../services/feed_service.dart';
+import '../../services/gossip_service.dart';
 import '../../services/post_service.dart';
 import '../../services/media_cache_service.dart';
 import '../../services/story_service.dart';
+import '../../services/local_storage_service.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_post_sheet.dart';
 import '../../widgets/teaser_card.dart';
+import '../../widgets/gossip_thread_card.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../clips/streams_screen.dart';
 import '../clips/storyviewer_screen.dart';
@@ -21,16 +27,19 @@ import '../clips/createstory_screen.dart';
 import 'comment_bottom_sheet.dart';
 import 'edit_post_screen.dart';
 import 'full_screen_post_viewer_screen.dart';
+import 'thread_viewer_screen.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
 import '../../services/live_update_service.dart';
+import '../../services/engagement_level_service.dart';
+import '../../services/event_tracking_service.dart';
+import '../../services/creator_service.dart';
+import '../../models/flywheel_models.dart';
+import '../../widgets/posting_nudge_card.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 
 /// Estimated height for a typical post card (used for scroll optimization)
 const double _kEstimatedPostHeight = 450.0;
-
-/// Stories row fixed height (matches _buildStoriesRow)
-const double _kStoriesRowHeight = 100.0;
-
-/// Loading indicator slot height
-const double _kLoadingSlotHeight = 80.0;
 
 /// How far ahead to preload media (in pixels)
 const double _kPreloadDistance = 1500.0;
@@ -86,13 +95,47 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 
   StreamSubscription<LiveUpdateEvent>? _liveUpdateSubscription;
 
+  // Gossip threads for feed injection
+  final GossipService _gossipService = GossipService();
+  List<GossipThread> _gossipThreads = [];
+
+  // Viewer streak (welcome back banner)
+  ViewerStreak? _viewerStreak;
+  bool _showWelcomeBack = false;
+
+  // Posting nudge (smart posting suggestions)
+  PostingNudge? _postingNudge;
+  bool _nudgeDismissed = false;
+
+  // Engagement intensity graduation (Spec §6)
+  EngagementLevel _engagementLevel = EngagementLevel.gentle;
+
+  // Depth milestone tracking
+  int _sessionPostsViewed = 0;
+  bool _showed25Milestone = false;
+  bool _showed50Milestone = false;
+
+  // Randomized teaser interval (5-7 posts)
+  final _random = Random();
+  late List<int> _teaserPositions;
+  late List<int> _threadPositions;
+
+  // Pre-built feed item list for interleaved content
+  List<_FeedItem> _feedItems = [];
+
   @override
   void initState() {
     super.initState();
+    _teaserPositions = [];
+    _threadPositions = [];
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
+    _loadEngagementLevel();
     _loadFeed();
     _loadStories();
+    _loadGossipThreads();
+    _loadViewerStreak();
+    _loadPostingNudge();
     // Initialize first scroll controller
     _scrollControllers[0] = ScrollController()..addListener(_onScroll);
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
@@ -133,6 +176,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       if (_posts.isEmpty) {
         _loadFeed();
       } else {
+        _buildFeedItems();
         setState(() => _isLoading = false);
       }
       if (newType == 'posts' || newType == 'friends') {
@@ -152,6 +196,236 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       _storiesLoading = false;
       _storyGroups = result.success ? result.groups : [];
     });
+  }
+
+  Future<void> _loadEngagementLevel() async {
+    try {
+      final level = await EngagementLevelService.getLevel();
+      if (mounted) {
+        setState(() => _engagementLevel = level);
+        // Share with PostCard for reaction pulse gating
+        PostCard.sessionEngagementLevel = level;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FeedScreen] Failed to load engagement level: $e');
+    }
+  }
+
+  Future<void> _loadGossipThreads() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null || token.isEmpty) return;
+      final threads = await _gossipService.getThreads(token: token);
+      if (mounted && threads.isNotEmpty) {
+        setState(() => _gossipThreads = threads);
+        _buildFeedItems();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FeedScreen] Failed to load gossip threads: $e');
+    }
+  }
+
+  Future<void> _loadViewerStreak() async {
+    try {
+      final creatorService = CreatorService();
+      final streak = await creatorService.getViewerStreak(userId: widget.currentUserId);
+      if (mounted && streak != null && streak.isFrozen) {
+        setState(() {
+          _viewerStreak = streak;
+          _showWelcomeBack = true;
+        });
+      }
+    } catch (e) {
+      // Ignore - non-critical
+    }
+  }
+
+  Future<void> _loadPostingNudge() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null || token.isEmpty) return;
+      final creatorService = CreatorService();
+      final nudge = await creatorService.getPostingNudge(
+        creatorId: widget.currentUserId,
+        token: token,
+      );
+      if (mounted && nudge != null) {
+        setState(() {
+          _postingNudge = nudge;
+          _nudgeDismissed = false;
+        });
+      }
+    } catch (e) {
+      // Ignore - non-critical
+    }
+  }
+
+  Future<void> _resumeStreak() async {
+    setState(() => _showWelcomeBack = false);
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final creatorService = CreatorService();
+      await creatorService.resumeViewerStreak(
+        userId: widget.currentUserId,
+        token: token,
+      );
+    } catch (e) {
+      // Non-critical — streak will auto-resume on next visit anyway
+    }
+  }
+
+  Widget _buildWelcomeBackBanner() {
+    final strings = AppStringsScope.of(context);
+    final streakDays = _viewerStreak?.currentStreakDays ?? 0;
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings?.welcomeBackStreak ?? 'Welcome back! Resume your streak?',
+                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Resume your $streakDays-day streak?',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _resumeStreak(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                strings?.resumeStreak ?? 'Resume',
+                style: const TextStyle(
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: () => setState(() => _showWelcomeBack = false),
+            icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _generateInsertionPositions(int totalPosts) {
+    _teaserPositions = [];
+    _threadPositions = [];
+
+    // Generate teaser positions every 5-7 posts
+    int pos = _random.nextInt(3) + 5; // First teaser at position 5-7
+    while (pos < totalPosts) {
+      _teaserPositions.add(pos);
+      pos += _random.nextInt(3) + 5; // Next teaser 5-7 posts later
+    }
+
+    // Generate thread card positions every 8-12 posts
+    pos = _random.nextInt(5) + 8; // First thread at position 8-12
+    while (pos < totalPosts) {
+      // Don't place thread card at same position as teaser
+      if (!_teaserPositions.contains(pos)) {
+        _threadPositions.add(pos);
+      }
+      pos += _random.nextInt(5) + 8;
+    }
+  }
+
+  void _buildFeedItems() {
+    _feedItems = [];
+    _generateInsertionPositions(_posts.length);
+    int threadIdx = 0;
+
+    for (int i = 0; i < _posts.length; i++) {
+      _feedItems.add(_FeedItem.post(i));
+
+      if (_teaserPositions.contains(i + 1)) {
+        _feedItems.add(_FeedItem.teaser());
+      }
+      if (_threadPositions.contains(i + 1) && _gossipThreads.isNotEmpty) {
+        _feedItems.add(_FeedItem.threadCard(threadIdx % _gossipThreads.length));
+        threadIdx++;
+      }
+    }
+  }
+
+  void _trackDepthMilestone(int postIndex) {
+    if (postIndex + 1 > _sessionPostsViewed) {
+      _sessionPostsViewed = postIndex + 1;
+    }
+
+    if (_sessionPostsViewed == 10) {
+      // Notify backend to improve content quality (no visible UI)
+      EventTrackingService.getInstance().then((tracker) {
+        tracker.trackEvent(
+          eventType: 'depth_milestone',
+          metadata: {'depth': 10, 'action': 'improve_quality'},
+        );
+      });
+    }
+
+    if (_sessionPostsViewed >= 50 && !_showed50Milestone) {
+      _showed50Milestone = true;
+      _showMilestoneOverlay('You\'re in the top 5% of active users today!');
+    } else if (_sessionPostsViewed >= 25 && !_showed25Milestone) {
+      _showed25Milestone = true;
+      _showMilestoneOverlay('Deep Dive: Check out trending gossip threads');
+    }
+  }
+
+  void _showMilestoneOverlay(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1A1A1A),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _openStoryViewer(StoryGroup group) {
@@ -329,6 +603,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         _error = result.message;
       }
     });
+    _buildFeedItems();
   }
 
   Future<void> _loadMore() async {
@@ -350,6 +625,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         _hasMore = result.meta?.hasMore ?? false;
       }
     });
+    _buildFeedItems();
   }
 
   Future<void> _onLike(Post post) async {
@@ -377,6 +653,33 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       });
     } else if (result.likesCount != null) {
       // Sync with server likes_count
+      setState(() {
+        _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
+      });
+    }
+  }
+
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    // Optimistic update
+    setState(() {
+      _posts[index] = post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      );
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.value,
+    );
+
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    } else if (result.likesCount != null) {
       setState(() {
         _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
       });
@@ -451,6 +754,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
             list.insert(0, sharedPost);
             _posts = list;
           });
+          _buildFeedItems();
         }
       },
     );
@@ -461,44 +765,96 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   }
 
   void _onMenuTap(Post post) {
+    final isOwner = post.userId == widget.currentUserId;
+    final s = AppStringsScope.of(context);
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text(AppStringsScope.of(context)?.edit ?? 'Edit'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push<Post>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditPostScreen(post: post),
-                  ),
-                ).then((updated) {
-                  if (updated != null && mounted) {
-                    final index = _posts.indexWhere((p) => p.id == updated.id);
-                    if (index != -1) {
-                      setState(() {
-                        _posts[index] = updated;
-                      });
+            if (isOwner) ...[
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: Text(s?.edit ?? 'Edit'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push<Post>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditPostScreen(post: post),
+                    ),
+                  ).then((updated) {
+                    if (updated != null && mounted) {
+                      final index = _posts.indexWhere((p) => p.id == updated.id);
+                      if (index != -1) {
+                        setState(() {
+                          _posts[index] = updated;
+                        });
+                      }
                     }
-                  }
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text(AppStringsScope.of(context)?.delete ?? 'Delete', style: const TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmDelete(post);
-              },
-            ),
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: Text(s?.delete ?? 'Delete', style: const TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(post);
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: const Icon(Icons.flag_rounded),
+                title: const Text('Report'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _reportPost(post);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.visibility_off_rounded),
+                title: const Text('Not interested'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _postService.hidePost(post.id, widget.currentUserId);
+                  setState(() => _posts.removeWhere((p) => p.id == post.id));
+                  _buildFeedItems();
+                },
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  void _reportPost(Post post) {
+    final s = AppStringsScope.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Report'),
+        content: const Text('Report this post?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(s?.cancel ?? 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _postService.reportPost(post.id, widget.currentUserId);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(s?.reportSubmitted ?? 'Report submitted')),
+                );
+              }
+            },
+            child: const Text('Report'),
+          ),
+        ],
       ),
     );
   }
@@ -519,10 +875,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              final result = await _postService.deletePost(post.id);
+              final result = await _postService.deletePost(post.id, userId: widget.currentUserId);
               if (!mounted) return;
               if (result.success) {
                 setState(() => _posts.removeWhere((p) => p.id == post.id));
+                _buildFeedItems();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(s?.postDeleted ?? 'Post deleted')),
                 );
@@ -610,12 +967,12 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         _currentFeedType == 'friends' &&
         (_storyGroups.isNotEmpty || _storiesLoading);
     final storiesSlot = showStoriesRow ? 1 : 0;
-    final postCount = _posts.length;
     final loadingSlot = _hasMore ? 1 : 0;
 
-    return RefreshIndicator(
+    final refreshIndicator = RefreshIndicator(
       onRefresh: () async {
         await _loadFeed();
+        _loadGossipThreads();
         if (showStoriesRow) await _loadStories();
       },
       child: ListView.builder(
@@ -625,27 +982,16 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
-        itemExtentBuilder: (int index, SliverLayoutDimensions dimensions) {
-          if (index == 0 && showStoriesRow) return _kStoriesRowHeight;
-          final contentIndex = index - storiesSlot;
-          final teaserCount = postCount > 0 ? (postCount - 1) ~/ 10 : 0;
-          if (contentIndex >= postCount + teaserCount) return _kLoadingSlotHeight;
-          // Teaser cards appear after every 10 posts (at content positions 10, 21, 32, ...)
-          final isTeaser = contentIndex > 0 && contentIndex % 11 == 10;
-          if (isTeaser) return 100.0;
-          return _kEstimatedPostHeight;
-        },
         addAutomaticKeepAlives: false,
         addRepaintBoundaries: true,
         addSemanticIndexes: false,
-        itemCount: storiesSlot + postCount + (postCount > 0 ? (postCount - 1) ~/ 10 : 0) + loadingSlot,
+        itemCount: storiesSlot + _feedItems.length + loadingSlot,
         itemBuilder: (context, index) {
           if (index == 0 && showStoriesRow) {
             return _buildStoriesRow(context);
           }
           final contentIndex = index - storiesSlot;
-          final teaserCount = postCount > 0 ? (postCount - 1) ~/ 10 : 0;
-          if (contentIndex >= postCount + teaserCount) {
+          if (contentIndex >= _feedItems.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
@@ -657,51 +1003,168 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
             );
           }
 
-          // Determine if this is a teaser slot
-          // Pattern: 10 posts, teaser, 10 posts, teaser, ...
-          // In a group of 11, indices 0-9 are posts, index 10 is teaser
-          final isTeaser = contentIndex > 0 && contentIndex % 11 == 10;
-          if (isTeaser) {
-            final strings = AppStringsScope.of(context);
-            return TeaserCard(
-              key: ValueKey('teaser_$contentIndex'),
-              text: strings?.viralPostAlert ?? 'A post is going viral right now!',
-              onTap: () {
-                // Find the next post after this teaser and open it
-                final nextPostIndex = (contentIndex ~/ 11) * 10 + 10;
-                if (nextPostIndex < _posts.length) {
-                  _openFullScreenPostViewer(_posts[nextPostIndex]);
-                }
-              },
-            );
-          }
+          final feedItem = _feedItems[contentIndex];
 
-          // Map content index to actual post index (subtract teaser slots before this position)
-          final teasersBefore = contentIndex > 0 ? contentIndex ~/ 11 : 0;
-          final postIndex = contentIndex - teasersBefore;
-          if (postIndex < 0 || postIndex >= _posts.length) {
-            return const SizedBox.shrink();
-          }
+          switch (feedItem.type) {
+            case _FeedItemType.teaser:
+              // Gate teaser cards behind engagement level (medium+)
+              if (!EngagementLevelService.shouldShow(
+                level: _engagementLevel,
+                feature: EngagementFeature.teaserCards,
+              )) {
+                return const SizedBox.shrink();
+              }
+              final strings = AppStringsScope.of(context);
+              final viewerCount = _random.nextInt(900) + 200; // 200-1100 viewers
+              final teaserTexts = [
+                strings?.viralPostAlert ?? 'A post is going viral right now!',
+                'A creator you follow just posted something going viral',
+                'Something is trending in your area right now',
+                'A gossip thread just crossed 1K reactions',
+              ];
+              final text = teaserTexts[_random.nextInt(teaserTexts.length)];
+              return TeaserCard(
+                key: ValueKey('teaser_${feedItem.postIndex ?? contentIndex}'),
+                text: text,
+                viewerCount: viewerCount,
+                onTap: () {
+                  // Find the next post after this teaser and open it
+                  for (int i = contentIndex + 1; i < _feedItems.length; i++) {
+                    if (_feedItems[i].type == _FeedItemType.post && _feedItems[i].postIndex != null) {
+                      final nextPostIndex = _feedItems[i].postIndex!;
+                      if (nextPostIndex < _posts.length) {
+                        _openFullScreenPostViewer(_posts[nextPostIndex]);
+                      }
+                      break;
+                    }
+                  }
+                },
+              );
 
-          final post = _posts[postIndex];
-          return RepaintBoundary(
-            key: ValueKey('post_${post.id}'),
-            child: PostCard(
-              key: ValueKey('postcard_${post.id}'),
-              post: post,
-              currentUserId: widget.currentUserId,
-              onTap: () => _openFullScreenPostViewer(post),
-              onLike: () => _onLike(post),
-              onComment: () => _onComment(post),
-              onShare: () => _onShare(post),
-              onSave: () => _onSave(post),
-              onUserTap: () => _onUserTap(post),
-              onMenuTap: () => _onMenuTap(post),
-            ),
-          );
+            case _FeedItemType.threadCard:
+              final threadIndex = feedItem.threadIndex!;
+              final thread = _gossipThreads[threadIndex];
+              return GossipThreadCard(
+                key: ValueKey('thread_${thread.id}_$contentIndex'),
+                thread: thread,
+                onTap: () {
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ThreadViewerScreen(
+                        threadId: thread.id,
+                        currentUserId: widget.currentUserId,
+                        threadIds: _gossipThreads.map((t) => t.id).toList(),
+                      ),
+                    ),
+                  );
+                },
+              );
+
+            case _FeedItemType.post:
+              final postIndex = feedItem.postIndex!;
+              if (postIndex < 0 || postIndex >= _posts.length) {
+                return const SizedBox.shrink();
+              }
+
+              // Track depth milestone (gated behind full engagement level)
+              if (EngagementLevelService.shouldShow(
+                level: _engagementLevel,
+                feature: EngagementFeature.depthMilestones,
+              )) {
+                _trackDepthMilestone(postIndex);
+              }
+
+              final post = _posts[postIndex];
+              return RepaintBoundary(
+                key: ValueKey('post_${post.id}'),
+                child: PostCard(
+                  key: ValueKey('postcard_${post.id}'),
+                  post: post,
+                  currentUserId: widget.currentUserId,
+                  onTap: () => _openFullScreenPostViewer(post),
+                  onLike: () => _onLike(post),
+                  onComment: () => _onComment(post),
+                  onShare: () => _onShare(post),
+                  onSave: () => _onSave(post),
+                  onUserTap: () => _onUserTap(post),
+                  onMenuTap: () => _onMenuTap(post),
+                  onHashtagTap: (hashtag) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HashtagScreen(
+                          hashtag: hashtag,
+                          currentUserId: widget.currentUserId,
+                        ),
+                      ),
+                    );
+                  },
+                  onMentionTap: (username) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SearchScreen(
+                          currentUserId: widget.currentUserId,
+                          initialQuery: username,
+                          initialTab: 0,
+                        ),
+                      ),
+                    );
+                  },
+                  onThreadTap: () {
+                    if (post.threadId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ThreadViewerScreen(
+                            threadId: post.threadId!,
+                            currentUserId: widget.currentUserId,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  onReaction: (reaction) {
+                    _onReaction(post, reaction);
+                  },
+                  onSubscribe: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SubscribeToCreatorScreen(
+                          creatorId: post.userId,
+                          currentUserId: widget.currentUserId,
+                          creatorDisplayName: post.user?.fullName,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+          }
         },
       ),
     );
+
+    final showNudge = _postingNudge != null && !_nudgeDismissed;
+
+    if (_showWelcomeBack && _viewerStreak != null || showNudge) {
+      return Column(
+        children: [
+          if (_showWelcomeBack && _viewerStreak != null) _buildWelcomeBackBanner(),
+          if (showNudge)
+            PostingNudgeCard(
+              nudge: _postingNudge!,
+              onDismiss: () => setState(() => _nudgeDismissed = true),
+              onCreatePost: () => Navigator.pushNamed(context, '/create-post'),
+            ),
+          Expanded(child: refreshIndicator),
+        ],
+      );
+    }
+
+    return refreshIndicator;
   }
 
   void _openFullScreenPostViewer(Post post) {
@@ -848,9 +1311,13 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         cacheExtent: 200,
-        itemCount: _storyGroups.length,
+        itemCount: _storyGroups.length + 1,
         itemBuilder: (context, index) {
-          final group = _storyGroups[index];
+          // First item: Add Story tile
+          if (index == 0) {
+            return _buildAddStoryTile(context, rowHeight, avatarSize, minTapSize);
+          }
+          final group = _storyGroups[index - 1];
           final hasUnviewed =
               group.stories.any((s) => !(s.hasViewed ?? false));
           return Padding(
@@ -1016,3 +1483,23 @@ class _FeedTabBarState extends State<_FeedTabBar> {
   }
 }
 
+/// Type of item in the interleaved feed list.
+enum _FeedItemType { post, teaser, threadCard }
+
+/// Represents a single item in the feed: a post, teaser card, or gossip thread card.
+class _FeedItem {
+  final _FeedItemType type;
+  final int? postIndex;
+  final int? threadIndex;
+
+  _FeedItem._({required this.type, this.postIndex, this.threadIndex});
+
+  factory _FeedItem.post(int postIndex) =>
+      _FeedItem._(type: _FeedItemType.post, postIndex: postIndex);
+
+  factory _FeedItem.teaser() =>
+      _FeedItem._(type: _FeedItemType.teaser);
+
+  factory _FeedItem.threadCard(int threadIndex) =>
+      _FeedItem._(type: _FeedItemType.threadCard, threadIndex: threadIndex);
+}

@@ -159,4 +159,16 @@ class LocalStorageService {
   Future<void> saveBool(String key, bool value) async {
     await _userBox.put(key, value);
   }
+
+  /// Generic string getter for preference keys.
+  String? getString(String key) {
+    final value = _userBox.get(key);
+    if (value is String) return value;
+    return null;
+  }
+
+  /// Generic string setter for preference keys.
+  Future<void> setString(String key, String value) async {
+    await _userBox.put(key, value);
+  }
 }

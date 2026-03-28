@@ -4,8 +4,10 @@ import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_post_sheet.dart';
 import '../../widgets/tajiri_app_bar.dart';
-import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 
 /// Saved (bookmarked) posts screen. Story 25.
 /// Navigation: Home → Feed/Profile → Post → Bookmark icon; or Feed app bar → Saved.
@@ -165,6 +167,34 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
     }
   }
 
+  Future<void> _onReaction(Post post, ReactionType reaction) async {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    // Optimistic update
+    setState(() {
+      _posts[index] = post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      );
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.value,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _posts[index] = post);
+    } else if (result.likesCount != null) {
+      setState(() {
+        _posts[index] = _posts[index].copyWith(likesCount: result.likesCount!);
+      });
+    }
+  }
+
   void _onComment(Post post) {
     Navigator.pushNamed(context, '/post/${post.id}');
   }
@@ -183,7 +213,32 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   }
 
   void _onMenuTap(Post post) {
-    // Optional menu for post in saved list
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.bookmark_remove_rounded),
+              title: const Text('Remove from saved'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _onSave(post);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_new_rounded),
+              title: const Text('View post'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _onTap(post);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onTap(Post post) {
@@ -303,6 +358,32 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
               onUserTap: () => _onUserTap(post),
               onMenuTap: () => _onMenuTap(post),
               onTap: () => _onTap(post),
+              onReaction: (reaction) => _onReaction(post, reaction),
+              onSubscribe: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SubscribeToCreatorScreen(
+                      creatorId: post.userId,
+                      currentUserId: widget.currentUserId,
+                      creatorDisplayName: post.user?.fullName,
+                    ),
+                  ),
+                );
+              },
+              onHashtagTap: (hashtag) {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => HashtagScreen(hashtag: hashtag, currentUserId: widget.currentUserId),
+                ));
+              },
+              onMentionTap: (username) {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => SearchScreen(currentUserId: widget.currentUserId, initialQuery: username, initialTab: 0),
+                ));
+              },
+              onThreadTap: post.threadId != null
+                  ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                  : null,
             ),
           );
         },

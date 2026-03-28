@@ -211,6 +211,12 @@ class PostService {
     double? videoSpeed,
     String? videoFilter,
     List<Map<String, dynamic>>? textOverlays,
+    // Reply (Duet) / Stitch metadata
+    int? replyToPostId,
+    String? replyLayout, // 'side_by_side', 'top_bottom', 'pip'
+    int? stitchFromPostId,
+    int? stitchTrimStartMs,
+    int? stitchTrimEndMs,
     // Progress callback for large uploads
     void Function(double progress)? onProgress,
     bool allowComments = true,
@@ -286,6 +292,11 @@ class PostService {
             videoSpeed: videoSpeed,
             videoFilter: videoFilter,
             textOverlays: textOverlays,
+            replyToPostId: replyToPostId,
+            replyLayout: replyLayout,
+            stitchFromPostId: stitchFromPostId,
+            stitchTrimStartMs: stitchTrimStartMs,
+            stitchTrimEndMs: stitchTrimEndMs,
             onProgress: onProgress,
             allowComments: allowComments,
           );
@@ -316,6 +327,12 @@ class PostService {
         if (videoSpeed != null) request.fields['video_speed'] = videoSpeed.toString();
         if (videoFilter != null) request.fields['video_filter'] = videoFilter;
         if (textOverlays != null) request.fields['text_overlays'] = jsonEncode(textOverlays);
+        // Reply (Duet) / Stitch metadata
+        if (replyToPostId != null) request.fields['reply_to_post_id'] = replyToPostId.toString();
+        if (replyLayout != null) request.fields['reply_layout'] = replyLayout;
+        if (stitchFromPostId != null) request.fields['stitch_from_post_id'] = stitchFromPostId.toString();
+        if (stitchTrimStartMs != null) request.fields['stitch_trim_start_ms'] = stitchTrimStartMs.toString();
+        if (stitchTrimEndMs != null) request.fields['stitch_trim_end_ms'] = stitchTrimEndMs.toString();
         // Multipart form sends strings; backend expects boolean-like value (accept '1'/'0' or 'true'/'false')
         request.fields['allow_comments'] = allowComments ? '1' : '0';
 
@@ -514,6 +531,11 @@ class PostService {
     double? videoSpeed,
     String? videoFilter,
     List<Map<String, dynamic>>? textOverlays,
+    int? replyToPostId,
+    String? replyLayout,
+    int? stitchFromPostId,
+    int? stitchTrimStartMs,
+    int? stitchTrimEndMs,
     void Function(double progress)? onProgress,
     bool allowComments = true,
   }) async {
@@ -539,6 +561,11 @@ class PostService {
         if (videoFilter != null) 'video_filter': videoFilter,
         if (textOverlays != null) 'text_overlays': jsonEncode(textOverlays),
         if (audioDuration != null) 'audio_duration': audioDuration.toString(),
+        if (replyToPostId != null) 'reply_to_post_id': replyToPostId.toString(),
+        if (replyLayout != null) 'reply_layout': replyLayout,
+        if (stitchFromPostId != null) 'stitch_from_post_id': stitchFromPostId.toString(),
+        if (stitchTrimStartMs != null) 'stitch_trim_start_ms': stitchTrimStartMs.toString(),
+        if (stitchTrimEndMs != null) 'stitch_trim_end_ms': stitchTrimEndMs.toString(),
         'allow_comments': allowComments ? '1' : '0',
       });
 
@@ -974,6 +1001,24 @@ class PostService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Hide a post from the user's feed (not interested)
+  Future<SimpleResult> hidePost(int postId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/hide'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      final data = response.body.isNotEmpty ? jsonDecode(response.body) : <String, dynamic>{};
+      return SimpleResult(
+        success: response.statusCode == 200 && (data['success'] != false),
+        message: data['message'],
+      );
+    } catch (e) {
+      return SimpleResult(success: false, message: 'Error: $e');
     }
   }
 

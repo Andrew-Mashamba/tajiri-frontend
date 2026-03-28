@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/analytics_models.dart';
 import '../../services/analytics_service.dart';
-import '../../services/local_storage_service.dart';
 import '../../l10n/app_strings_scope.dart';
 
 class AnalyticsDashboardScreen extends StatefulWidget {
@@ -17,6 +17,8 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
   AnalyticsDashboard? _dashboard;
   AudienceInsight? _audience;
+  String _engagementLevel = 'gentle';
+  List<PostPerformance> _topPosts = [];
   bool _loading = true;
   String? _error;
 
@@ -28,26 +30,29 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
+    if (kDebugMode) debugPrint('[AnalyticsDashboard] Loading data for user ${widget.userId}');
     try {
-      final storage = await LocalStorageService.getInstance();
-      final token = storage.getAuthToken();
-      if (token == null) {
-        if (mounted) setState(() { _error = 'Not authenticated'; _loading = false; });
-        return;
-      }
-      final results = await Future.wait([
-        _analyticsService.getDashboard(token: token, creatorId: widget.userId),
-        _analyticsService.getAudienceInsights(token: token, creatorId: widget.userId),
+      final results = await Future.wait<dynamic>([
+        _analyticsService.getDashboard(creatorId: widget.userId),
+        _analyticsService.getAudienceInsights(creatorId: widget.userId),
+        _analyticsService.getEngagementLevel(userId: widget.userId),
+        _analyticsService.getPostPerformance(creatorId: widget.userId),
       ]);
+      if (kDebugMode) debugPrint('[AnalyticsDashboard] Data loaded: dashboard=${results[0] != null}, audience=${results[1] != null}');
       if (mounted) {
         setState(() {
           _dashboard = results[0] as AnalyticsDashboard?;
           _audience = results[1] as AudienceInsight?;
+          _engagementLevel = (results[2] is String) ? results[2] as String : 'gentle';
+          _topPosts = (results[3] is List<PostPerformance>)
+              ? results[3] as List<PostPerformance>
+              : <PostPerformance>[];
           _loading = false;
           if (_dashboard == null) _error = 'No analytics data';
         });
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('[AnalyticsDashboard] Error: $e');
       if (mounted) setState(() { _error = 'Error: $e'; _loading = false; });
     }
   }
@@ -89,6 +94,30 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
                           style: const TextStyle(color: Color(0xFF999999), fontSize: 13)),
                       const SizedBox(height: 12),
                       _buildStatsGrid(strings),
+                      const SizedBox(height: 12),
+                      // Engagement level badge
+                      Row(
+                        children: [
+                          Text('Engagement: ',
+                              style: const TextStyle(fontSize: 13, color: Color(0xFF666666))),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1A1A).withAlpha(13),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE0E0E0), width: 0.5),
+                            ),
+                            child: Text(
+                              _engagementLevel.replaceAll('_', ' '),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1A1A1A),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 16),
                       _buildCard(
                         child: Column(
@@ -174,6 +203,14 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
                         const SizedBox(height: 12),
                         _buildMiniChart(),
+                      ],
+                      // Top posts section
+                      if (_topPosts.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Text(strings?.topPosts ?? 'Top Posts',
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+                        const SizedBox(height: 12),
+                        ..._topPosts.take(5).map((post) => _buildPostPerformanceTile(post)),
                       ],
                     ],
                   ),
@@ -271,6 +308,49 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           }).toList(),
         ),
       ),
+    );
+  }
+
+  Widget _buildPostPerformanceTile(PostPerformance post) {
+    final snippet = post.threadTitle != null && post.threadTitle!.isNotEmpty
+        ? post.threadTitle!
+        : 'Post #${post.postId}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _buildCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              snippet,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildPostStat(Icons.visibility_outlined, _formatCount(post.views)),
+                const SizedBox(width: 16),
+                _buildPostStat(Icons.favorite_outline_rounded, _formatCount(post.likes)),
+                const SizedBox(width: 16),
+                _buildPostStat(Icons.show_chart_rounded, '${post.engagementRate.toStringAsFixed(1)}%'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostStat(IconData icon, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF999999)),
+        const SizedBox(width: 4),
+        Text(value, style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
+      ],
     );
   }
 

@@ -10,12 +10,15 @@ String get _baseUrl => ApiConfig.baseUrl;
 /// Instance-based (same pattern as CreatorService, FeedService).
 class PaymentService {
   /// GET /api/fund-pool/current
-  Future<CreatorFundPool?> getCurrentPool(String token) async {
+  Future<CreatorFundPool?> getCurrentPool([String? token]) async {
+    final url = Uri.parse('$_baseUrl/fund-pool/current');
+    if (kDebugMode) debugPrint('[PaymentService] getCurrentPool → $url');
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/fund-pool/current'),
-        headers: ApiConfig.authHeaders(token),
+        url,
+        headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
+      if (kDebugMode) debugPrint('[PaymentService] getCurrentPool ← ${response.statusCode}');
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         final data = body['data'] ?? body;
@@ -23,9 +26,7 @@ class PaymentService {
           return CreatorFundPool.fromJson(data);
         }
       }
-      if (kDebugMode) {
-        debugPrint('[PaymentService] getCurrentPool ${response.statusCode}');
-      }
+      if (kDebugMode) debugPrint('[PaymentService] getCurrentPool body: ${response.body.substring(0, (response.body.length).clamp(0, 200))}');
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('[PaymentService] getCurrentPool error: $e');
@@ -36,11 +37,11 @@ class PaymentService {
   /// GET /api/creators/{id}/payouts
   Future<List<CreatorFundPayout>> getPayoutHistory(
       String token, int creatorId) async {
+    final url = Uri.parse('$_baseUrl/creators/$creatorId/payouts');
+    if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory → $url');
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/creators/$creatorId/payouts'),
-        headers: ApiConfig.authHeaders(token),
-      );
+      final response = await http.get(url, headers: ApiConfig.authHeaders(token));
+      if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory ← ${response.statusCode}');
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         final list = body['data'] ?? body;
@@ -51,9 +52,7 @@ class PaymentService {
               .toList();
         }
       }
-      if (kDebugMode) {
-        debugPrint('[PaymentService] getPayoutHistory ${response.statusCode}');
-      }
+      if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory body: ${response.body.substring(0, (response.body.length).clamp(0, 200))}');
       return [];
     } catch (e) {
       if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory error: $e');
@@ -63,11 +62,11 @@ class PaymentService {
 
   /// POST /api/creators/{id}/payout/request
   Future<bool> requestPayout(String token, int creatorId) async {
+    final url = Uri.parse('$_baseUrl/creators/$creatorId/payout/request');
+    if (kDebugMode) debugPrint('[PaymentService] requestPayout → $url');
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/creators/$creatorId/payout/request'),
-        headers: ApiConfig.authHeaders(token),
-      );
+      final response = await http.post(url, headers: ApiConfig.authHeaders(token));
+      if (kDebugMode) debugPrint('[PaymentService] requestPayout ← ${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       if (kDebugMode) debugPrint('[PaymentService] requestPayout error: $e');

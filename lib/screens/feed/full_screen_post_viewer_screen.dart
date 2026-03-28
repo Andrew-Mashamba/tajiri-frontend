@@ -9,11 +9,12 @@ import '../../widgets/video_player_widget.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/audio_player_widget.dart';
 import 'comment_bottom_sheet.dart';
-import 'edit_post_screen.dart';
 import '../../services/post_service.dart';
+import '../../services/friend_service.dart';
 import '../../services/poll_service.dart';
 import '../../services/event_tracking_service.dart';
-import '../../l10n/app_strings_scope.dart';
+import 'video_reply_screen.dart';
+import 'video_stitch_screen.dart';
 
 /// Full-screen TikTok-style post viewer: one post per viewport, vertical swipe, snap.
 /// Media fills screen by aspect ratio with black letterboxing; overlay UI like TikTok.
@@ -37,6 +38,7 @@ class FullScreenPostViewerScreen extends StatefulWidget {
 class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen> {
   late PageController _pageController;
   final PostService _postService = PostService();
+  final FriendService _friendService = FriendService();
   late List<Post> _posts;
   int? _likingPostId;
   int? _savingPostId;
@@ -45,10 +47,18 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
   int? _currentPostId;
   int? _currentCreatorId;
 
-  int _postsViewed = 0;
   bool _autoPlayEnabled = false;
   Timer? _countdownTimer;
   int _countdownSeconds = 0;
+
+  // Follow state: track per-user follow status locally
+  final Map<int, bool> _followingStatus = {};
+  final Set<int> _followingInProgress = {};
+
+  // Comment input
+  final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
+  bool _sendingComment = false;
 
   @override
   void initState() {
@@ -73,11 +83,21 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     }
   }
 
+  Post? _getNextPost() {
+    final currentPage = _pageController.page?.round() ?? 0;
+    if (currentPage < _posts.length - 1) {
+      return _posts[currentPage + 1];
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _emitDwellForCurrentPost();
     _countdownTimer?.cancel();
     _pageController.dispose();
+    _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -97,16 +117,67 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     }
   }
 
+  bool _countdownPaused = false;
+
   void _startAutoPlayCountdown() {
     _countdownTimer?.cancel();
+    _countdownPaused = false;
     if (!_autoPlayEnabled) return;
-    setState(() => _countdownSeconds = 3);
+
+    // Determine countdown based on content type
+    final currentPage = _pageController.page?.round() ?? 0;
+    if (currentPage >= _posts.length) return;
+    final post = _posts[currentPage];
+
+    int seconds;
+    if (post.hasVideo) {
+      // Video: use video duration (minimum 10s, so the overlay isn't too brief)
+      seconds = post.videoDuration > 0 ? post.videoDuration : 10;
+    } else if (post.hasAudio) {
+      // Audio: use audio duration
+      seconds = (post.audioDuration ?? 0) > 0 ? post.audioDuration! : 10;
+    } else {
+      // Image/text: 10 seconds
+      seconds = 10;
+    }
+
+    setState(() => _countdownSeconds = seconds);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) { timer.cancel(); return; }
+      if (_countdownPaused) return; // Skip tick while paused
       setState(() => _countdownSeconds--);
       if (_countdownSeconds <= 0) {
         timer.cancel();
         _autoAdvance();
+      }
+    });
+  }
+
+  void _pauseCountdown() {
+    setState(() => _countdownPaused = true);
+  }
+
+  void _resumeCountdown() {
+    setState(() => _countdownPaused = false);
+  }
+
+  void _cancelCountdown() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdownSeconds = 0;
+      _countdownPaused = false;
+    });
+  }
+
+  void _toggleAutoPlay() {
+    setState(() {
+      _autoPlayEnabled = !_autoPlayEnabled;
+      if (_autoPlayEnabled) {
+        _startAutoPlayCountdown();
+      } else {
+        _countdownTimer?.cancel();
+        _countdownSeconds = 0;
+        _countdownPaused = false;
       }
     });
   }
@@ -240,77 +311,173 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     }
   }
 
+  bool _isFollowing(Post post) {
+    if (post.userId == widget.currentUserId) return true;
+    return _followingStatus[post.userId] ?? post.user?.isFollowing ?? false;
+  }
+
+  void _onFollow(Post post) async {
+    if (_followingInProgress.contains(post.userId)) return;
+    if (post.userId == widget.currentUserId) return;
+    final isCurrentlyFollowing = _isFollowing(post);
+    setState(() {
+      _followingInProgress.add(post.userId);
+      _followingStatus[post.userId] = !isCurrentlyFollowing;
+    });
+    try {
+      final success = isCurrentlyFollowing
+          ? await _friendService.unfollowUser(widget.currentUserId, post.userId)
+          : await _friendService.followUser(widget.currentUserId, post.userId);
+      if (!mounted) return;
+      setState(() {
+        _followingInProgress.remove(post.userId);
+        if (!success) _followingStatus[post.userId] = isCurrentlyFollowing;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _followingInProgress.remove(post.userId);
+        _followingStatus[post.userId] = isCurrentlyFollowing;
+      });
+    }
+  }
+
+  void _onSendComment(Post post) async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty || _sendingComment) return;
+    setState(() => _sendingComment = true);
+    try {
+      final result = await _postService.addComment(post.id, widget.currentUserId, text);
+      if (!mounted) return;
+      if (result.success) {
+        _commentController.clear();
+        _commentFocusNode.unfocus();
+        setState(() {
+          _sendingComment = false;
+          final i = _posts.indexWhere((p) => p.id == post.id);
+          if (i >= 0) {
+            _posts[i] = post.copyWith(commentsCount: post.commentsCount + 1);
+          }
+        });
+      } else {
+        setState(() => _sendingComment = false);
+        _showErrorSnackBar('Could not post comment. Try again.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sendingComment = false);
+      _showErrorSnackBar(_networkErrorMessage(e));
+    }
+  }
+
   void _onUserTap(Post post) {
     Navigator.pushNamed(context, '/profile/${post.userId}');
   }
 
-  void _onMenuTap(Post post) async {
-    final s = AppStringsScope.of(context);
-    final action = await showModalBottomSheet<String>(
+  void _onMoreOptions(Post post) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (post.userId == widget.currentUserId)
-              ListTile(
-                leading: HeroIcon(HeroIcons.pencilSquare, style: HeroIconStyle.outline, size: 24, color: const Color(0xFF1A1A1A)),
-                title: Text(s?.editPost ?? 'Edit post'),
-                onTap: () => Navigator.pop(ctx, 'edit'),
-              ),
-            ListTile(
-              leading: HeroIcon(HeroIcons.share, style: HeroIconStyle.outline, size: 24, color: const Color(0xFF1A1A1A)),
-              title: Text(s?.share ?? 'Share'),
-              onTap: () => Navigator.pop(ctx, 'share'),
-            ),
-            if (post.userId == widget.currentUserId)
-              ListTile(
-                leading: HeroIcon(HeroIcons.trash, style: HeroIconStyle.outline, size: 24, color: const Color(0xFF1A1A1A)),
-                title: Text(s?.deletePost ?? 'Delete post'),
-                onTap: () => Navigator.pop(ctx, 'delete'),
-              ),
-          ],
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _PostOptionsSheet(
+        post: post,
+        currentUserId: widget.currentUserId,
+        onReport: () => _reportPost(post),
+        onNotInterested: () => _notInterested(post),
+        onReply: () => _openReply(post),
+        onStitch: () => _openStitch(post),
+      ),
+    );
+  }
+
+  void _openReply(Post post) {
+    Navigator.pop(context); // close sheet
+    Navigator.push(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => VideoReplyScreen(
+          originalPost: post,
+          currentUserId: widget.currentUserId,
         ),
       ),
     );
-    if (!mounted) return;
-    if (action == 'edit') {
-      final updated = await Navigator.push<Post>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EditPostScreen(post: post),
+  }
+
+  void _openStitch(Post post) {
+    Navigator.pop(context); // close sheet
+    if (!post.hasVideo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Stitch inapatikana tu kwa video'),
+          backgroundColor: Colors.grey.shade800,
+          behavior: SnackBarBehavior.floating,
         ),
       );
-      if (updated != null) {
-        setState(() {
-          final i = _posts.indexWhere((p) => p.id == post.id);
-          if (i >= 0) _posts[i] = updated;
-        });
-      }
-    } else if (action == 'share') {
-      _onShare(post);
-    } else if (action == 'delete') {
-      try {
-        final result = await _postService.deletePost(post.id);
-        if (!mounted) return;
-        if (result.success) {
-          setState(() => _posts.removeWhere((p) => p.id == post.id));
-          if (_posts.isEmpty) Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Post deleted'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.grey.shade800,
-            ),
-          );
-        } else {
-          _showErrorSnackBar('Could not delete post. Try again.');
-        }
-      } catch (e) {
-        if (!mounted) return;
-        _showErrorSnackBar(_networkErrorMessage(e));
-      }
+      return;
     }
+    Navigator.push(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => VideoStitchScreen(
+          originalPost: post,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+  }
+
+  void _reportPost(Post post) async {
+    Navigator.pop(context); // close the sheet
+    // Show report reason dialog
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _ReportReasonDialog(),
+    );
+    if (reason == null || !mounted) return;
+    final result = await _postService.reportPost(post.id, widget.currentUserId, reason: reason);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.success ? 'Ripoti imetumwa. Asante!' : (result.message ?? 'Imeshindikana kutuma ripoti')),
+        backgroundColor: Colors.grey.shade800,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _notInterested(Post post) async {
+    Navigator.pop(context); // close the sheet
+    // Track "not_interested" event for algorithm
+    EventTrackingService.getInstance().then((tracker) {
+      tracker.trackEvent(
+        eventType: 'not_interested',
+        postId: post.id,
+        creatorId: post.userId,
+      );
+    });
+    // Hide from feed by calling API
+    _postService.hidePost(post.id, widget.currentUserId);
+    // Remove from local list
+    setState(() {
+      _posts.removeWhere((p) => p.id == post.id);
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Hutaona chapisho kama hili tena'),
+        backgroundColor: Colors.grey.shade800,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Rejesha',
+          textColor: Colors.white,
+          onPressed: () {
+            // Re-add the post
+            setState(() {
+              _posts.add(post);
+            });
+          },
+        ),
+      ),
+    );
   }
 
   static String _formatCount(int count) {
@@ -346,9 +513,9 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
             controller: _pageController,
             scrollDirection: Axis.vertical,
             pageSnapping: true,
-            physics: const BouncingScrollPhysics(
-              parent: ClampingScrollPhysics(),
-            ),
+            physics: _autoPlayEnabled
+                ? const _EasierSwipePhysics(parent: ClampingScrollPhysics())
+                : const BouncingScrollPhysics(parent: ClampingScrollPhysics()),
             onPageChanged: (index) {
               _emitDwellForCurrentPost();
               final post = _posts[index];
@@ -362,10 +529,6 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
                   creatorId: post.userId,
                 );
               });
-              _postsViewed++;
-              if (_postsViewed >= 3 && !_autoPlayEnabled) {
-                _autoPlayEnabled = true;
-              }
               if (_autoPlayEnabled) {
                 _startAutoPlayCountdown();
               }
@@ -381,59 +544,192 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
                   currentUserId: widget.currentUserId,
                   likingPostId: _likingPostId,
                   savingPostId: _savingPostId,
+                  isFollowing: _isFollowing(post),
+                  followInProgress: _followingInProgress.contains(post.userId),
                   onLike: () => _onLike(post),
                   onComment: () => _onComment(post),
                   onShare: () => _onShare(post),
                   onSave: () => _onSave(post),
                   onUserTap: () => _onUserTap(post),
-                  onMenuTap: () => _onMenuTap(post),
+                  onFollow: () => _onFollow(post),
+                  autoPlayEnabled: _autoPlayEnabled,
+                  onToggleAutoPlay: _toggleAutoPlay,
+                  onMoreOptions: () => _onMoreOptions(post),
                   formatCount: _formatCount,
                 ),
               );
             },
           ),
-          // Autoplay "Up Next" countdown overlay
-          if (_countdownSeconds > 0)
-            Positioned(
-              bottom: 100,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xCC1A1A1A),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'Up Next in $_countdownSeconds...',
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ),
-          // Global close button (top-left) with tap effect
+          // Top bar: close button + Up Next info + action icons
           SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8, top: 4),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => Navigator.pop(context),
-                    borderRadius: BorderRadius.circular(24),
-                    splashColor: Colors.white24,
-                    highlightColor: Colors.white12,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, right: 12, top: 4),
+              child: Row(
+                children: [
+                  // Close button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(24),
+                      splashColor: Colors.white24,
+                      highlightColor: Colors.white12,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: HeroIcon(HeroIcons.xMark, style: HeroIconStyle.outline, size: 26, color: Colors.white),
                       ),
-                      child: HeroIcon(HeroIcons.xMark, style: HeroIconStyle.outline, size: 26, color: Colors.white),
                     ),
                   ),
+                  // Up Next info (shown when countdown active)
+                  if (_countdownSeconds > 0 && _getNextPost() != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            // Countdown number
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white38, width: 1.5),
+                              ),
+                              child: Center(
+                                child: _countdownPaused
+                                    ? const Icon(Icons.pause_rounded, color: Colors.white, size: 12)
+                                    : Text(
+                                        '$_countdownSeconds',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Next post info
+                            Expanded(
+                              child: Text(
+                                _countdownPaused
+                                    ? 'Paused'
+                                    : '${_getNextPost()!.user?.fullName ?? 'Next'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Pause/Resume icon
+                            GestureDetector(
+                              onTap: () {
+                                if (_countdownPaused) {
+                                  _resumeCountdown();
+                                } else {
+                                  _pauseCountdown();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                child: Icon(
+                                  _countdownPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                            // Skip icon
+                            GestureDetector(
+                              onTap: () {
+                                _countdownTimer?.cancel();
+                                _autoAdvance();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                child: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 18),
+                              ),
+                            ),
+                            // Cancel icon
+                            GestureDetector(
+                              onTap: _cancelCountdown,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                child: const Icon(Icons.close_rounded, color: Colors.white70, size: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else
+                    const Spacer(),
+                ],
+              ),
+            ),
+          ),
+          // Comment input bar at bottom
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                color: Colors.black54,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white12,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: TextField(
+                          controller: _commentController,
+                          focusNode: _commentFocusNode,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          decoration: const InputDecoration(
+                            hintText: 'Add a comment...',
+                            hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) {
+                            final currentPage = _pageController.page?.round() ?? 0;
+                            if (currentPage < _posts.length) {
+                              _onSendComment(_posts[currentPage]);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _sendingComment
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+                          )
+                        : GestureDetector(
+                            onTap: () {
+                              final currentPage = _pageController.page?.round() ?? 0;
+                              if (currentPage < _posts.length) {
+                                _onSendComment(_posts[currentPage]);
+                              }
+                            },
+                            child: const Icon(Icons.send_rounded, color: Colors.white70, size: 24),
+                          ),
+                  ],
                 ),
               ),
             ),
@@ -450,12 +746,17 @@ class _FullScreenPostPage extends StatelessWidget {
   final int currentUserId;
   final int? likingPostId;
   final int? savingPostId;
+  final bool isFollowing;
+  final bool followInProgress;
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onSave;
   final VoidCallback onUserTap;
-  final VoidCallback onMenuTap;
+  final VoidCallback onFollow;
+  final bool autoPlayEnabled;
+  final VoidCallback onToggleAutoPlay;
+  final VoidCallback onMoreOptions;
   final String Function(int) formatCount;
 
   const _FullScreenPostPage({
@@ -464,12 +765,17 @@ class _FullScreenPostPage extends StatelessWidget {
     required this.currentUserId,
     this.likingPostId,
     this.savingPostId,
+    this.isFollowing = false,
+    this.followInProgress = false,
     required this.onLike,
     required this.onComment,
     required this.onShare,
     required this.onSave,
     required this.onUserTap,
-    required this.onMenuTap,
+    required this.onFollow,
+    this.autoPlayEnabled = false,
+    required this.onToggleAutoPlay,
+    required this.onMoreOptions,
     required this.formatCount,
   });
 
@@ -591,6 +897,20 @@ class _FullScreenPostPage extends StatelessWidget {
     );
   }
 
+  String _buildSocialProofText(List<String> names, int totalCount) {
+    if (names.length == 1) {
+      final others = totalCount - 1;
+      if (others > 0) return 'Followed by ${names[0]} and $others others';
+      return 'Followed by ${names[0]}';
+    }
+    if (names.length >= 2) {
+      final others = totalCount - 2;
+      if (others > 0) return 'Followed by ${names[0]}, ${names[1]} and $others others';
+      return 'Followed by ${names[0]} and ${names[1]}';
+    }
+    return '';
+  }
+
   /// Max decode size for full-screen images (smooth scroll, avoid over-decode).
   static int _cacheSize(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -615,31 +935,33 @@ class _FullScreenPostPage extends StatelessWidget {
         // 1) Black background + media (aspect-fit, black fill where media doesn't cover)
         Container(color: Colors.black),
         if (hasVisualMedia && primaryMedia != null)
-          Center(
-            child: AspectRatio(
-              aspectRatio: aspectRatio,
-              child: primaryVideo != null
-                  ? VideoPlayerWidget(
+          primaryVideo != null
+              ? Center(
+                  child: AspectRatio(
+                    aspectRatio: aspectRatio,
+                    child: VideoPlayerWidget(
                       videoUrl: primaryVideo.fileUrl,
                       thumbnailUrl: primaryVideo.thumbnailUrl,
                       aspectRatio: aspectRatio,
                       showControls: true,
                       showBufferIndicator: true,
-                    )
-                  : CachedMediaImage(
-                      imageUrl: primaryImage!.fileUrl,
-                      fit: BoxFit.contain,
-                      cacheWidth: cacheSize,
-                      cacheHeight: cacheSize,
-                      errorWidget: Container(
-                        color: Colors.black,
-                        child: const Center(
-                          child: HeroIcon(HeroIcons.photo, style: HeroIconStyle.outline, size: 48, color: Colors.white54),
-                        ),
+                    ),
+                  ),
+                )
+              : SizedBox.expand(
+                  child: CachedMediaImage(
+                    imageUrl: primaryImage!.fileUrl,
+                    fit: BoxFit.cover,
+                    cacheWidth: cacheSize,
+                    cacheHeight: cacheSize,
+                    errorWidget: Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: HeroIcon(HeroIcons.photo, style: HeroIconStyle.outline, size: 48, color: Colors.white54),
                       ),
                     ),
-            ),
-          )
+                  ),
+                )
         else if (post.isAudioPost)
           _buildAudioContent(context, post, cacheSize)
         else if (post.postType == PostType.poll && post.pollId != null)
@@ -651,10 +973,10 @@ class _FullScreenPostPage extends StatelessWidget {
           // Text-only / colored text: full-screen frame (treat as one "image")
           _buildTextOnlyContent(post),
 
-        // 2) TikTok-style right side: avatar, like, comment, share, save
+        // 2) Right side action bar: avatar, like, comment, share, save, menu
         Positioned(
           right: 12,
-          bottom: 120,
+          bottom: 100,
           child: SafeArea(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -711,110 +1033,184 @@ class _FullScreenPostPage extends StatelessWidget {
                 onTap: onSave,
                 isLoading: savingPostId == post.id,
               ),
+              const SizedBox(height: 16),
+              // Auto-play toggle
+              _ActionItem(
+                icon: Icon(
+                  autoPlayEnabled ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
+                  size: 28,
+                  color: autoPlayEnabled ? Colors.amber : Colors.white,
+                ),
+                onTap: onToggleAutoPlay,
+              ),
+              const SizedBox(height: 16),
+              // More options (3-dot menu)
+              _ActionItem(
+                icon: HeroIcon(HeroIcons.ellipsisHorizontal, style: HeroIconStyle.outline, size: 28, color: Colors.white),
+                onTap: onMoreOptions,
+              ),
               ],
             ),
           ),
         ),
 
-        // 3) Menu (three dots) top-right with tap effect
-        Positioned(
-          top: 0,
-          right: 12,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: _TapWrap(
-            onTap: onMenuTap,
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: HeroIcon(HeroIcons.ellipsisVertical, style: HeroIconStyle.outline, size: 26, color: Colors.white),
-            ),
-          ),
-            ),
-          ),
-        ),
-
-        // 4) Bottom-left: username + caption (TikTok-style)
+        // 3) Bottom-left: username + follow + caption + music + social proof
         Positioned(
           left: 12,
           right: 80,
           bottom: 0,
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.only(bottom: 64),
               child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _TapWrap(
-                onTap: onUserTap,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    '@${post.user?.username ?? 'user${post.userId}'}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      shadows: [
-                        Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
-                        Shadow(color: Colors.black87, offset: Offset(0, 1), blurRadius: 8),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Username row with Follow button
+                  Row(
+                    children: [
+                      _TapWrap(
+                        onTap: onUserTap,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            '@${post.user?.username ?? 'user${post.userId}'}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              shadows: [
+                                Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+                                Shadow(color: Colors.black87, offset: Offset(0, 1), blurRadius: 8),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Follow button (hidden for own posts or if already following)
+                      if (post.userId != currentUserId && !isFollowing) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: followInProgress ? null : onFollow,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white, width: 1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: followInProgress
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
+                                  )
+                                : const Text(
+                                    'Follow',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      shadows: [
+                                        Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+                                      ],
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                ),
-              ),
-              if (post.content != null && post.content!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  post.content!,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 1.3,
-                    shadows: [
-                      Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
-                      Shadow(color: Colors.black87, offset: Offset(0, 1), blurRadius: 8),
                     ],
                   ),
-                ),
-              ],
-              if (post.hasMusic && post.musicTrack != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 16, color: Colors.white70),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        post.musicTrack!.displayName,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          shadows: [
-                            Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  // Caption (expandable)
+                  if (post.content != null && post.content!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _ExpandableCaption(text: post.content!),
+                  ],
+                  // Music track row (tappable → creator's music)
+                  if (post.hasMusic && post.musicTrack != null) ...[
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () => Navigator.pushNamed(context, '/profile/${post.userId}/music'),
+                      child: Row(
+                        children: [
+                          HeroIcon(HeroIcons.musicalNote, style: HeroIconStyle.outline, size: 16, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              post.musicTrack!.displayName,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                shadows: [
+                                  Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 16),
+                        ],
                       ),
                     ),
                   ],
-                ),
-              ],
-            ],
+                  // Social proof: "Followed by X and Y others"
+                  if (post.user != null &&
+                      post.user!.mutualFollowerNames != null &&
+                      post.user!.mutualFollowerNames!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _buildSocialProofText(post.user!.mutualFollowerNames!, post.user!.mutualFollowersCount ?? 0),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        shadows: [
+                          Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
         ),
+
+        // 5) Thread CTA for gossip thread posts
+        if (post.threadId != null)
+          Positioned(
+            left: 16,
+            bottom: 160,
+            child: GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/thread/${post.threadId}'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24, width: 0.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    HeroIcon(HeroIcons.chatBubbleLeftRight, style: HeroIconStyle.outline, size: 16, color: Colors.white70),
+                    const SizedBox(width: 6),
+                    Text(
+                      post.commentsCount > 0
+                          ? '${post.commentsCount} ${post.commentsCount == 1 ? 'comment' : 'comments'} · Join thread'
+                          : 'Join thread',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -849,13 +1245,13 @@ class _TapWrap extends StatelessWidget {
 
 class _ActionItem extends StatelessWidget {
   final Widget icon;
-  final String label;
+  final String? label;
   final VoidCallback onTap;
   final bool isLoading;
 
   const _ActionItem({
     required this.icon,
-    required this.label,
+    this.label,
     required this.onTap,
     this.isLoading = false,
   });
@@ -886,18 +1282,20 @@ class _ActionItem extends StatelessWidget {
                     )
                   : Center(child: icon),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                shadows: [
-                  Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
-                ],
+            if (label != null && label!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                label!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  shadows: [
+                    Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1191,4 +1589,338 @@ class _FullScreenPollContentState extends State<_FullScreenPollContent> {
       ),
     );
   }
+}
+
+/// Expandable caption: shows 3 lines with "more" tap, full text when expanded.
+class _ExpandableCaption extends StatefulWidget {
+  final String text;
+  const _ExpandableCaption({required this.text});
+
+  @override
+  State<_ExpandableCaption> createState() => _ExpandableCaptionState();
+}
+
+class _ExpandableCaptionState extends State<_ExpandableCaption> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      color: Colors.white,
+      fontSize: 14,
+      height: 1.3,
+      shadows: [
+        Shadow(color: Colors.black54, offset: Offset(0, 1), blurRadius: 4),
+        Shadow(color: Colors.black87, offset: Offset(0, 1), blurRadius: 8),
+      ],
+    );
+
+    if (_expanded) {
+      return GestureDetector(
+        onTap: () => setState(() => _expanded = false),
+        child: Text(widget.text, style: style),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: widget.text, style: style),
+          maxLines: 3,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+
+        final overflow = tp.didExceedMaxLines;
+
+        return GestureDetector(
+          onTap: overflow ? () => setState(() => _expanded = true) : null,
+          child: RichText(
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: style,
+              children: [
+                TextSpan(text: widget.text),
+                if (overflow)
+                  const TextSpan(
+                    text: ' more',
+                    style: TextStyle(color: Colors.white54, fontWeight: FontWeight.w600),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Instagram-style post options bottom sheet.
+class _PostOptionsSheet extends StatelessWidget {
+  final Post post;
+  final int currentUserId;
+  final VoidCallback onReport;
+  final VoidCallback onNotInterested;
+  final VoidCallback onReply;
+  final VoidCallback onStitch;
+
+  const _PostOptionsSheet({
+    required this.post,
+    required this.currentUserId,
+    required this.onReport,
+    required this.onNotInterested,
+    required this.onReply,
+    required this.onStitch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwnPost = post.userId == currentUserId;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Top action row: Reply + Stitch (like Instagram's Save/Remix/Sequence)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  _TopActionButton(
+                    icon: Icons.reply_rounded,
+                    label: 'Reply',
+                    onTap: onReply,
+                  ),
+                  const SizedBox(width: 12),
+                  if (post.hasVideo)
+                    _TopActionButton(
+                      icon: Icons.content_cut_rounded,
+                      label: 'Stitch',
+                      onTap: onStitch,
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            if (!isOwnPost) ...[
+              // Not interested
+              _OptionTile(
+                icon: Icons.not_interested_rounded,
+                label: 'Sipendi hii',
+                subtitle: 'Hutaona machapisho kama haya',
+                onTap: onNotInterested,
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              // Report
+              _OptionTile(
+                icon: Icons.flag_outlined,
+                label: 'Ripoti',
+                labelColor: Colors.red.shade700,
+                iconColor: Colors.red.shade700,
+                onTap: onReport,
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Top action button in the options sheet (Instagram-style icon + label).
+class _TopActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _TopActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 28, color: const Color(0xFF1A1A1A)),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Single option tile in the post options sheet.
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final Color? labelColor;
+  final Color? iconColor;
+
+  const _OptionTile({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    required this.onTap,
+    this.labelColor,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, size: 24, color: iconColor ?? const Color(0xFF1A1A1A)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: labelColor ?? const Color(0xFF1A1A1A),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          color: Color(0xFF666666),
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Report reason dialog with predefined categories.
+class _ReportReasonDialog extends StatelessWidget {
+  static const _reasons = [
+    'Maudhui yasiyofaa (Inappropriate content)',
+    'Uchochezi (Hate speech)',
+    'Udanganyifu (Spam/Scam)',
+    'Unyanyasaji (Harassment)',
+    'Maudhui ya watu wazima (Adult content)',
+    'Habari za uongo (Misinformation)',
+    'Sababu nyingine (Other)',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFFFAFAFA),
+      title: const Text(
+        'Ripoti chapisho',
+        style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 17, fontWeight: FontWeight.w600),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: _reasons.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (ctx, i) => Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => Navigator.pop(ctx, _reasons[i]),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                child: Text(
+                  _reasons[i],
+                  style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Ghairi', style: TextStyle(color: Color(0xFF666666))),
+        ),
+      ],
+    );
+  }
+}
+
+/// Custom scroll physics with lower mass and fling threshold for easier swiping
+/// after the user has viewed 3+ posts (auto-play mode).
+class _EasierSwipePhysics extends PageScrollPhysics {
+  const _EasierSwipePhysics({super.parent});
+
+  @override
+  _EasierSwipePhysics applyTo(ScrollPhysics? ancestor) {
+    return _EasierSwipePhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+    mass: 50,      // Lower mass = easier to swipe (default is 100)
+    stiffness: 100,
+    damping: 1,
+  );
+
+  @override
+  double get minFlingVelocity => 50.0; // Lower threshold = easier flings (default ~365)
 }

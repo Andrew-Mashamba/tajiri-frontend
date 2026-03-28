@@ -1,10 +1,13 @@
 // FCM: foreground/background/opened handlers. Payload contract: new_message -> open chat; call_incoming -> open incoming call screen.
 
+import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:tajiri/calls/call_channel_service.dart';
 import 'package:tajiri/screens/calls/incoming_call_flow_screen.dart';
+import '../config/api_config.dart';
 import 'local_storage_service.dart';
 import '../widgets/milestone_overlay.dart';
 
@@ -137,9 +140,12 @@ class FcmService {
     }
   }
 
-  /// Opens gossip thread (Phase 2 — for now navigates to feed).
+  /// Opens gossip thread from notification.
   void _openThread(Map<String, dynamic> data, NavigatorState navigator) {
-    if (navigator.mounted) {
+    final threadId = _intFrom(data, 'thread_id');
+    if (threadId != null && threadId > 0 && navigator.mounted) {
+      navigator.pushNamed('/thread/$threadId');
+    } else if (navigator.mounted) {
       navigator.pushNamed('/feed');
     }
   }
@@ -198,9 +204,25 @@ class FcmService {
 
   /// Send FCM token to backend so it can target this device. Call after login.
   Future<void> sendTokenToBackend(int userId) async {
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token == null) return;
-    // TODO: POST to your backend e.g. POST /api/users/me/push-token or /api/devices
-    if (kDebugMode) debugPrint('[FCM] Token for user $userId (register with backend): $token');
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken == null) return;
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final authToken = storage.getAuthToken();
+      if (authToken == null) return;
+      final url = Uri.parse('${ApiConfig.baseUrl}/users/$userId/fcm-token');
+      final response = await http.post(
+        url,
+        headers: {...ApiConfig.authHeaders(authToken), 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'token': fcmToken,
+          'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+        }),
+      );
+      if (kDebugMode) debugPrint('[FCM] Token registered for user $userId (${response.statusCode})');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FCM] Token registration failed: $e');
+    }
   }
 }

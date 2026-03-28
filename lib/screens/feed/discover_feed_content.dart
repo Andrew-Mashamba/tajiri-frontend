@@ -4,6 +4,7 @@
 // APIs: GET /api/feed/discover, GET /api/feed/trending, GET /api/feed/nearby
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/gossip_models.dart';
 import '../../models/post_models.dart';
 import '../../services/feed_service.dart';
@@ -16,6 +17,9 @@ import '../../l10n/app_strings_scope.dart';
 import '../groups/events_screen.dart';
 import 'comment_bottom_sheet.dart';
 import 'edit_post_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
+import '../search/hashtag_screen.dart';
+import '../search/search_screen.dart';
 import 'post_detail_screen.dart';
 
 /// Section type for the Discover tab
@@ -167,6 +171,38 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
     });
   }
 
+  Future<void> _onReaction(Post post, ReactionType reaction, DiscoverSection section) async {
+    final list = _listForSection(section);
+    final index = list.indexWhere((p) => p.id == post.id);
+    if (index == -1) return;
+
+    // Optimistic update
+    setState(() {
+      _updateList(section, index, post.copyWith(
+        isLiked: true,
+        likesCount: post.isLiked ? post.likesCount : post.likesCount + 1,
+      ));
+    });
+
+    final result = await _postService.likePost(
+      post.id,
+      widget.currentUserId,
+      reactionType: reaction.value,
+    );
+
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _updateList(section, index, post));
+    } else if (result.likesCount != null) {
+      setState(() {
+        final current = _listForSection(section);
+        if (index < current.length) {
+          _updateList(section, index, current[index].copyWith(likesCount: result.likesCount!));
+        }
+      });
+    }
+  }
+
   void _onComment(Post post, DiscoverSection section) {
     CommentBottomSheet.show(
       context,
@@ -209,7 +245,14 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
             ListTile(
               leading: const Icon(Icons.link),
               title: const Text('Nakili kiungo'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () {
+                final postUrl = 'https://tajiri.app/post/${post.id}';
+                Clipboard.setData(ClipboardData(text: postUrl));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Kiungo kimenakiliwa')),
+                );
+              },
             ),
           ],
         ),
@@ -476,6 +519,7 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
               ),
             ),
           ),
+          _buildThreadsSection(),
           _buildSection(
             title: 'Gundua',
             subtitle: 'Mapendekezo kwa wewe',
@@ -485,7 +529,6 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
             section: DiscoverSection.discover,
             onRetry: _loadDiscover,
           ),
-          _buildThreadsSection(),
           _buildSection(
             title: 'Karibu nawe',
             subtitle: 'Kutoka eneo lako',
@@ -713,6 +756,32 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
                     onUserTap: () => _onUserTap(post),
                     onMenuTap: () => _onMenuTap(post, section),
                     onTap: () => _openPostDetail(post, section),
+                    onReaction: (reaction) => _onReaction(post, reaction, section),
+                    onSubscribe: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SubscribeToCreatorScreen(
+                            creatorId: post.userId,
+                            currentUserId: widget.currentUserId,
+                            creatorDisplayName: post.user?.fullName,
+                          ),
+                        ),
+                      );
+                    },
+                    onHashtagTap: (hashtag) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => HashtagScreen(hashtag: hashtag, currentUserId: widget.currentUserId),
+                      ));
+                    },
+                    onMentionTap: (username) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => SearchScreen(currentUserId: widget.currentUserId, initialQuery: username, initialTab: 0),
+                      ));
+                    },
+                    onThreadTap: post.threadId != null
+                        ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+                        : null,
                   ),
                 )),
         ],

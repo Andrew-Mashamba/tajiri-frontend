@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../config/api_config.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/theme_notifier.dart';
@@ -10,6 +13,7 @@ import '../profile/edit_profile_screen.dart';
 import 'profile_tabs_settings_screen.dart';
 import 'username_settings_screen.dart';
 import 'privacy_settings_screen.dart';
+import '../../services/user_service.dart';
 
 /// Settings screen. Navigation: Home → Profile → ⚙ Settings → SettingsScreen (STORY-69).
 /// Sections: Account, Notifications, Privacy, Display (with theme toggle Light/Dark).
@@ -68,6 +72,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final storage = await LocalStorageService.getInstance();
     await storage.saveThemeMode(mode);
     ThemeNotifier.setThemeMode(mode);
+  }
+
+  Future<void> _syncPreference(String key, bool value) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    if (token == null) return;
+    try {
+      await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/users/${widget.currentUserId}/preferences'),
+        headers: {...ApiConfig.authHeaders(token), 'Content-Type': 'application/json'},
+        body: jsonEncode({key: value}),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -154,7 +171,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.security,
                 title: s.security,
                 subtitle: s.securitySubtitle,
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mipangilio ya usalama - Inakuja hivi karibuni')),
+                  );
+                },
               ),
 
               _buildSectionHeader(s.creatorSettings),
@@ -167,6 +188,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() => _optOutSponsored = value);
                   final storage = await LocalStorageService.getInstance();
                   await storage.saveBool('opt_out_sponsored', value);
+                  _syncPreference('opt_out_sponsored', value);
                 },
               ),
               _buildSwitchTile(
@@ -178,6 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() => _optOutCollaboration = value);
                   final storage = await LocalStorageService.getInstance();
                   await storage.saveBool('opt_out_collaboration', value);
+                  _syncPreference('opt_out_collaboration', value);
                 },
               ),
               _buildSwitchTile(
@@ -189,17 +212,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() => _optOutBattles = value);
                   final storage = await LocalStorageService.getInstance();
                   await storage.saveBool('opt_out_battles', value);
+                  _syncPreference('opt_out_battles', value);
                 },
               ),
               _buildSwitchTile(
                 icon: Icons.forum_rounded,
                 title: s.optOutThreads,
-                subtitle: '',
+                subtitle: s.trendingThreads,
                 value: _optOutThreads,
                 onChanged: (value) async {
                   setState(() => _optOutThreads = value);
                   final storage = await LocalStorageService.getInstance();
                   await storage.saveBool('opt_out_threads', value);
+                  _syncPreference('opt_out_threads', value);
                 },
               ),
 
@@ -572,20 +597,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showDeleteAccountDialog(AppStrings s) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text(s.deleteAccountConfirmTitle),
         content: Text(s.deleteAccountConfirmMessage),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: Text(s.no),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(s.deleteAccountRequestSent)),
-              );
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await UserService().deleteAccount(widget.currentUserId);
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(s.deleteAccountRequestSent)),
+                );
+                await _logout();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Imeshindwa kufuta akaunti')),
+                );
+              }
             },
             child: Text(s.delete, style: const TextStyle(color: Colors.red)),
           ),

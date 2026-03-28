@@ -27,6 +27,8 @@ class VideoPlayerWidget extends StatefulWidget {
   final bool enableDoubleTapSeek; // YouTube-style double-tap to seek
   final bool showBufferIndicator; // Show buffer health
   final VoidCallback? onVideoEnd; // Callback when video ends
+  final void Function(double aspectRatio)? onAspectRatioResolved; // Real dims
+  final VoidCallback? onTap; // Tap to open fullscreen viewer
 
   const VideoPlayerWidget({
     super.key,
@@ -40,6 +42,8 @@ class VideoPlayerWidget extends StatefulWidget {
     this.enableDoubleTapSeek = true,
     this.showBufferIndicator = true,
     this.onVideoEnd,
+    this.onAspectRatioResolved,
+    this.onTap,
   });
 
   @override
@@ -82,10 +86,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     _cacheService.preloadMedia(widget.videoUrl);
   }
 
+  bool _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     _videoController?.removeListener(_onVideoUpdate);
     _videoController?.dispose();
+    _videoController = null;
     _seekIndicatorTimer?.cancel();
     _doubleTapTimer?.cancel();
     _bufferCheckTimer?.cancel();
@@ -128,6 +136,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
       _logVideo('Video initialized: ${_videoController!.value.duration}');
 
+      // Report real aspect ratio if dimensions are available
+      if (widget.onAspectRatioResolved != null) {
+        final size = _videoController!.value.size;
+        if (size.width > 0 && size.height > 0) {
+          widget.onAspectRatioResolved!(size.width / size.height);
+        }
+      }
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
@@ -162,7 +178,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   }
 
   void _onVideoUpdate() {
-    if (!mounted) return;
+    if (!mounted || _disposed) return;
 
     final isPlaying = _videoController?.value.isPlaying ?? false;
     if (isPlaying != _isPlaying) {
@@ -197,6 +213,12 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   }
 
   void _handleTap() {
+    // Single tap opens fullscreen viewer if callback provided
+    if (widget.onTap != null) {
+      widget.onTap!();
+      return;
+    }
+
     if (!widget.enableDoubleTapSeek) {
       _toggleControls();
       return;
@@ -262,6 +284,8 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   }
 
   void _onVisibilityChanged(VisibilityInfo info) {
+    if (_disposed || !mounted) return;
+
     final visibleFraction = info.visibleFraction;
     final wasVisible = _isVisible;
     _isVisible = visibleFraction > 0.5; // Consider visible if >50% shown
@@ -282,14 +306,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   }
 
   Future<void> _play() async {
-    if (_videoController != null && _isInitialized) {
+    if (_videoController != null && _isInitialized && !_disposed) {
       await _videoController!.play();
       _logVideo('Playing');
     }
   }
 
   Future<void> _pause() async {
-    if (_videoController != null && _isInitialized) {
+    if (_videoController != null && _isInitialized && !_disposed) {
       await _videoController!.pause();
       _logVideo('Paused');
     }
@@ -379,16 +403,33 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
           if (_showSeekIndicator)
             _buildSeekIndicator(),
 
-          // Play/Pause overlay (shows on tap or when paused)
-          if (_isInitialized && (_showControls || !_isPlaying) && !_showSeekIndicator)
-            _buildPlayPauseOverlay(),
+          // Play/Pause visual indicator (non-interactive, shows when paused)
+          if (_isInitialized && !_isPlaying && !_showSeekIndicator)
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow, color: Colors.white, size: 36),
+              ),
+            ),
 
-          // Mute button (always visible)
+          // Play/Pause + Mute buttons (bottom-right)
           if (_isInitialized)
             Positioned(
               bottom: 12,
               right: 12,
-              child: _buildMuteButton(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildPlayPauseButton(),
+                  const SizedBox(width: 8),
+                  _buildMuteButton(),
+                ],
+              ),
             ),
 
           // Buffer health indicator
@@ -488,29 +529,19 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     );
   }
 
-  Widget _buildPlayPauseOverlay() {
+  Widget _buildPlayPauseButton() {
     return GestureDetector(
       onTap: _togglePlayPause,
       child: Container(
-        color: Colors.transparent,
-        child: Center(
-          child: AnimatedOpacity(
-            opacity: _showControls || !_isPlaying ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.white,
-                size: 36,
-              ),
-            ),
-          ),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.6),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _isPlaying ? Icons.pause : Icons.play_arrow,
+          color: Colors.white,
+          size: 20,
         ),
       ),
     );

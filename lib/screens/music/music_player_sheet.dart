@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/music_models.dart';
 import '../../services/music_service.dart';
@@ -441,11 +442,7 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
 
   void _navigateToSubscribe() {
     final track = _currentTrack ?? widget.track;
-    Navigator.pushNamed(
-      context,
-      '/profile',
-      arguments: {'userId': track.artistId},
-    );
+    Navigator.pushNamed(context, '/profile/${track.artistId}');
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -886,14 +883,9 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
   }
 
   void _shareTrack() {
-    // TODO: Implement share functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Kushiriki nyimbo kunakuja hivi karibuni'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFF282828),
-      ),
-    );
+    final track = _currentTrack ?? widget.track;
+    final shareText = '${track.title} — ${track.artist?.name ?? ''}';
+    SharePlus.instance.share(ShareParams(text: shareText));
   }
 
   @override

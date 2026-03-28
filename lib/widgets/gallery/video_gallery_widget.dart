@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../config/api_config.dart';
 import '../../models/clip_models.dart' as models;
+import '../../screens/feed/comment_bottom_sheet.dart';
 import '../../services/clip_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/video_cache_service.dart';
@@ -109,8 +112,17 @@ class _VideoGalleryWidgetState extends State<VideoGalleryWidget> {
       setState(() {
         _isLoadingMore = false;
         if (result.success) {
-          _clips.addAll(result.clips);
-          _hasMore = result.clips.length >= 20;
+          // getUserClips returns all clips (no server-side pagination).
+          // Deduplicate by id to prevent appending the same data.
+          final existingIds = _clips.map((c) => c.id).toSet();
+          final newClips = result.clips.where((c) => !existingIds.contains(c.id)).toList();
+          if (newClips.isEmpty) {
+            // No new data — stop paginating.
+            _hasMore = false;
+          } else {
+            _clips.addAll(newClips);
+            _hasMore = newClips.length >= 20;
+          }
         }
       });
     }
@@ -602,7 +614,7 @@ class _VideoGalleryWidgetState extends State<VideoGalleryWidget> {
               label: 'Angalia',
               textColor: Colors.white,
               onPressed: () {
-                // Navigate to own profile videos tab
+                Navigator.pushNamed(context, '/profile/${_currentUserId ?? widget.userId}');
               },
             ),
           ),
@@ -823,6 +835,156 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
     super.dispose();
   }
 
+  /// Create a copy of a Clip with overridden like/save fields.
+  models.Clip _copyClipWith(
+    models.Clip clip, {
+    bool? isLiked,
+    bool? isSaved,
+    int? likesCount,
+    int? savesCount,
+    int? commentsCount,
+  }) {
+    return models.Clip(
+      id: clip.id,
+      userId: clip.userId,
+      videoPath: clip.videoPath,
+      thumbnailPath: clip.thumbnailPath,
+      caption: clip.caption,
+      duration: clip.duration,
+      musicId: clip.musicId,
+      musicStart: clip.musicStart,
+      hashtags: clip.hashtags,
+      mentions: clip.mentions,
+      locationName: clip.locationName,
+      latitude: clip.latitude,
+      longitude: clip.longitude,
+      privacy: clip.privacy,
+      allowComments: clip.allowComments,
+      allowDuet: clip.allowDuet,
+      allowStitch: clip.allowStitch,
+      allowDownload: clip.allowDownload,
+      viewsCount: clip.viewsCount,
+      likesCount: likesCount ?? clip.likesCount,
+      commentsCount: commentsCount ?? clip.commentsCount,
+      sharesCount: clip.sharesCount,
+      savesCount: savesCount ?? clip.savesCount,
+      duetsCount: clip.duetsCount,
+      isFeatured: clip.isFeatured,
+      status: clip.status,
+      originalClipId: clip.originalClipId,
+      clipType: clip.clipType,
+      createdAt: clip.createdAt,
+      user: clip.user,
+      music: clip.music,
+      originalClip: clip.originalClip,
+      isLiked: isLiked ?? clip.isLiked,
+      isSaved: isSaved ?? clip.isSaved,
+      isSubscribedToAuthor: clip.isSubscribedToAuthor,
+    );
+  }
+
+  Future<void> _toggleLike(models.Clip clip, int index) async {
+    if (widget.currentUserId == null) return;
+
+    final wasLiked = clip.isLiked == true;
+    final oldLikesCount = clip.likesCount;
+
+    // Optimistic update
+    setState(() {
+      widget.clips[index] = _copyClipWith(
+        clip,
+        isLiked: !wasLiked,
+        likesCount: wasLiked ? (oldLikesCount - 1).clamp(0, 999999999) : oldLikesCount + 1,
+      );
+    });
+
+    final success = wasLiked
+        ? await _clipService.unlikeClip(clip.id, widget.currentUserId!)
+        : await _clipService.likeClip(clip.id, widget.currentUserId!);
+
+    // Rollback on failure
+    if (!success && mounted) {
+      setState(() {
+        widget.clips[index] = _copyClipWith(
+          clip,
+          isLiked: wasLiked,
+          likesCount: oldLikesCount,
+        );
+      });
+    }
+  }
+
+  void _showComments(models.Clip clip, int index) {
+    if (widget.currentUserId == null) return;
+
+    CommentBottomSheet.show(
+      context,
+      postId: clip.id,
+      currentUserId: widget.currentUserId!,
+      onCommentsCountUpdated: (newCount) {
+        if (mounted) {
+          setState(() {
+            widget.clips[index] = _copyClipWith(clip, commentsCount: newCount);
+          });
+        }
+      },
+    );
+  }
+
+  Future<void> _toggleSave(models.Clip clip, int index) async {
+    if (widget.currentUserId == null) return;
+
+    final wasSaved = clip.isSaved == true;
+
+    // Optimistic update
+    setState(() {
+      widget.clips[index] = _copyClipWith(
+        clip,
+        isSaved: !wasSaved,
+      );
+    });
+
+    final success = wasSaved
+        ? await _clipService.unsaveClip(clip.id, widget.currentUserId!)
+        : await _clipService.saveClip(clip.id, widget.currentUserId!);
+
+    // Rollback on failure
+    if (!success && mounted) {
+      setState(() {
+        widget.clips[index] = _copyClipWith(
+          clip,
+          isSaved: wasSaved,
+        );
+      });
+    }
+  }
+
+  Future<void> _shareClip(models.Clip clip) async {
+    final clipUrl = '${ApiConfig.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/clip/${clip.id}';
+    final userName = clip.user?.displayName ?? 'TAJIRI';
+    final caption = clip.caption ?? '';
+
+    final shareText = StringBuffer();
+    if (caption.isNotEmpty) {
+      shareText.writeln(caption);
+      shareText.writeln();
+    }
+    shareText.writeln('— $userName on TAJIRI');
+    shareText.write(clipUrl);
+
+    await SharePlus.instance.share(
+      ShareParams(
+        text: shareText.toString(),
+        uri: Uri.parse(clipUrl),
+      ),
+    );
+
+    // Track share on backend
+    if (widget.currentUserId != null) {
+      _clipService.shareClip(clip.id, widget.currentUserId!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -839,7 +1001,7 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
             },
             itemBuilder: (context, index) {
               final clip = widget.clips[index];
-              return _buildVideoPage(clip, index == _currentIndex);
+              return _buildVideoPage(clip, index, index == _currentIndex);
             },
           ),
           // Close button
@@ -872,7 +1034,7 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
     );
   }
 
-  Widget _buildVideoPage(models.Clip clip, bool isActive) {
+  Widget _buildVideoPage(models.Clip clip, int index, bool isActive) {
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -959,33 +1121,25 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
                 icon: clip.isLiked == true ? Icons.favorite : Icons.favorite_border,
                 label: '${clip.likesCount}',
                 color: clip.isLiked == true ? Colors.red : Colors.white,
-                onTap: () {
-                  // TODO: Implement like
-                },
+                onTap: () => _toggleLike(clip, index),
               ),
               const SizedBox(height: 16),
               _ActionButton(
                 icon: Icons.comment,
                 label: '${clip.commentsCount}',
-                onTap: () {
-                  // TODO: Show comments
-                },
+                onTap: () => _showComments(clip, index),
               ),
               const SizedBox(height: 16),
               _ActionButton(
                 icon: clip.isSaved == true ? Icons.bookmark : Icons.bookmark_border,
                 label: 'Hifadhi',
-                onTap: () {
-                  // TODO: Implement save
-                },
+                onTap: () => _toggleSave(clip, index),
               ),
               const SizedBox(height: 16),
               _ActionButton(
                 icon: Icons.share,
                 label: 'Shiriki',
-                onTap: () {
-                  // TODO: Implement share
-                },
+                onTap: () => _shareClip(clip),
               ),
               // Add to my videos button (for non-owners)
               if (!widget.isOwnProfile && widget.currentUserId != null) ...[

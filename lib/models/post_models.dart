@@ -118,10 +118,24 @@ class Post {
   /// Whether commenting is allowed on this post (post author can disable).
   final bool allowComments;
 
+  // Reply (Duet) / Stitch fields
+  final int? replyToPostId;       // Post this is a video reply (duet) of
+  final int? stitchFromPostId;    // Post this is a stitch of
+  final String? replyLayout;      // 'side_by_side', 'top_bottom', 'pip'
+  final int? stitchTrimStartMs;   // Trim start in ms for stitch source clip
+  final int? stitchTrimEndMs;     // Trim end in ms for stitch source clip
+  final Post? replyToPost;        // Nested original post for display
+  final Post? stitchFromPost;     // Nested original post for display
+
   // Sponsored post fields
   final bool isSponsored;
   final int? sponsorId;
   final String? sponsorName;
+
+  // Top comment preview (for thread posts)
+  final String? topCommentText;
+  final String? topCommentAuthor;
+  final int topCommentReplies;
 
   Post({
     required this.id,
@@ -175,9 +189,19 @@ class Post {
     this.allowComments = true,
     this.threadId,
     this.threadTitle,
+    this.replyToPostId,
+    this.stitchFromPostId,
+    this.replyLayout,
+    this.stitchTrimStartMs,
+    this.stitchTrimEndMs,
+    this.replyToPost,
+    this.stitchFromPost,
     this.isSponsored = false,
     this.sponsorId,
     this.sponsorName,
+    this.topCommentText,
+    this.topCommentAuthor,
+    this.topCommentReplies = 0,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -251,9 +275,19 @@ class Post {
       videoFilter: json['video_filter'],
       pollId: json['poll_id'] != null ? _parseInt(json['poll_id']) : null,
       allowComments: _parseBool(json['allow_comments'], true),
+      replyToPostId: json['reply_to_post_id'] != null ? _parseInt(json['reply_to_post_id']) : null,
+      stitchFromPostId: json['stitch_from_post_id'] != null ? _parseInt(json['stitch_from_post_id']) : null,
+      replyLayout: json['reply_layout'] as String?,
+      stitchTrimStartMs: json['stitch_trim_start_ms'] != null ? _parseInt(json['stitch_trim_start_ms']) : null,
+      stitchTrimEndMs: json['stitch_trim_end_ms'] != null ? _parseInt(json['stitch_trim_end_ms']) : null,
+      replyToPost: json['reply_to_post'] != null ? Post.fromJson(json['reply_to_post']) : null,
+      stitchFromPost: json['stitch_from_post'] != null ? Post.fromJson(json['stitch_from_post']) : null,
       isSponsored: _parseBool(json['is_sponsored']),
       sponsorId: json['sponsor_id'] != null ? _parseInt(json['sponsor_id']) : null,
       sponsorName: json['sponsor_name'] as String?,
+      topCommentText: json['top_comment_text'] as String?,
+      topCommentAuthor: json['top_comment_author'] as String?,
+      topCommentReplies: json['top_comment_replies'] != null ? _parseInt(json['top_comment_replies']) : 0,
     );
   }
 
@@ -274,6 +308,11 @@ class Post {
       'is_pinned': isPinned,
       'is_short_video': isShortVideo,
       'original_post_id': originalPostId,
+      'reply_to_post_id': replyToPostId,
+      'stitch_from_post_id': stitchFromPostId,
+      'reply_layout': replyLayout,
+      'stitch_trim_start_ms': stitchTrimStartMs,
+      'stitch_trim_end_ms': stitchTrimEndMs,
       'region_id': regionId,
       // New fields
       'background_color': backgroundColor,
@@ -415,9 +454,19 @@ class Post {
     String? videoFilter,
     int? pollId,
     bool? allowComments,
+    int? replyToPostId,
+    int? stitchFromPostId,
+    String? replyLayout,
+    int? stitchTrimStartMs,
+    int? stitchTrimEndMs,
+    Post? replyToPost,
+    Post? stitchFromPost,
     bool? isSponsored,
     int? sponsorId,
     String? sponsorName,
+    String? topCommentText,
+    String? topCommentAuthor,
+    int? topCommentReplies,
   }) {
     return Post(
       id: id ?? this.id,
@@ -468,9 +517,19 @@ class Post {
       videoFilter: videoFilter ?? this.videoFilter,
       pollId: pollId ?? this.pollId,
       allowComments: allowComments ?? this.allowComments,
+      replyToPostId: replyToPostId ?? this.replyToPostId,
+      stitchFromPostId: stitchFromPostId ?? this.stitchFromPostId,
+      replyLayout: replyLayout ?? this.replyLayout,
+      stitchTrimStartMs: stitchTrimStartMs ?? this.stitchTrimStartMs,
+      stitchTrimEndMs: stitchTrimEndMs ?? this.stitchTrimEndMs,
+      replyToPost: replyToPost ?? this.replyToPost,
+      stitchFromPost: stitchFromPost ?? this.stitchFromPost,
       isSponsored: isSponsored ?? this.isSponsored,
       sponsorId: sponsorId ?? this.sponsorId,
       sponsorName: sponsorName ?? this.sponsorName,
+      topCommentText: topCommentText ?? this.topCommentText,
+      topCommentAuthor: topCommentAuthor ?? this.topCommentAuthor,
+      topCommentReplies: topCommentReplies ?? this.topCommentReplies,
     );
   }
 }
@@ -789,6 +848,9 @@ class PostUser {
   final String lastName;
   final String? username;
   final String? profilePhotoPath;
+  final bool isFollowing;
+  final int? mutualFollowersCount;
+  final List<String>? mutualFollowerNames;
 
   PostUser({
     required this.id,
@@ -796,6 +858,9 @@ class PostUser {
     required this.lastName,
     this.username,
     this.profilePhotoPath,
+    this.isFollowing = false,
+    this.mutualFollowersCount,
+    this.mutualFollowerNames,
   });
 
   factory PostUser.fromJson(Map<String, dynamic> json) {
@@ -805,12 +870,39 @@ class PostUser {
       lastName: (json['last_name'] ?? '').toString(),
       username: json['username'] != null ? json['username'].toString() : null,
       profilePhotoPath: json['profile_photo_path'] != null ? json['profile_photo_path'].toString() : null,
+      isFollowing: _parseBool(json['is_following']),
+      mutualFollowersCount: json['mutual_followers_count'] != null ? _parseInt(json['mutual_followers_count']) : null,
+      mutualFollowerNames: json['mutual_follower_names'] != null
+          ? (json['mutual_follower_names'] as List).map((e) => e.toString()).toList()
+          : null,
     );
   }
 
   String get fullName => '$firstName $lastName'.trim();
 
   String? get profilePhotoUrl => profilePhotoPath != null ? _buildStorageUrl(profilePhotoPath!) : null;
+
+  PostUser copyWith({
+    int? id,
+    String? firstName,
+    String? lastName,
+    String? username,
+    String? profilePhotoPath,
+    bool? isFollowing,
+    int? mutualFollowersCount,
+    List<String>? mutualFollowerNames,
+  }) {
+    return PostUser(
+      id: id ?? this.id,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      username: username ?? this.username,
+      profilePhotoPath: profilePhotoPath ?? this.profilePhotoPath,
+      isFollowing: isFollowing ?? this.isFollowing,
+      mutualFollowersCount: mutualFollowersCount ?? this.mutualFollowersCount,
+      mutualFollowerNames: mutualFollowerNames ?? this.mutualFollowerNames,
+    );
+  }
 }
 
 class Comment {

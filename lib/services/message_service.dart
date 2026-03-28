@@ -610,6 +610,25 @@ class MessageService {
     }
   }
 
+  /// Report a conversation. POST /api/conversations/{id}/report
+  Future<bool> reportConversation(int conversationId, int userId, String reason) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/conversations/$conversationId/report'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'reason': reason,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Remove reaction from a message.
   Future<MessageResult> removeReaction({
     required int conversationId,

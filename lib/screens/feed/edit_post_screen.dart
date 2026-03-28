@@ -67,9 +67,10 @@ class _EditPostScreenState extends State<EditPostScreen> {
       setState(() => _isSaving = false);
 
       if (result.success) {
-        Navigator.pop(context, result.post);
         final s = AppStringsScope.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.pop(context, result.post);
+        messenger.showSnackBar(
           SnackBar(content: Text(s?.postUpdated ?? 'Post updated')),
         );
       } else {
