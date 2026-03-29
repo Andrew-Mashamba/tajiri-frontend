@@ -47,7 +47,7 @@ General-purpose key-value config table for all platform-level settings.
 | `fund_allocation_pct` | `30.0` | % of platform revenue allocated to Creator Fund |
 | `operations_allocation_pct` | `40.0` | % of platform revenue allocated to operations |
 | `margin_allocation_pct` | `30.0` | % of platform revenue retained as margin |
-| `last_fund_distribution_at` | `null` | Timestamp of last Creator Fund distribution (guard against double-distribution) |
+| `last_fund_distribution_at` | `null` | ISO 8601 timestamp of last Creator Fund distribution (parsed via `Carbon::parse()`, compared against current month start to guard against double-distribution) |
 
 #### `platform_revenue_ledger` table (new)
 
@@ -304,7 +304,7 @@ Selection algorithm:
 | POST | `/api/biashara/campaigns/{id}/cancel` | Bearer token | Cancel and refund remaining budget |
 | GET | `/api/biashara/campaigns/{id}/performance` | Bearer token | Get impressions, clicks, spend |
 | GET | `/api/biashara/balance` | Bearer token | Get current ad_balance |
-| POST | `/api/biashara/deposit` | Bearer token | Deposit funds to ad escrow |
+| POST | `/api/biashara/deposit` | Bearer token | Deposit funds to ad escrow. Request: `{amount: float, payment_method: "wallet"|"mobile_money"}`. Response: `{success: true, gross: float, fee: float, fee_pct: float, net_credited: float, new_balance: float}`. The response includes the fee breakdown so the frontend can show confirmation before final submission (use a two-step flow: preview then confirm). |
 | GET | `/api/biashara/settings` | Bearer token | Get client-facing ad settings (frequencies, etc.) |
 
 **Validation rules for campaign creation:**
@@ -440,6 +440,7 @@ Static methods following existing service patterns.
 | `resumeCampaign(String token, int id)` | Resume paused campaign |
 | `cancelCampaign(String token, int id)` | Cancel and refund remaining budget |
 | `getCampaignPerformance(String token, int id)` | Get impressions, clicks, spend stats |
+| `getAdBalance(String token)` | Get current ad_balance |
 | `depositAdBalance(String token, double amount, String paymentMethod)` | Add funds to ad escrow |
 | `getServedAds(String token, String placement, int count)` | Fetch ads for a placement |
 | `recordAdEvent(String token, Map eventData)` | Report impression/click/skip |
@@ -706,7 +707,7 @@ Server-rendered Laravel Blade web panel for monitoring platform revenue, managin
 
 **Charts:**
 - **Line chart:** Daily revenue over last 30 days, stacked by source (transaction fees, self-serve ads, AdMob)
-- **Donut chart:** Revenue breakdown by transaction_type (subscription, tip, marketplace, michango, sponsored, ad_cpm, ad_cpc)
+- **Donut chart:** Revenue breakdown by transaction_type (subscription, tip, marketplace, michango, sponsored, ad_cpm, ad_cpc, ad_admob)
 - **Bar chart:** Monthly revenue trend, last 12 months
 
 **Data source:** Materialized view `mv_daily_revenue` refreshed hourly via Laravel scheduler:
