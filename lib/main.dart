@@ -33,6 +33,7 @@ import 'screens/groups/events_screen.dart';
 import 'screens/search/search_screen.dart'; // Retained: used by other screens
 import 'screens/search/universal_search_screen.dart';
 import 'screens/login/login_screen.dart';
+import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/shop/create_product_screen.dart';
 import 'screens/shop/product_detail_screen.dart';
 import 'screens/shop/seller_orders_screen.dart';
@@ -847,6 +848,11 @@ class _TajiriAppState extends State<TajiriApp> {
           case 'login':
             return MaterialPageRoute(
               builder: (_) => const LoginScreen(),
+            );
+
+          case 'onboarding':
+            return MaterialPageRoute(
+              builder: (_) => const OnboardingScreen(),
             );
         }
 

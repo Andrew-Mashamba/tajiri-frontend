@@ -1,24 +1,82 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings_scope.dart';
-import '../registration/registration_screen.dart';
+import '../../services/user_service.dart';
+import '../../services/local_storage_service.dart';
+import '../onboarding/onboarding_screen.dart';
+import '../home/home_screen.dart';
 
-/// Login screen: Splash → Login → RegistrationScreen.
-/// DOCS/NAVIGATION.md: No user path. DESIGN.md: SafeArea, 48dp touch targets, monochrome.
-class LoginScreen extends StatelessWidget {
+/// Login screen: phone-based sign in or navigate to registration.
+/// DESIGN.md: SafeArea, 48dp touch targets, monochrome #1A1A1A / #FAFAFA.
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   static const Color _background = Color(0xFFFAFAFA);
   static const Color _primary = Color(0xFF1A1A1A);
   static const Color _secondaryText = Color(0xFF666666);
-  static const double _minTouchTargetDp = 48.0;
-  static const double _buttonMinHeight = 72.0;
+
+  final _phoneController = TextEditingController();
+  final _userService = UserService();
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = 'Tafadhali ingiza nambari ya simu');
+      return;
+    }
+
+    // Normalize: prepend +255 if user typed 0XXXXXXXXX
+    String normalized = phone;
+    if (phone.startsWith('0') && phone.length == 10) {
+      normalized = '+255${phone.substring(1)}';
+    } else if (!phone.startsWith('+')) {
+      normalized = '+$phone';
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await _userService.loginByPhone(normalized);
+
+    if (!mounted) return;
+
+    if (result.success && result.accessToken != null && result.user != null) {
+      // Save auth state
+      final storage = await LocalStorageService.getInstance();
+      await storage.saveAuthToken(result.accessToken!);
+      await storage.saveUser(result.user!);
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(currentUserId: result.user!.userId!),
+        ),
+      );
+    } else {
+      setState(() {
+        _isLoading = false;
+        _error = result.message ?? 'Imeshindwa kuingia';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
-    if (s == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
     return Scaffold(
       backgroundColor: _background,
       body: SafeArea(
@@ -27,7 +85,7 @@ class LoginScreen extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(
-                height: MediaQuery.of(context).size.height * 0.4,
+                height: MediaQuery.of(context).size.height * 0.3,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -58,7 +116,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      s.welcome,
+                      s?.welcome ?? 'Karibu',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -69,11 +127,8 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      s.welcomeSubtitle,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: _secondaryText,
-                      ),
+                      s?.welcomeSubtitle ?? 'Jifunze. Kukua. Tajiri.',
+                      style: const TextStyle(fontSize: 14, color: _secondaryText),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
@@ -84,33 +139,115 @@ class LoginScreen extends StatelessWidget {
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 24),
-                      _buildButton(
-                        context: context,
-                        label: s.createAccount,
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const RegistrationScreen(),
-                            ),
-                          );
-                        },
+                      // Phone input
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        style: const TextStyle(fontSize: 16, color: _primary),
+                        decoration: InputDecoration(
+                          hintText: '0712 345 678',
+                          hintStyle: const TextStyle(color: _secondaryText),
+                          labelText: s?.phoneNumber ?? 'Nambari ya Simu',
+                          labelStyle: const TextStyle(color: _secondaryText),
+                          prefixIcon: const Icon(Icons.phone_outlined, color: _primary),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                        onSubmitted: (_) => _login(),
                       ),
-                      const SizedBox(height: 12),
-                      _buildButton(
-                        context: context,
-                        label: s.signIn,
-                        onPressed: () {
-                          // For now, same as create account (phone-based login TBD).
-                          // When adding login API: on success call LocalStorageService().saveAuthToken(accessToken)
-                          // so FCM and call flows use the new API.
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const RegistrationScreen(),
+
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red, fontSize: 13),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+
+                      // Sign In button
+                      SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        },
+                            elevation: 0,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  s?.signIn ?? 'Ingia',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Divider
+                      Row(
+                        children: [
+                          const Expanded(child: Divider(color: Color(0xFFE0E0E0))),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'au',
+                              style: const TextStyle(color: _secondaryText, fontSize: 13),
+                            ),
+                          ),
+                          const Expanded(child: Divider(color: Color(0xFFE0E0E0))),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Create Account button
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const OnboardingScreen(),
+                                    ),
+                                  );
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _primary,
+                            side: const BorderSide(color: _primary, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            s?.createAccount ?? 'Fungua Akaunti',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -118,47 +255,6 @@ class LoginScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildButton({
-    required BuildContext context,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(
-        minHeight: _buttonMinHeight,
-        maxHeight: 80,
-      ),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            constraints: const BoxConstraints(
-              minHeight: _minTouchTargetDp,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: _primary,
-              ),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
           ),
         ),
       ),
