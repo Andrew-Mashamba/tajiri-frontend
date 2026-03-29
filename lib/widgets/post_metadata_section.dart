@@ -92,7 +92,7 @@ class PostMetadataSection extends StatelessWidget {
         const SizedBox(height: 12),
         // Category dropdown
         DropdownButtonFormField<String>(
-          value: selectedCategory,
+          initialValue: selectedCategory,
           decoration: InputDecoration(
             labelText:
                 isSw ? 'Aina ya maudhui' : 'Content category',
