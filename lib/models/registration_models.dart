@@ -32,6 +32,9 @@ class RegistrationState {
   /// Step 5 (Education Path): Whether user attended A-Level. Drives conditional Step 6.
   bool? didAttendAlevel;
 
+  /// Education path selected during onboarding branching
+  EducationPath? educationPath;
+
   // Step 6: A-Level (conditional on didAttendAlevel)
   AlevelEducation? alevelEducation;
 
@@ -58,6 +61,7 @@ class RegistrationState {
     this.primarySchool,
     this.secondarySchool,
     this.didAttendAlevel,
+    this.educationPath,
     this.alevelEducation,
     this.postsecondaryEducation,
     this.universityEducation,
@@ -114,6 +118,7 @@ class RegistrationState {
       'primary_school': primarySchool?.toJson(),
       'secondary_school': secondarySchool?.toJson(),
       'did_attend_alevel': didAttendAlevel,
+      'education_path': educationPath?.name,
       'alevel_education': alevelEducation?.toJson(),
       'postsecondary_education': postsecondaryEducation?.toJson(),
       'university_education': universityEducation?.toJson(),
@@ -148,6 +153,12 @@ class RegistrationState {
           ? EducationEntry.fromJson(json['secondary_school'])
           : null,
       didAttendAlevel: json['did_attend_alevel'] as bool?,
+      educationPath: json['education_path'] != null
+          ? EducationPath.values.firstWhere(
+              (e) => e.name == json['education_path'],
+              orElse: () => EducationPath.primary,
+            )
+          : null,
       alevelEducation: json['alevel_education'] != null
           ? AlevelEducation.fromJson(json['alevel_education'])
           : null,
@@ -168,6 +179,15 @@ class RegistrationState {
 }
 
 enum Gender { male, female }
+
+/// Education level for onboarding branching logic
+enum EducationPath {
+  primary,       // Shule ya Msingi
+  secondary,     // Sekondari (O-Level)
+  alevel,        // Kidato cha 5-6
+  postSecondary, // Chuo
+  university,    // Chuo Kikuu
+}
 
 extension GenderExtension on Gender {
   String get label {
