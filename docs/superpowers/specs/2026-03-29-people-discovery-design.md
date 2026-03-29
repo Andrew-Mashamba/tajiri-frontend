@@ -85,7 +85,7 @@ Accept matches where `similarity >= 0.6` (dlib's recommended threshold). Each de
 ### Embedding Lifecycle
 
 - **Registration:** Always create with `is_primary = true`, `source = 'registration'`
-- **Duplicate detection:** Before storing a new embedding, query existing embeddings for similarity >= 0.8 belonging to a *different* `user_id`. If found, log a warning (`face_embedding_duplicate: user {new} matches user {existing}`) and still store the embedding, but flag the account for review via a `flagged_accounts` log entry. This prevents identity confusion in the matching pipeline.
+- **Duplicate detection:** Before storing a new embedding, query existing embeddings for similarity >= 0.8 belonging to a *different* `user_id`. If found, log a warning via `Log::warning('face_embedding_duplicate', ['new_user' => $userId, 'existing_user' => $matchedUserId, 'similarity' => $sim])` and still store the embedding. This log entry can be monitored for fraud review. This prevents identity confusion in the matching pipeline.
 - **Profile photo change with 1 face detected:** Set old primary to `is_primary = false`, insert new with `is_primary = true`, `source = 'profile_update'`
 - **Profile photo change without clear face:** Keep existing primary embedding, upload photo normally
 
@@ -197,7 +197,7 @@ face_recognition==1.3.0
 flask==3.1.0
 psycopg2-binary==2.9.10
 pgvector==0.3.6
-numpy==2.2.4
+numpy>=1.26,<2.0
 gunicorn==23.0.0
 ```
 
@@ -214,6 +214,8 @@ redirect_stderr=true
 stdout_logfile=/var/log/tajiri/face-service.log
 environment=FLASK_ENV=production,DB_HOST=127.0.0.1,DB_PORT=5432,DB_NAME=tajiri,DB_USER=tajiri,DB_PASSWORD=%(ENV_TAJIRI_DB_PASSWORD)s
 ```
+
+Note: `%(ENV_TAJIRI_DB_PASSWORD)s` requires `TAJIRI_DB_PASSWORD` to be exported in the supervisord process environment (e.g., in `/etc/default/supervisor` or the systemd unit's `Environment=`).
 
 Note: 2 gunicorn workers. Each loads its own copy of the dlib model (~200MB each, ~400MB total). This allows concurrent request handling during backfill without starving real-time enrichment. For single-server deployment with limited RAM, reduce to 1 worker.
 
@@ -351,7 +353,7 @@ The current registration flow (`lib/screens/registration/registration_screen.dar
 
 **New file:** `lib/screens/registration/steps/profile_photo_step.dart`
 
-**Position:** Insert as step 1 (after Bio, before Phone). Bio collects name/username/email/password, then the user immediately captures their face photo. This ensures every account has a face embedding from the start.
+**Position:** Insert after Bio step (index 0), shifting all subsequent steps by +1. The full current flow is: Bio(0) → Phone(1) → Location(2) → Primary School(3) → Secondary School(4) → Education Path(5) → A-Level(6, conditional) → Post-Secondary(7) → University(8) → Employer(9). The new photo step becomes index 1, and Phone shifts to index 2, etc. Bio collects name/username/email/password, then the user immediately captures their face photo. This ensures every account has a face embedding from the start.
 
 **Step UI:**
 - Camera preview (front camera, using `image_picker` which is already in pubspec)
@@ -361,7 +363,7 @@ The current registration flow (`lib/screens/registration/registration_screen.dar
 - If valid: show photo with green checkmark overlay, "Endelea" (Continue) button enabled
 - Also allow gallery pick (with same validation)
 
-**Registration state change:** Add `profilePhoto` (File?) and `faceBbox` (Map<String, int>?) to `RegistrationState` model in `lib/models/registration_models.dart`.
+**Registration state change:** Add `profilePhotoPath` (String? — file path, not File object) and `faceBbox` (Map<String, int>?) to `RegistrationState` model in `lib/models/registration_models.dart`. Store the file path (not the File object) so it survives Hive draft persistence. Reconstruct `File(path)` when needed for upload.
 
 **Registration submit change:** In the `register()` call in `UserService`, send the profile photo as a multipart upload alongside the registration JSON. The backend `RegisterController` must accept and save the photo, then call `FaceEmbeddingService::extractAndStore()`.
 
@@ -387,7 +389,7 @@ In profile screen photo change flow:
 | `lib/utils/face_validator.dart` | New — ML Kit face validation wrapper (uses existing `google_ml_kit`) |
 | `lib/screens/registration/steps/profile_photo_step.dart` | New — Profile photo capture step with face validation |
 | `lib/screens/registration/registration_screen.dart` | Add profile photo step after Bio step |
-| `lib/models/registration_models.dart` | Add `profilePhoto` (File?) and `faceBbox` (Map?) fields |
+| `lib/models/registration_models.dart` | Add `profilePhotoPath` (String?) and `faceBbox` (Map?) fields |
 | `lib/services/user_service.dart` | Modify `register()` to send profile photo as multipart upload |
 | `lib/services/profile_service.dart` | Add `Map<String, int>? faceBbox` param to instance method `updateProfilePhoto()` |
 | `lib/l10n/app_strings.dart` | Add `faceNotDetected`, `multipleFacesDetected`, `takeYourPhoto` bilingual getters |
@@ -417,7 +419,7 @@ In profile screen photo change flow:
 |------|---------|
 | `/opt/tajiri-face/app.py` | Flask face service (extract, detect-and-match, health) |
 | `/opt/tajiri-face/requirements.txt` | Python dependencies |
-| `database/migrations/..._create_face_embeddings_table.php` | face_embeddings table + pgvector index |
+| `database/migrations/..._create_face_embeddings_table.php` | face_embeddings table + pgvector index (pgvector extension already enabled for the media pipeline — no `CREATE EXTENSION` needed) |
 | `app/Models/FaceEmbedding.php` | Eloquent model |
 | `app/Services/ContentEngine/FaceEmbeddingService.php` | Extract + store embeddings, match query |
 | `app/Services/ContentEngine/FaceDiscoveryService.php` | Orchestrate face matching during enrichment |
