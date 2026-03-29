@@ -143,7 +143,7 @@ Hybrid advertising platform: self-serve for Tanzanian SMEs (100% revenue retaine
 | start_date | date | NOT NULL | Campaign start |
 | end_date | date | nullable | Campaign end (null = runs until budget exhausted) |
 | targeting | jsonb | NOT NULL, DEFAULT '{}' | `{"regions": [...], "age_min": int, "age_max": int, "interests": [...], "gender": "all"|"male"|"female"}` |
-| placements | jsonb | NOT NULL | `["feed","stories","music","search","marketplace"]` |
+| placements | jsonb | NOT NULL | `["feed","stories","music","search","marketplace","clips","video_preroll","conversations","comments","live_stream","hashtag"]` |
 | rejection_reason | text | nullable | Admin reason for rejection |
 | created_at | timestamp | DEFAULT NOW() | |
 | updated_at | timestamp | DEFAULT NOW() | |
@@ -183,7 +183,7 @@ High-volume event log. Partitioned by month on `created_at` using PostgreSQL ran
 | campaign_id | bigint | NOT NULL | Self-serve campaign ID (0 for AdMob) |
 | creative_id | bigint | NOT NULL | Self-serve creative ID (0 for AdMob) |
 | user_id | bigint | NOT NULL | Viewer |
-| placement | varchar(15) | NOT NULL, CHECK IN ('feed','stories','music','search','marketplace') | Where shown |
+| placement | varchar(20) | NOT NULL, CHECK IN ('feed','stories','music','search','marketplace','clips','video_preroll','conversations','comments','live_stream','hashtag') | Where shown |
 | event_type | varchar(15) | NOT NULL, CHECK IN ('impression','click','skip','mute') | Event type |
 | revenue | decimal(8,4) | NOT NULL, DEFAULT 0 | Platform revenue for this event |
 | source | varchar(15) | NOT NULL, CHECK IN ('self_serve','admob') | Which system served it |
@@ -459,7 +459,7 @@ Static methods following existing service patterns.
 - Step 1: Campaign type selector (CPM "Macho" / CPC "Kubofya")
 - Step 2: Creative upload (image picker, video picker) + headline + body + CTA dropdown
 - Step 3: Targeting (region multi-select from TZ regions, age range slider, interests chips, gender)
-- Step 4: Placements (checkboxes with Swahili labels: Habari, Hadithi, Muziki, Tafuta, Duka)
+- Step 4: Placements (checkboxes with Swahili labels: Habari, Hadithi, Muziki, Tafuta, Duka, Klipu, Kabla ya Video, Ujumbe, Maoni, Matangazo ya Moja kwa Moja, Hashtag)
 - Step 5: Budget (daily budget input, total budget input, bid amount input, date pickers)
 - Step 6: Review summary + "Wasilisha" (Submit) button
 - Payment: deducted from ad_balance. If insufficient, prompt to deposit first.
@@ -601,6 +601,93 @@ Renders like a `PostCard` but with:
 - "Imedhaminiwa" badge on product card
 - On tap: navigate to product detail (same as organic), record click event
 
+#### 2.4.6 Video Pre-Roll Ads (`placement: 'video_preroll'`)
+
+**File:** `lib/widgets/video_player_widget.dart`
+
+**Changes:**
+- Before video initialization completes (lines 119-134), check if a pre-roll ad is available
+- Call `AdService.getServedAds(token, 'video_preroll', 1)` on widget init
+- If ad available: show 3-5 second sponsor overlay before video plays (image + countdown)
+- If admob: show AdMob interstitial before video
+- After ad completes/skipped: proceed with video playback
+- Frequency: max 1 pre-roll per 3 videos watched per session (tracked client-side)
+
+**New widget: `lib/widgets/video_preroll_overlay.dart`**
+
+- Overlay covering video player area
+- Creative image/short video (max 5s)
+- "Tangazo" label top-left
+- Countdown timer (3s) then "Ruka" (Skip) button
+- "Video inaanza..." (Video starting...) text below countdown
+- Record impression on display, skip on skip
+
+#### 2.4.7 Clips/Reels Ads (`placement: 'clips'`)
+
+**File:** `lib/screens/clips/clips_screen.dart`
+
+**Changes:**
+- In PageView.builder (line 21-74), intercept `_onPageChanged`
+- Every N clips (N from `ad_clips_frequency`, default 5): replace next page with full-screen ad
+- Ad renders as a sponsored clip (same full-screen format)
+- If admob: show interstitial between clips
+
+**Reuses:** `StoryAdOverlay` widget (same full-screen format)
+
+#### 2.4.8 Conversations List Ads (`placement: 'conversations'`)
+
+**File:** `lib/screens/messages/conversations_screen.dart`
+
+**Changes:**
+- In ListView.builder (line 955), insert ad card after every N conversations (N from `ad_conversations_frequency`, default 5)
+- Ad renders as a business/brand chat card with avatar, name, and "Tangazo" badge
+- On tap: opens CTA URL (not a real chat)
+
+**New widget: `lib/widgets/conversation_ad_card.dart`**
+
+- Same visual structure as conversation tile (avatar, name, preview text)
+- "Tangazo" badge instead of timestamp
+- Brand avatar + headline as "message preview"
+- CTA on tap (open URL)
+
+#### 2.4.9 Comments Ads (`placement: 'comments'`)
+
+**File:** `lib/screens/feed/comment_bottom_sheet.dart`
+
+**Changes:**
+- In ListView.builder (line 623), insert ad card after every N comments (N = 8, hardcoded)
+- Ad renders as a native card slightly differentiated from comments (subtle background, "Tangazo" label)
+- Must not look like a fake comment — use card format, not bubble format
+
+**Reuses:** `NativeAdCard` widget (compact variant with reduced padding)
+
+#### 2.4.10 Live Stream Ads (`placement: 'live_stream'`)
+
+**File:** `lib/screens/clips/streamviewer_screen.dart`
+
+**Changes:**
+- Before joining stream (line 180+): show 3-5s full-screen ad ("Tangazo kabla ya kuangalia..." — Ad before watching)
+- During stream: subtle sponsor badge overlay (bottom-left, semi-transparent, "Imetolewa na [Brand]" — Brought to you by [Brand])
+- Badge loads from `AdService.getServedAds(token, 'live_stream', 1)` on stream join
+
+**New widget: `lib/widgets/stream_sponsor_badge.dart`**
+
+- Small semi-transparent card (120x40dp) positioned bottom-left
+- Brand logo/name + "Imetolewa na" text
+- Non-intrusive, does not block stream content
+- On tap: opens CTA URL
+- Impression recorded once on display
+
+#### 2.4.11 Hashtag Feed Ads (`placement: 'hashtag'`)
+
+**File:** `lib/screens/search/hashtag_screen.dart`
+
+**Changes:**
+- In ListView.builder (line 61-108), insert native ad card after every N posts (N = 6, hardcoded)
+- Ad contextually labeled: "Tangazo katika #[hashtag]" (Ad in #[hashtag])
+
+**Reuses:** `NativeAdCard` widget
+
 ### 2.5 AdMob Integration
 
 **Package:** Add `google_mobile_ads: ^5.0.0` to `pubspec.yaml`.
@@ -652,9 +739,16 @@ Frontend fetches these on app startup and caches locally via `LocalStorageServic
 | Feed ad spacing | Every 10 posts | `ad_feed_frequency` |
 | Story ad spacing | Every 3 group transitions | `ad_story_frequency` |
 | Music ad spacing | Every 4 tracks | `ad_music_frequency` |
+| Clips ad spacing | Every 5 clips | `ad_clips_frequency` |
+| Conversations ad spacing | Every 5 chats | `ad_conversations_frequency` |
+| Video pre-roll frequency | 1 per 3 videos/session | Client-side counter |
+| Comments ad spacing | Every 8 comments | Hardcoded |
+| Hashtag feed ad spacing | Every 6 posts | Hardcoded |
 | Search promoted results | Max 2 per search | Hardcoded |
 | Marketplace promoted products | Max 2 per page load | Hardcoded |
-| Story ad skip delay | 5 seconds | Hardcoded |
+| Live stream pre-join ad | 1 per stream join | Hardcoded |
+| Live stream sponsor badge | 1 per stream | Hardcoded |
+| Story/clip/video ad skip delay | 5 seconds | Hardcoded |
 | Music ad skip delay | 5 seconds | Hardcoded |
 
 ### 2.7 Ad Escrow Payment Flow
@@ -888,9 +982,12 @@ Single controller with methods mapping to each route. Each method:
 | `lib/screens/biashara/create_ad_campaign_screen.dart` | Screen | Create ad wizard |
 | `lib/screens/biashara/campaign_detail_screen.dart` | Screen | Campaign performance |
 | `lib/screens/biashara/deposit_ad_balance_screen.dart` | Screen | Fund ad wallet |
-| `lib/widgets/native_ad_card.dart` | Widget | Feed native ad card |
-| `lib/widgets/story_ad_overlay.dart` | Widget | Full-screen story ad |
+| `lib/widgets/native_ad_card.dart` | Widget | Feed/comments/hashtag native ad card |
+| `lib/widgets/story_ad_overlay.dart` | Widget | Full-screen story/clips ad |
 | `lib/widgets/music_ad_overlay.dart` | Widget | Music player ad overlay |
+| `lib/widgets/video_preroll_overlay.dart` | Widget | Video pre-roll ad overlay |
+| `lib/widgets/conversation_ad_card.dart` | Widget | Chat-list-style ad card |
+| `lib/widgets/stream_sponsor_badge.dart` | Widget | Live stream sponsor badge |
 
 ### Modified Files
 
@@ -902,6 +999,12 @@ Single controller with methods mapping to each route. Each method:
 | `lib/screens/search/search_screen.dart` | Insert promoted search results |
 | `lib/screens/feed/discover_feed_content.dart` | Insert promoted discover cards |
 | `lib/screens/shop/shop_screen.dart` | Insert promoted product listings |
+| `lib/screens/clips/clips_screen.dart` | Insert ads between clips |
+| `lib/widgets/video_player_widget.dart` | Insert video pre-roll ads |
+| `lib/screens/messages/conversations_screen.dart` | Insert ads in chat list |
+| `lib/screens/feed/comment_bottom_sheet.dart` | Insert ads in comments |
+| `lib/screens/clips/streamviewer_screen.dart` | Pre-join ad + sponsor badge |
+| `lib/screens/search/hashtag_screen.dart` | Insert ads in hashtag feed |
 | `lib/l10n/app_strings.dart` | Add ~18 biashara/ad Swahili strings |
 | `lib/main.dart` | Add /biashara routes |
 | `pubspec.yaml` | Add google_mobile_ads dependency |
