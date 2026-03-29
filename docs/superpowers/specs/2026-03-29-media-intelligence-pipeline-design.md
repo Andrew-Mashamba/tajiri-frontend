@@ -66,20 +66,27 @@ Structured output per media item:
   "images": [
     {"media_id": 6, "description": "A woman selling vegetables at Kariakoo market in Dar es Salaam, colorful produce arranged on wooden tables"}
   ],
-  "audio": {
-    "raw_transcript": "Habari za leo nataka kuongea kuhusu...",
-    "clean_transcript": "Habari za leo, nataka kuongea kuhusu biashara ndogo...",
-    "summary": "Discussion about small business challenges in Dar es Salaam",
-    "detected_language": "sw"
-  },
-  "video": {
-    "transcript": "Karibuni kwenye duka langu jipya...",
-    "frame_descriptions": [
-      {"timestamp": "0:05", "description": "Man standing in front of a shop with sign reading 'Duka la Juma'"},
-      {"timestamp": "0:15", "description": "Close-up of produce display with tomatoes, onions, and peppers"}
-    ],
-    "summary": "Video tour of a new duka in Mwananyamala showing products and prices"
-  },
+  "audio": [
+    {
+      "media_id": null,
+      "source": "post.audio_path",
+      "raw_transcript": "Habari za leo nataka kuongea kuhusu...",
+      "clean_transcript": "Habari za leo, nataka kuongea kuhusu biashara ndogo...",
+      "summary": "Discussion about small business challenges in Dar es Salaam",
+      "detected_language": "sw"
+    }
+  ],
+  "video": [
+    {
+      "media_id": 12,
+      "transcript": "Karibuni kwenye duka langu jipya...",
+      "frame_descriptions": [
+        {"timestamp": "0:05", "description": "Man standing in front of a shop with sign reading 'Duka la Juma'"},
+        {"timestamp": "0:15", "description": "Close-up of produce display with tomatoes, onions, and peppers"}
+      ],
+      "summary": "Video tour of a new duka in Mwananyamala showing products and prices"
+    }
+  ],
   "enriched_at": "2026-03-29T14:00:00Z"
 }
 ```
@@ -179,8 +186,13 @@ transcribe(string $audioPath): ?array
 - Validates file exists
 - Runs: `whisper {audio_path} --model small --output_format txt --output_dir /tmp/whisper_{id}/`
 - Note: Uses `small` model (~2GB RAM) instead of `medium` (~5GB) for safety on 16GB server with other services. No `--language` flag — Whisper auto-detects language, supporting Swahili, English, and mixed content.
-- Reads raw transcript from output .txt file
-- Sends to Claude Haiku: "Fix spelling/grammar errors in this transcript. Clean up sentence boundaries. Write a 1-2 sentence English summary. Detect the language. Respond as JSON: {\"clean_transcript\": \"...\", \"summary\": \"...\", \"detected_language\": \"sw|en|mixed\"}"
+- Reads raw transcript from output .txt file (Whisper names output after input basename, e.g., `audio.txt` for `audio.wav` — service globs `/tmp/whisper_{id}/*.txt` to find it)
+- Sends to Claude Haiku for cleanup:
+  ```
+  timeout 30 claude -p "{prompt_with_transcript}" --model haiku --output-format text
+  ```
+  Prompt: "Fix spelling/grammar errors in this transcript. Clean up sentence boundaries. Write a 1-2 sentence English summary. Detect the language. Respond ONLY as valid JSON with no markdown wrapping: {\"clean_transcript\": \"...\", \"summary\": \"...\", \"detected_language\": \"sw|en|mixed\"}"
+- **JSON parsing**: Strip any markdown code fences (` ```json ... ``` `) before `json_decode()`. If `json_decode()` fails, fall back to using raw transcript as `clean_transcript`, empty `summary`, and `detected_language = 'unknown'`.
 - Returns `['raw_transcript' => ..., 'clean_transcript' => ..., 'summary' => ..., 'detected_language' => ...]`
 - Cleans up temp directory in `finally` block
 
@@ -192,14 +204,21 @@ analyze(string $videoPath, ?float $duration = null): ?array
 
 - Validates file exists
 - If duration unknown, probes with: `ffprobe -v quiet -print_format json -show_format {video_path}`
-- Extracts audio: `ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 /tmp/{id}_audio.wav`
+- **Duration guard**: If duration is null, 0, or > 300s (5 minutes), skip enrichment for this video. Log warning with reason. Videos over 5 minutes would exceed the job timeout budget.
+- Creates temp directory: `/tmp/tajiri_enrich_{contentDocId}_{uniqid}/` (unique per run to avoid stale file reuse on retry)
+- Extracts audio: `ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {tmpDir}/audio.wav`
 - Calls `AudioTranscriptionService::transcribe()` on extracted audio
-- Calculates keyframe interval: `max(5, duration / max_frames)` where `max_frames = min(6, ceil(duration / 10))`
-- Extracts frames: `ffmpeg -i {video_path} -vf "fps=1/{interval}" -frames:v {max_frames} -q:v 2 /tmp/{id}_frame_%02d.jpg`
-- Calls `ImageAnalysisService::describe()` on each frame
-- Final Claude Haiku call with transcript + all frame descriptions → rich combined summary
+- Calculates keyframe interval: `max(5, duration / max_frames)` where `max_frames = min(6, ceil(duration / 10))` (for a 3s video: 1 frame at 0s; for 60s: 6 frames every 10s)
+- Extracts frames: `ffmpeg -i {video_path} -vf "fps=1/{interval}" -frames:v {max_frames} -q:v 2 {tmpDir}/frame_%02d.jpg`
+- Calls `ImageAnalysisService::describe()` on each frame (with 1s sleep between calls)
+- Final Claude Haiku call combining transcript + all frame descriptions:
+  ```
+  timeout 30 claude -p "{prompt_with_transcript_and_frames}" --model haiku --output-format text
+  ```
+  Prompt: "Given this video transcript and frame descriptions, write a rich 2-3 sentence summary covering the topic, visual content, and context. Suggest a content category. Respond as JSON: {\"summary\": \"...\", \"suggested_category\": \"...\"}"
+- Same JSON parsing strategy as AudioTranscriptionService (strip markdown fences, fallback on parse failure)
 - Returns `['transcript' => ..., 'frame_descriptions' => [...], 'summary' => ...]`
-- Cleans up all temp files in `finally` block
+- Cleans up entire temp directory in `finally` block
 
 ### MediaEnrichmentService
 
@@ -292,10 +311,11 @@ At 1,000 posts/day: ~$5-20/day. At 10,000 posts/day: ~$50-200/day.
 - **Claude CLI fails** (timeout, rate limit): Log warning, store null for that description, continue with other media
 - **FFmpeg fails** (corrupt video, missing codec): Log error, skip entire video enrichment, other media items still processed
 - **Partial success**: If 3/5 images succeed and 2 fail, store the 3 descriptions. Never discard good work due to partial failure
-- **Retry**: Job retries once (`tries=2`) with 60s backoff. Transient failures self-heal
-- **Temp file cleanup**: All `/tmp/{post_id}_*` files deleted in `finally` block regardless of outcome
+- **Retry**: Job retries once (`tries=2`). Job class defines `public $backoff = 60;` for 60s delay between attempts. Transient failures self-heal
+- **Temp file cleanup**: All temp directories (`/tmp/tajiri_enrich_{id}_*/`, `/tmp/whisper_{id}/`) deleted in `finally` block regardless of outcome
 - **Null byte sanitization**: All user-derived text sanitized before `escapeshellarg()` (consistent with Phase 5 pattern)
 - **Rate limiting**: 1-second `sleep(1)` between consecutive Claude CLI calls within a single job to avoid rate-limit errors when processing posts with many images/frames
+- **Size/duration limits**: Images > 20MB skipped. Audio > 5 minutes skipped (Whisper processing time scales linearly). Video > 5 minutes skipped (would exceed timeout budget). Limits logged as warnings, not errors.
 
 ## 8. Backfill Command
 
