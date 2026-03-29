@@ -42,10 +42,12 @@ General-purpose key-value config table for all platform-level settings.
 | `fee_tip_pct` | `10.0` | % deducted from tips |
 | `fee_marketplace_pct` | `10.0` | % deducted from marketplace sales |
 | `fee_michango_pct` | `5.0` | % deducted from crowdfunding withdrawals |
-| `fee_sponsored_pct` | `25.0` | % deducted from sponsored post budgets |
+| `fee_sponsored_pct` | `25.0` | % deducted from legacy sponsored post budgets |
+| `fee_ad_deposit_pct` | `25.0` | % deducted from Biashara ad escrow deposits |
 | `fund_allocation_pct` | `30.0` | % of platform revenue allocated to Creator Fund |
 | `operations_allocation_pct` | `40.0` | % of platform revenue allocated to operations |
 | `margin_allocation_pct` | `30.0` | % of platform revenue retained as margin |
+| `last_fund_distribution_at` | `null` | Timestamp of last Creator Fund distribution (guard against double-distribution) |
 
 #### `platform_revenue_ledger` table (new)
 
@@ -54,7 +56,7 @@ Append-only financial ledger recording every fee collection event.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | bigint | PK, auto-increment | |
-| transaction_type | varchar(20) | NOT NULL, CHECK IN ('subscription','tip','marketplace','michango','sponsored','ad_cpm','ad_cpc') | Revenue source category |
+| transaction_type | varchar(20) | NOT NULL, CHECK IN ('subscription','tip','marketplace','michango','sponsored','ad_deposit','ad_cpm','ad_cpc','ad_admob') | Revenue source category |
 | reference_id | bigint | NOT NULL | ID of the source record (payment, order, campaign, etc.) |
 | reference_type | varchar(50) | NOT NULL | Polymorphic type (e.g., 'App\Models\SubscriptionPayment') |
 | gross_amount | decimal(12,2) | NOT NULL | Full transaction amount |
@@ -149,7 +151,7 @@ Hybrid advertising platform: self-serve for Tanzanian SMEs (100% revenue retaine
 **Indexes:**
 - `(advertiser_id)` — advertiser's campaigns list
 - `(status, start_date, end_date)` — active campaign queries for ad serving
-- `(status)` — review queue
+- `(status, updated_at)` — review queue + ordering
 
 #### `ad_creatives` table (new)
 
@@ -176,7 +178,8 @@ High-volume event log. Partitioned by month on `created_at` using PostgreSQL ran
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | bigint | PK | |
+| id | bigint | GENERATED ALWAYS AS IDENTITY | Auto-increment |
+| created_at | timestamp | NOT NULL, DEFAULT NOW() | Partition key |
 | campaign_id | bigint | NOT NULL | Self-serve campaign ID (0 for AdMob) |
 | creative_id | bigint | NOT NULL | Self-serve creative ID (0 for AdMob) |
 | user_id | bigint | NOT NULL | Viewer |
@@ -184,7 +187,8 @@ High-volume event log. Partitioned by month on `created_at` using PostgreSQL ran
 | event_type | varchar(15) | NOT NULL, CHECK IN ('impression','click','skip','mute') | Event type |
 | revenue | decimal(8,4) | NOT NULL, DEFAULT 0 | Platform revenue for this event |
 | source | varchar(15) | NOT NULL, CHECK IN ('self_serve','admob') | Which system served it |
-| created_at | timestamp | NOT NULL, DEFAULT NOW() | |
+
+**Primary key:** `(id, created_at)` — composite PK required for PostgreSQL range partitioning (partition key must be in PK).
 
 **Indexes (per partition):**
 - `(campaign_id, created_at)` — campaign performance queries
@@ -194,15 +198,15 @@ High-volume event log. Partitioned by month on `created_at` using PostgreSQL ran
 
 **Partition strategy:** Monthly range on `created_at`. Create partitions 3 months ahead via scheduled job. Partitions older than 12 months can be detached and archived.
 
-#### `ad_balances` — Advertiser escrow
+#### Ad escrow balance
 
-New column on existing `wallets` table (or `user_profiles`):
+Add `ad_balance` column to the existing `wallets` table (confirmed: `wallet_models.dart` has `Wallet` with `balance` and `pendingBalance`):
 
 | Column | Type | Description |
 |--------|------|-------------|
-| ad_balance | decimal(12,2) DEFAULT 0 | Prepaid ad escrow balance |
+| ad_balance | decimal(12,2) NOT NULL DEFAULT 0 | Prepaid ad escrow balance |
 
-Alternatively, a separate `ad_wallets` table if wallet structure is complex. Simplest: add `ad_balance` column to whichever table holds the user's wallet balance.
+**Frontend:** Update `Wallet.fromJson()` in `lib/models/wallet_models.dart` to parse `ad_balance` field.
 
 ### 2.2 Ad Serving Engine
 
@@ -236,7 +240,8 @@ Selection algorithm:
     "cta_type": "shop_now",
     "cta_url": "https://...",
     "campaign_type": "cpm",
-    "product_id": null
+    "product_id": null,
+    "placement": "feed"
   },
   {
     "id": 0,
@@ -251,15 +256,30 @@ Selection algorithm:
 1. Insert into `ad_impressions`
 2. If `source = 'self_serve'`:
    - Calculate revenue: CPM → `bid_amount / 1000` for impressions. CPC → `bid_amount` for clicks only.
-   - Update `ad_campaigns.spent_amount += revenue`
-   - Deduct from advertiser's `ad_balance`
+   - **Atomic budget update** (prevents overspend race condition):
+     ```sql
+     UPDATE ad_campaigns
+     SET spent_amount = spent_amount + :revenue
+     WHERE id = :campaign_id
+       AND spent_amount + :revenue <= total_budget
+     RETURNING spent_amount, total_budget;
+     ```
+     If no rows affected (budget exhausted), skip billing and set `status = 'completed'`.
+   - **Atomic balance deduction** (prevents negative balance):
+     ```sql
+     UPDATE wallets
+     SET ad_balance = ad_balance - :revenue
+     WHERE user_id = :advertiser_id
+       AND ad_balance >= :revenue;
+     ```
+     If no rows affected, skip (campaign auto-pauses on next serve cycle).
    - Insert into `platform_revenue_ledger` with type `ad_cpm` or `ad_cpc`
-3. If campaign `spent_amount >= total_budget`: set `status = 'completed'`
+3. If `spent_amount >= total_budget` after update: set `status = 'completed'`
 
 **`recordAdMobRevenue(int $userId, string $placement, float $estimatedRevenue): void`**
 
 1. Insert into `ad_impressions` with `source = 'admob'`, `campaign_id = 0`
-2. Insert into `platform_revenue_ledger` with type `ad_cpm`, `reference_type = 'admob'`
+2. Insert into `platform_revenue_ledger` with type `ad_admob` (distinct from `ad_cpm`/`ad_cpc` which are self-serve only)
 
 #### API Endpoints
 
@@ -268,6 +288,56 @@ Selection algorithm:
 | GET | `/api/ads/serve` | Bearer token | `?placement=feed&count=3` — returns ads for placement |
 | POST | `/api/ads/event` | Bearer token | `{creative_id, campaign_id, event_type, placement, source}` — record event |
 | POST | `/api/ads/admob-revenue` | Bearer token | `{placement, estimated_revenue}` — record AdMob revenue callback |
+
+#### Biashara API Endpoints (BiasharaController)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/biashara/campaigns` | Bearer token | List advertiser's campaigns |
+| POST | `/api/biashara/campaigns` | Bearer token | Create draft campaign |
+| GET | `/api/biashara/campaigns/{id}` | Bearer token | Campaign detail with creatives |
+| PUT | `/api/biashara/campaigns/{id}` | Bearer token | Update draft campaign |
+| POST | `/api/biashara/campaigns/{id}/creatives` | Bearer token | Upload creative (multipart) |
+| POST | `/api/biashara/campaigns/{id}/submit` | Bearer token | Submit for review |
+| POST | `/api/biashara/campaigns/{id}/pause` | Bearer token | Pause active campaign |
+| POST | `/api/biashara/campaigns/{id}/resume` | Bearer token | Resume paused campaign |
+| POST | `/api/biashara/campaigns/{id}/cancel` | Bearer token | Cancel and refund remaining budget |
+| GET | `/api/biashara/campaigns/{id}/performance` | Bearer token | Get impressions, clicks, spend |
+| GET | `/api/biashara/balance` | Bearer token | Get current ad_balance |
+| POST | `/api/biashara/deposit` | Bearer token | Deposit funds to ad escrow |
+| GET | `/api/biashara/settings` | Bearer token | Get client-facing ad settings (frequencies, etc.) |
+
+**Validation rules for campaign creation:**
+
+| Field | Rule |
+|-------|------|
+| title | Required, max 100 chars |
+| campaign_type | Required, in: cpm, cpc |
+| daily_budget | Required, min 1000 TZS |
+| total_budget | Required, min 5000 TZS, >= daily_budget |
+| bid_amount | Required, min 100 TZS (CPM) or min 50 TZS (CPC) |
+| start_date | Required, >= today |
+| end_date | Nullable, > start_date |
+| placements | Required, non-empty array, values in: feed, stories, music, search, marketplace |
+| targeting | Optional, validated: age_min 13-100, age_max > age_min, regions array of valid TZ regions |
+
+**Campaign status transitions (state machine):**
+```
+draft → pending_review (on submit, requires at least 1 approved creative)
+pending_review → active (admin approve)
+pending_review → rejected (admin reject)
+rejected → draft (advertiser edits and resubmits)
+active → paused (advertiser or auto when daily budget hit)
+paused → active (advertiser resume, or next day for daily budget pause)
+active → completed (spent_amount >= total_budget or end_date passed)
+draft|pending_review|active|paused → cancelled (advertiser cancel)
+```
+
+**Campaign cancellation refund:**
+- Refund `total_budget - spent_amount` back to `ad_balance` (not original payment method)
+- Platform fee on initial deposit is NOT refunded
+- Only `draft`, `pending_review`, `active`, `paused` can be cancelled
+- `completed` and `rejected` cannot be cancelled
 
 ### 2.3 Advertiser In-App Experience ("Biashara")
 
@@ -407,6 +477,11 @@ Static methods following existing service patterns.
 - Confirmation with fee disclosure (25% platform fee shown)
 - Route: `/biashara/deposit`
 
+**Empty states:**
+- BiasharaHomeScreen with 0 campaigns: illustration + "Huna matangazo bado" (No ads yet) + prominent "Unda Tangazo" CTA
+- CampaignDetailScreen loading: skeleton shimmer cards for metrics + chart area
+- CampaignDetailScreen with 0 impressions: "Tangazo lako bado halijaonyeshwa" (Your ad hasn't been shown yet) + explanation text
+
 #### Swahili UI Strings (added to AppStrings)
 
 | Key | Swahili | English |
@@ -438,7 +513,7 @@ Static methods following existing service patterns.
 
 **Changes:**
 - Add `nativeAd` to the `_FeedItemType` enum
-- In `_buildFeedItems()`, insert a `_FeedItemType.nativeAd` entry every N posts (N from `platform_settings` key `ad_feed_frequency`, default 10)
+- In `_buildFeedItems()`, insert a `_FeedItemType.nativeAd` entry every N posts (N from `platform_settings` key `ad_feed_frequency`, default 10). **Note:** existing `teaser` items (rabbit hole mechanic) already interrupt every ~10 posts. Ads and teasers should not collide — if a teaser occupies a slot, skip the ad for that position and insert at the next eligible slot.
 - On build, call `AdService.getServedAds(token, 'feed', count)` to prefetch ads
 - In the `itemBuilder` switch, add case for `nativeAd`:
   - If `source == 'self_serve'`: render `NativeAdCard` widget
@@ -549,6 +624,25 @@ class AdMobService {
 
 **Revenue tracking:** AdMob SDK provides `onPaidEvent` callback with estimated revenue. This is sent to the backend via `/api/ads/admob-revenue` for ledger tracking.
 
+**Important limitation:** `onPaidEvent` fires asynchronously and not for every impression. The platform_revenue_ledger will undercount AdMob revenue. The AdMob console dashboard is the source of truth for AdMob revenue; the ledger provides an approximation for the admin dashboard. Monthly reconciliation against the AdMob dashboard is recommended.
+
+### 2.6a Client Settings Delivery
+
+Ad frequency settings and AdMob unit IDs need to reach the Flutter frontend. The `/api/biashara/settings` endpoint returns client-facing settings:
+
+```json
+{
+  "ad_feed_frequency": 10,
+  "ad_story_frequency": 3,
+  "ad_music_frequency": 4,
+  "admob_native_unit_id": "ca-app-pub-xxx",
+  "admob_interstitial_unit_id": "ca-app-pub-xxx",
+  "ad_frequency_cap_per_campaign": 3
+}
+```
+
+Frontend fetches these on app startup and caches locally via `LocalStorageService`. Refreshed every 24 hours or on force-refresh.
+
 ### 2.6 Frequency Capping & User Experience
 
 | Rule | Value | Configurable |
@@ -568,7 +662,7 @@ class AdMobService {
 2. Enters amount, selects payment method (wallet or mobile money)
 3. Platform fee (25%) disclosed: "Kati ya 10,000 TZS, 2,500 TZS ni ada ya jukwaa" (Of 10,000 TZS, 2,500 TZS is platform fee)
 4. Payment processed:
-   - `PlatformFeeService::applyFee('sponsored', amount, ...)` records the fee
+   - `PlatformFeeService::applyFee('ad_deposit', amount, ...)` records the fee (uses `fee_ad_deposit_pct`)
    - Net amount credited to user's `ad_balance`
 5. When campaign runs, daily spend deducted from `ad_balance`
 6. On campaign cancellation, remaining `ad_balance` portion for that campaign refunded
@@ -673,6 +767,8 @@ GROUP BY DATE(created_at), transaction_type;
 **Table:** Creator fund payouts with: creator name, tier, base score, multipliers (streak, community, virality), final score, payout amount, status.
 
 **Action button:** "Distribute Fund" — POST to `/admin/revenue/fund/distribute`. Triggers the existing monthly fund distribution logic, allocating `fund_allocation_pct` of this month's total platform revenue across eligible creators based on their scores.
+
+**Distribution guard:** The backend tracks `last_fund_distribution_at` in `platform_settings`. The "Distribute Fund" button is disabled if a distribution has already been run for the current month. The POST endpoint returns 409 Conflict if `last_fund_distribution_at` is within the current calendar month, preventing double-distribution.
 
 #### 3.3.5 Platform Settings (`/admin/revenue/settings`)
 
