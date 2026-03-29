@@ -18,6 +18,7 @@ import 'steps/education_path_step.dart';
 import 'steps/postsecondary_step.dart';
 import 'steps/university_step.dart';
 import 'steps/employer_step.dart';
+import 'steps/profile_photo_step.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -42,15 +43,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   // Step indices - dynamically calculated based on user choices
   // Base steps:
   // 0: Bio
-  // 1: Phone
-  // 2: Location (skippable)
-  // 3: Primary School (skippable)
-  // 4: Secondary School (skippable)
-  // 5: Education Path
-  // 6: A-Level (conditional, skippable)
-  // 7: Post-secondary (skippable)
-  // 8: University (skippable)
-  // 9: Employer (skippable)
+  // 1: Face Photo
+  // 2: Phone
+  // 3: Location (skippable)
+  // 4: Primary School (skippable)
+  // 5: Secondary School (skippable)
+  // 6: Education Path
+  // 7: A-Level (conditional, skippable)
+  // 8: Post-secondary (skippable)
+  // 9: University (skippable)
+  // 10: Employer (skippable)
 
   @override
   void initState() {
@@ -74,6 +76,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (s == null) return [];
     final titles = [
       s.stepBio,
+      s.stepPhoto,
       s.stepPhone,
       s.stepLocation,
       s.stepPrimary,
@@ -304,14 +307,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         onNext: _nextStep,
       ),
 
-      // Step 1: Phone
+      // Step 1: Profile Photo
+      ProfilePhotoStep(
+        state: _registrationState,
+        onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+
+      // Step 2: Phone
       PhoneStep(
         state: _registrationState,
         onNext: _nextStep,
         onBack: _previousStep,
       ),
 
-      // Step 2: Location (skippable)
+      // Step 3: Location (skippable)
       LocationStep(
         state: _registrationState,
         locationService: _locationService,
@@ -320,7 +330,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         onSkip: _nextStep,
       ),
 
-      // Step 3: Primary School (skippable)
+      // Step 4: Primary School (skippable)
       PrimarySchoolStep(
         state: _registrationState,
         schoolService: _schoolService,
@@ -329,7 +339,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         onSkip: _nextStep,
       ),
 
-      // Step 4: Secondary School (skippable)
+      // Step 5: Secondary School (skippable)
       SecondarySchoolStep(
         state: _registrationState,
         secondaryService: _secondaryService,
@@ -338,7 +348,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         onSkip: _nextStep,
       ),
 
-      // Step 5: Education Path
+      // Step 6: Education Path
       EducationPathStep(
         state: _registrationState,
         onPathSelected: _onEducationPathSelected,
@@ -346,7 +356,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ),
     ];
 
-    // Step 6: A-Level (conditional, skippable)
+    // Step 7: A-Level (conditional, skippable)
     if (_didAttendAlevel) {
       pages.add(
         AlevelStep(
@@ -359,7 +369,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
     }
 
-    // Step 7: Post-secondary (skippable)
+    // Step 8: Post-secondary (skippable)
     pages.add(
       PostsecondaryStep(
         onComplete: (institution, gradYear, startYear) {
@@ -379,7 +389,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ),
     );
 
-    // Step 8: University (skippable)
+    // Step 9: University (skippable)
     pages.add(
       UniversityStep(
         onComplete: (university, programme, gradYear, startYear) {
@@ -401,7 +411,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ),
     );
 
-    // Step 9: Employer (skippable)
+    // Step 10: Employer (skippable)
     pages.add(
       EmployerStep(
         onComplete: (business) {
@@ -425,7 +435,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   static const Color _background = Color(0xFFFAFAFA);
-  static const Color _primary = Color(0xFF1A1A);
+  static const Color _primary = Color(0xFF1A1A1A);
   static const double _minTouchTargetDp = 48.0;
 
   @override

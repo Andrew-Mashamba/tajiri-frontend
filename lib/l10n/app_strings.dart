@@ -148,6 +148,20 @@ class AppStrings {
   String get phoneRequired => isSwahili ? 'Namba ya simu inahitajika' : 'Phone number is required';
   String stepLabelFormat(int current, int total) => isSwahili ? 'Hatua $current / $total' : 'Step $current of $total';
   String get stepBio => isSwahili ? 'Taarifa Binafsi' : 'Personal info';
+  String get stepPhoto => isSwahili ? 'Picha ya Uso' : 'Face Photo';
+  String get takeYourPhoto => isSwahili ? 'Piga picha yako' : 'Take your photo';
+  String get takeYourPhotoDesc => isSwahili
+      ? 'Tunahitaji picha inayoonyesha uso wako vizuri'
+      : 'We need a photo that clearly shows your face';
+  String get faceNotDetected => isSwahili
+      ? 'Picha yako haionyeshi uso. Tafadhali piga picha inayoonyesha uso wako vizuri'
+      : 'Your photo doesn\'t show a face. Please take a photo that clearly shows your face';
+  String get multipleFacesDetected => isSwahili
+      ? 'Picha ina watu wengi. Tafadhali piga picha yako peke yako'
+      : 'Photo has multiple people. Please take a photo of just yourself';
+  String get takePhotoBtn => isSwahili ? 'Piga Picha' : 'Take Photo';
+  String get chooseFromGallery => isSwahili ? 'Chagua kutoka Picha' : 'Choose from Gallery';
+  String get faceDetected => isSwahili ? 'Uso umegunduliwa!' : 'Face detected!';
   String get stepPhone => isSwahili ? 'Thibitisha Simu' : 'Verify phone';
   String get stepLocation => isSwahili ? 'Mahali Unapoishi' : 'Where you live';
   String get stepPrimary => isSwahili ? 'Shule ya Msingi' : 'Primary school';

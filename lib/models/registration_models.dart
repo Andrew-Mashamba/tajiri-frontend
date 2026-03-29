@@ -5,6 +5,10 @@ class RegistrationState {
   int? userId;
   String? profilePhotoUrl;
 
+  // Face photo (after Bio step)
+  String? profilePhotoPath; // File path — survives Hive persistence
+  Map<String, int>? faceBbox; // {x, y, width, height} from ML Kit
+
   // Step 1: Bio Information
   String? firstName;
   String? lastName;
@@ -70,6 +74,8 @@ class RegistrationState {
       dateOfBirth != null &&
       gender != null;
 
+  bool get isPhotoComplete => profilePhotoPath != null;
+
   bool get isPhoneComplete => phoneNumber != null && isPhoneVerified;
 
   bool get isLocationComplete => location != null && location!.isComplete;
@@ -96,6 +102,8 @@ class RegistrationState {
     return {
       'user_id': userId,
       'profile_photo_url': profilePhotoUrl,
+      if (profilePhotoPath != null) 'profile_photo_path': profilePhotoPath,
+      if (faceBbox != null) 'face_bbox': faceBbox,
       'first_name': firstName,
       'last_name': lastName,
       'date_of_birth': dateOfBirth?.toIso8601String(),
@@ -114,7 +122,7 @@ class RegistrationState {
   }
 
   factory RegistrationState.fromJson(Map<String, dynamic> json) {
-    return RegistrationState(
+    final state = RegistrationState(
       userId: json['user_id'],
       profilePhotoUrl: json['profile_photo_url'],
       firstName: json['first_name'],
@@ -153,6 +161,9 @@ class RegistrationState {
           ? EmployerEntry.fromJson(json['current_employer'])
           : null,
     );
+    state.profilePhotoPath = json['profile_photo_path'] as String?;
+    state.faceBbox = json['face_bbox'] != null ? Map<String, int>.from(json['face_bbox']) : null;
+    return state;
   }
 }
 

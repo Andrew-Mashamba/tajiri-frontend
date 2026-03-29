@@ -46,6 +46,7 @@ import 'creator_dashboard_section.dart';
 import 'edit_profile_screen.dart';
 import '../../services/creator_service.dart';
 import '../../models/flywheel_models.dart';
+import '../../utils/face_validator.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -311,9 +312,24 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     setState(() => _isUploadingPhoto = true);
 
+    // Optional face detection (non-blocking)
+    Map<String, int>? faceBbox;
+    try {
+      final bounds = await FaceValidator.detectLargestFace(File(image.path));
+      if (bounds != null) {
+        faceBbox = {
+          'x': bounds.left.round(),
+          'y': bounds.top.round(),
+          'width': bounds.width.round(),
+          'height': bounds.height.round(),
+        };
+      }
+    } catch (_) {}
+
     final result = await _profileService.updateProfilePhoto(
       userId: widget.userId,
       photo: File(image.path),
+      faceBbox: faceBbox,
     );
 
     if (!mounted) return;

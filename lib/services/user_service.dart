@@ -9,22 +9,47 @@ class UserService {
   /// Register a new user profile on the server
   Future<UserRegistrationResult> register(RegistrationState profile) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/users/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(profile.toJson()),
-      );
+      late final http.Response response;
+
+      if (profile.profilePhotoPath != null) {
+        // Multipart request when photo is provided
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$_baseUrl/users/register'),
+        );
+
+        final jsonData = profile.toJson();
+        jsonData.forEach((key, value) {
+          if (value != null && key != 'profile_photo_path' && key != 'face_bbox') {
+            request.fields[key] = value is String ? value : jsonEncode(value);
+          }
+        });
+
+        request.files.add(await http.MultipartFile.fromPath(
+          'profile_photo',
+          profile.profilePhotoPath!,
+        ));
+
+        if (profile.faceBbox != null) {
+          request.fields['face_bbox'] = jsonEncode(profile.faceBbox);
+        }
+
+        final streamedResponse = await request.send();
+        response = await http.Response.fromStream(streamedResponse);
+      } else {
+        response = await http.post(
+          Uri.parse('$_baseUrl/users/register'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(profile.toJson()),
+        );
+      }
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
         final responseData = data['data'];
-        final id = responseData is Map
-            ? responseData['id']
-            : null;
-        final userId = id is int
-            ? id
-            : (id is num ? id.toInt() : null);
+        final id = responseData is Map ? responseData['id'] : null;
+        final userId = id is int ? id : (id is num ? id.toInt() : null);
         final Map<String, dynamic>? profileMap = responseData is Map<String, dynamic>
             ? Map<String, dynamic>.from(responseData)
             : null;
@@ -37,14 +62,11 @@ class UserService {
           accessToken: accessToken is String ? accessToken : accessToken?.toString(),
         );
       } else if (response.statusCode == 422) {
-        // Validation error
         final errors = data['errors'] as Map<String, dynamic>?;
         String errorMessage = data['message'] ?? 'Validation failed';
-
         if (errors != null && errors.containsKey('phone_number')) {
           errorMessage = 'Nambari hii ya simu imeshasajiliwa';
         }
-
         return UserRegistrationResult(
           success: false,
           message: errorMessage,

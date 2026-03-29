@@ -45,6 +45,7 @@ class ProfileService {
   Future<PhotoUpdateResult> updateProfilePhoto({
     required int userId,
     required File photo,
+    Map<String, int>? faceBbox,
   }) async {
     try {
       var request = http.MultipartRequest(
@@ -53,6 +54,10 @@ class ProfileService {
       );
 
       request.files.add(await http.MultipartFile.fromPath('photo', photo.path));
+
+      if (faceBbox != null) {
+        request.fields['face_bbox'] = jsonEncode(faceBbox);
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
