@@ -217,6 +217,8 @@ class PostService {
     int? stitchFromPostId,
     int? stitchTrimStartMs,
     int? stitchTrimEndMs,
+    // Content category for search indexing
+    String? contentCategory,
     // Progress callback for large uploads
     void Function(double progress)? onProgress,
     bool allowComments = true,
@@ -297,6 +299,7 @@ class PostService {
             stitchFromPostId: stitchFromPostId,
             stitchTrimStartMs: stitchTrimStartMs,
             stitchTrimEndMs: stitchTrimEndMs,
+            contentCategory: contentCategory,
             onProgress: onProgress,
             allowComments: allowComments,
           );
@@ -317,6 +320,7 @@ class PostService {
         request.fields['privacy'] = privacy;
         if (postType == 'short_video') request.fields['is_short_video'] = 'true';
         if (locationName != null) request.fields['location_name'] = locationName;
+        if (contentCategory != null) request.fields['content_category'] = contentCategory;
 
         // New fields for enhanced post types
         if (backgroundColor != null) request.fields['background_color'] = backgroundColor;
@@ -433,6 +437,7 @@ class PostService {
           'privacy': privacy,
           'location_name': locationName,
           'tagged_users': taggedUsers,
+          if (contentCategory != null) 'content_category': contentCategory,
           if (postType == 'short_video') 'is_short_video': true,
           // New fields for enhanced post types
           if (backgroundColor != null) 'background_color': backgroundColor,
@@ -536,6 +541,7 @@ class PostService {
     int? stitchFromPostId,
     int? stitchTrimStartMs,
     int? stitchTrimEndMs,
+    String? contentCategory,
     void Function(double progress)? onProgress,
     bool allowComments = true,
   }) async {
@@ -552,6 +558,7 @@ class PostService {
         'privacy': privacy,
         if (postType == 'short_video') 'is_short_video': 'true',
         if (locationName != null) 'location_name': locationName,
+        if (contentCategory != null) 'content_category': contentCategory,
         if (backgroundColor != null) 'background_color': backgroundColor,
         if (musicTrackId != null) 'music_track_id': musicTrackId.toString(),
         if (musicStartTime != null) 'music_start_time': musicStartTime.toString(),

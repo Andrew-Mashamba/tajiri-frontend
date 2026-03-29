@@ -6,6 +6,8 @@ import '../../services/draft_service.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
+import '../../widgets/post_metadata_section.dart';
+import '../../widgets/trending_hashtags_bar.dart';
 import 'schedulepostwidget_screen.dart';
 
 /// Text-only post creation screen with background color support
@@ -41,6 +43,8 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
   DateTime? _scheduledAt;
   int? _draftId;
   bool _allowComments = true;
+  String? _selectedCategory;
+  final TextEditingController _locationController = TextEditingController();
 
   // Background color options
   static const List<String> _backgroundColors = [
@@ -74,6 +78,7 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
   void dispose() {
     _contentController.dispose();
     _contentFocusNode.dispose();
+    _locationController.dispose();
     _draftService.dispose();
     super.dispose();
   }
@@ -111,6 +116,8 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
         postType: 'text',
         backgroundColor: _backgroundColor,
         allowComments: _allowComments,
+        contentCategory: _selectedCategory,
+        locationName: _locationController.text.trim().isNotEmpty ? _locationController.text.trim() : null,
       );
 
       if (mounted) {
@@ -481,6 +488,17 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
                           ),
                         ),
                       ),
+                    // Trending hashtags
+                    TrendingHashtagsBar(
+                      onHashtagTap: (tag) {
+                        final text = _contentController.text;
+                        final suffix = text.isEmpty || text.endsWith(' ') ? '#$tag ' : ' #$tag ';
+                        _contentController.text = text + suffix;
+                        _contentController.selection = TextSelection.collapsed(offset: _contentController.text.length);
+                        _contentFocusNode.requestFocus();
+                        setState(() {});
+                      },
+                    ),
                     const SizedBox(height: 24),
 
                     // Background color section
@@ -568,6 +586,13 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
                           ),
                         ),
                       ],
+                    ),
+
+                    // Category & Location
+                    PostMetadataSection(
+                      selectedCategory: _selectedCategory,
+                      onCategoryChanged: (v) => setState(() => _selectedCategory = v),
+                      locationController: _locationController,
                     ),
 
                     const SizedBox(height: 24),

@@ -8,6 +8,8 @@ import '../../services/draft_service.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
+import '../../widgets/post_metadata_section.dart';
+import '../../widgets/trending_hashtags_bar.dart';
 import 'schedulepostwidget_screen.dart';
 
 /// Short video (<=60 seconds) creation screen with TikTok-style features, drafts and scheduling
@@ -48,6 +50,8 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
   int? _draftId;
   double _uploadProgress = 0.0;
   String _uploadStatus = '';
+  String? _selectedCategory;
+  final TextEditingController _locationController = TextEditingController();
 
   late AnimationController _recordingPulse;
 
@@ -95,6 +99,7 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
   void dispose() {
     _captionController.dispose();
     _recordingPulse.dispose();
+    _locationController.dispose();
     _draftService.dispose();
     super.dispose();
   }
@@ -237,6 +242,8 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
         videoSpeed: _videoSpeed != 1.0 ? _videoSpeed : null,
         musicTrackId: _selectedMusic?.id,
         originalAudioVolume: _muteOriginalAudio ? 0.0 : 1.0,
+        contentCategory: _selectedCategory,
+        locationName: _locationController.text.trim().isNotEmpty ? _locationController.text.trim() : null,
         onProgress: (progress) {
           if (mounted) {
             setState(() {
@@ -767,9 +774,11 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
           ),
         ),
         Container(
+          constraints: const BoxConstraints(maxHeight: 360),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: Colors.grey.shade900, borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
           child: SafeArea(
+            child: SingleChildScrollView(
             child: Column(
               children: [
                 Container(
@@ -789,6 +798,22 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
+                ),
+                // Trending hashtags
+                TrendingHashtagsBar(
+                  onHashtagTap: (tag) {
+                    final text = _captionController.text;
+                    final suffix = text.isEmpty || text.endsWith(' ') ? '#$tag ' : ' #$tag ';
+                    _captionController.text = text + suffix;
+                    _captionController.selection = TextSelection.collapsed(offset: _captionController.text.length);
+                    setState(() {});
+                  },
+                ),
+                // Category & Location
+                PostMetadataSection(
+                  selectedCategory: _selectedCategory,
+                  onCategoryChanged: (v) => setState(() => _selectedCategory = v),
+                  locationController: _locationController,
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -819,6 +844,7 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
                 ),
               ],
             ),
+          ),
           ),
         ),
       ],

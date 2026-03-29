@@ -14,6 +14,8 @@ import '../../services/draft_service.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
+import '../../widgets/post_metadata_section.dart';
+import '../../widgets/trending_hashtags_bar.dart';
 import 'schedulepostwidget_screen.dart';
 
 /// Audio post creation screen with recording, drafts and scheduling
@@ -66,6 +68,8 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
   int? _draftId;
   List<double> _waveformData = [];
   String? _recordedFilePath;
+  String? _selectedCategory;
+  final TextEditingController _locationController = TextEditingController();
 
   late AnimationController _pulseController;
 
@@ -158,6 +162,7 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
   @override
   void dispose() {
     _contentController.dispose();
+    _locationController.dispose();
     _recordingTimer?.cancel();
     _pulseController.dispose();
     _recorderSubscription?.cancel();
@@ -450,6 +455,8 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
         audioFile: _audioFile,
         audioDuration: _recordingDuration > 0 ? _recordingDuration : null,
         coverImage: _coverImage,
+        contentCategory: _selectedCategory,
+        locationName: _locationController.text.trim().isNotEmpty ? _locationController.text.trim() : null,
       );
 
       if (mounted) {
@@ -1116,6 +1123,22 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
                         ),
                       ),
                       onChanged: (_) => setState(() {}),
+                    ),
+                    // Trending hashtags
+                    TrendingHashtagsBar(
+                      onHashtagTap: (tag) {
+                        final text = _contentController.text;
+                        final suffix = text.isEmpty || text.endsWith(' ') ? '#$tag ' : ' #$tag ';
+                        _contentController.text = text + suffix;
+                        _contentController.selection = TextSelection.collapsed(offset: _contentController.text.length);
+                        setState(() {});
+                      },
+                    ),
+                    // Category & Location
+                    PostMetadataSection(
+                      selectedCategory: _selectedCategory,
+                      onCategoryChanged: (v) => setState(() => _selectedCategory = v),
+                      locationController: _locationController,
                     ),
                     const SizedBox(height: 24),
 

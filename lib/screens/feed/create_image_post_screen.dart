@@ -8,6 +8,8 @@ import '../../services/draft_service.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
+import '../../widgets/post_metadata_section.dart';
+import '../../widgets/trending_hashtags_bar.dart';
 import 'schedulepostwidget_screen.dart';
 import 'photo_editor_screen.dart';
 
@@ -46,6 +48,8 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
   String _selectedFilter = 'normal';
   DateTime? _scheduledAt;
   int? _draftId;
+  String? _selectedCategory;
+  final TextEditingController _locationController = TextEditingController();
 
   static const List<Map<String, dynamic>> _filters = [
     {'name': 'normal', 'label': 'Normal', 'matrix': null},
@@ -91,6 +95,7 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
   void dispose() {
     _contentController.dispose();
     _contentFocusNode.dispose();
+    _locationController.dispose();
     _draftService.dispose();
     super.dispose();
   }
@@ -174,6 +179,8 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
         postType: 'photo',
         media: _selectedImages,
         videoFilter: _selectedFilter != 'normal' ? _selectedFilter : null,
+        contentCategory: _selectedCategory,
+        locationName: _locationController.text.trim().isNotEmpty ? _locationController.text.trim() : null,
       );
 
       if (mounted) {
@@ -506,6 +513,23 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
                                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
                               ),
                               onChanged: (_) => setState(() {}),
+                            ),
+                            // Trending hashtags
+                            TrendingHashtagsBar(
+                              onHashtagTap: (tag) {
+                                final text = _contentController.text;
+                                final suffix = text.isEmpty || text.endsWith(' ') ? '#$tag ' : ' #$tag ';
+                                _contentController.text = text + suffix;
+                                _contentController.selection = TextSelection.collapsed(offset: _contentController.text.length);
+                                _contentFocusNode.requestFocus();
+                                setState(() {});
+                              },
+                            ),
+                            // Category & Location
+                            PostMetadataSection(
+                              selectedCategory: _selectedCategory,
+                              onCategoryChanged: (v) => setState(() => _selectedCategory = v),
+                              locationController: _locationController,
                             ),
                             const SizedBox(height: 16),
                             SchedulePostWidget(initialScheduledAt: _scheduledAt, onScheduleChanged: (date) => setState(() => _scheduledAt = date)),
