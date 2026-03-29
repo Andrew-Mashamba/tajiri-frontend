@@ -26,8 +26,12 @@ class LocalStorageService {
     return _instance!;
   }
 
+  /// Synchronous access to the already-initialized instance (null if not yet ready).
+  static LocalStorageService? get instanceSync => _instance;
+
   Future<void> _init() async {
     _userBox = await Hive.openBox(_userBoxName);
+    await Hive.openBox('ad_settings');
   }
 
   // Save user data after registration
@@ -170,5 +174,44 @@ class LocalStorageService {
   /// Generic string setter for preference keys.
   Future<void> setString(String key, String value) async {
     await _userBox.put(key, value);
+  }
+
+  // ── Ad Settings Cache ──────────────────────────────────────────────────────
+
+  Future<void> saveAdSettings(Map<String, dynamic> settings) async {
+    final box = await Hive.openBox('ad_settings');
+    await box.put('settings', settings);
+    await box.put('lastFetchedAt', DateTime.now().toIso8601String());
+  }
+
+  Map<String, dynamic>? getAdSettings() {
+    final box = Hive.box('ad_settings');
+    final data = box.get('settings');
+    if (data == null) return null;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  int getAdFrequency(String key, int defaultValue) {
+    final settings = getAdSettings();
+    if (settings == null) return defaultValue;
+    return int.tryParse(settings[key]?.toString() ?? '') ?? defaultValue;
+  }
+
+  String? getAdMobUnitId(String key) {
+    final settings = getAdSettings();
+    if (settings == null) return null;
+    return settings[key]?.toString();
+  }
+
+  bool shouldRefreshAdSettings() {
+    try {
+      final box = Hive.box('ad_settings');
+      final lastFetched = box.get('lastFetchedAt') as String?;
+      if (lastFetched == null) return true;
+      final lastDate = DateTime.parse(lastFetched);
+      return DateTime.now().difference(lastDate).inHours >= 24;
+    } catch (_) {
+      return true;
+    }
   }
 }

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../models/ad_models.dart';
 import '../../models/story_models.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../services/story_service.dart';
 import '../../widgets/cached_media_image.dart';
+import '../../widgets/story_ad_overlay.dart';
 
 /// Story 51: View Stories — Home → Feed → Stories row → Tap to view.
 /// Tap right = next, left = previous. Auto-advance ~5s. Progress bar at top.
@@ -33,6 +37,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   double _dragOffset = 0;
   bool _programmaticPageChange = false;
 
+  // Ad integration — show ad every N story groups (default 3, server-controlled)
+  int _groupsSinceLastAd = 0;
+  ServedAd? _nextStoryAd;
+  bool _showingAd = false;
+  int _storyAdFrequency = 3; // overridden from server settings in initState
+
   static const Duration _defaultStoryDuration = Duration(seconds: 5);
   static const double _minDragToExit = 80;
 
@@ -50,8 +60,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       }
     });
 
+    // Read server-controlled ad frequency (falls back to 3 if not cached)
+    final storage = LocalStorageService.instanceSync;
+    if (storage != null) {
+      _storyAdFrequency = storage.getAdFrequency('ad_story_frequency', 3);
+    }
+
     _startProgress();
     _markAsViewed();
+    _prefetchStoryAd();
   }
 
   @override
@@ -116,7 +133,33 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
   }
 
-  void _nextGroup() {
+  Future<void> _prefetchStoryAd() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'stories', 1);
+      if (ads.isNotEmpty && mounted) {
+        setState(() => _nextStoryAd = ads.first);
+      }
+    } catch (_) {
+      // Ad prefetch failure is non-fatal
+    }
+  }
+
+  void _onAdComplete() {
+    setState(() => _showingAd = false);
+    _prefetchStoryAd();
+    // Continue advancing to the next group
+    _advanceToNextGroup();
+  }
+
+  void _onAdSkip() {
+    setState(() => _showingAd = false);
+    _prefetchStoryAd();
+    _advanceToNextGroup();
+  }
+
+  void _advanceToNextGroup() {
     if (_currentGroupIndex < widget.storyGroups.length - 1) {
       _programmaticPageChange = true;
       setState(() {
@@ -132,6 +175,41 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     } else {
       Navigator.pop(context);
     }
+  }
+
+  void _nextGroup() {
+    _groupsSinceLastAd++;
+    if (_groupsSinceLastAd >= _storyAdFrequency && _nextStoryAd != null) {
+      _groupsSinceLastAd = 0;
+      _progressController.stop();
+      setState(() => _showingAd = true);
+      // Record impression (fire-and-forget)
+      _recordAdImpression(_nextStoryAd!, 'stories');
+      return;
+    }
+    _advanceToNextGroup();
+  }
+
+  Future<void> _recordAdImpression(ServedAd ad, String placement) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      AdService.recordAdEvent(
+        token, ad.campaignId, ad.creativeId,
+        widget.currentUserId, placement, 'impression',
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _recordAdClick(ServedAd ad, String placement) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      AdService.recordAdEvent(
+        token, ad.campaignId, ad.creativeId,
+        widget.currentUserId, placement, 'click',
+      );
+    } catch (_) {}
   }
 
   void _previousGroup() {
@@ -274,29 +352,47 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             onLongPressEnd: _onLongPressEnd,
             onVerticalDragUpdate: _onVerticalDragUpdate,
             onVerticalDragEnd: _onVerticalDragEnd,
-            child: PageView.builder(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.storyGroups.length,
-              onPageChanged: _onPageChanged,
-              itemBuilder: (context, groupIndex) {
-                final group = widget.storyGroups[groupIndex];
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _StoryContent(
-                      story: groupIndex == _currentGroupIndex
-                          ? _currentStory
-                          : group.stories.isNotEmpty
-                              ? group.stories.first
-                              : null,
+            child: Stack(
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: widget.storyGroups.length,
+                  onPageChanged: _onPageChanged,
+                  itemBuilder: (context, groupIndex) {
+                    final group = widget.storyGroups[groupIndex];
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _StoryContent(
+                          story: groupIndex == _currentGroupIndex
+                              ? _currentStory
+                              : group.stories.isNotEmpty
+                                  ? group.stories.first
+                                  : null,
+                        ),
+                        _buildProgressBars(group, groupIndex),
+                        _buildHeader(group, groupIndex),
+                        if (groupIndex == _currentGroupIndex) _buildBottomActions(),
+                      ],
+                    );
+                  },
+                ),
+                // Story ad overlay — shown between groups
+                if (_showingAd && _nextStoryAd != null)
+                  Positioned.fill(
+                    child: StoryAdOverlay(
+                      servedAd: _nextStoryAd,
+                      onComplete: _onAdComplete,
+                      onSkip: _onAdSkip,
+                      onClick: () {
+                        if (_nextStoryAd != null) {
+                          _recordAdClick(_nextStoryAd!, 'stories');
+                        }
+                      },
                     ),
-                    _buildProgressBars(group, groupIndex),
-                    _buildHeader(group, groupIndex),
-                    if (groupIndex == _currentGroupIndex) _buildBottomActions(),
-                  ],
-                );
-              },
+                  ),
+              ],
             ),
           ),
         ),

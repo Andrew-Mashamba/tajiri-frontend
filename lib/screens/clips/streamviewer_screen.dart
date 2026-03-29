@@ -16,6 +16,10 @@ import '../../config/api_config.dart';
 import '../../services/local_storage_service.dart';
 import '../wallet/send_tip_screen.dart';
 import 'battlemodeoverlay_screen.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../widgets/story_ad_overlay.dart';
+import '../../widgets/stream_sponsor_badge.dart';
 
 /// Minimum touch target per DOCS/DESIGN.md (48dp)
 const double _kMinTouchTarget = 48.0;
@@ -68,6 +72,11 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
   StreamSubscription<Map<String, dynamic>>? _streamStatusSubscription;
   BattleState? _battleState;
 
+  /// Pre-stream ad shown before joining.
+  ServedAd? _streamAd;
+  /// Whether the pre-stream ad overlay is currently showing.
+  bool _showPreStreamAd = false;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +103,32 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
       return;
     }
 
+    // Fetch a pre-stream ad before joining
+    final token = storage.getAuthToken();
+    try {
+      final ads = await AdService.getServedAds(token, 'live_stream', 1);
+      if (ads.isNotEmpty && mounted) {
+        setState(() {
+          _streamAd = ads.first;
+          _showPreStreamAd = true;
+        });
+        // Record impression
+        AdService.recordAdEvent(
+          token, _streamAd!.campaignId, _streamAd!.creativeId,
+          widget.currentUserId, 'live_stream', 'impression',
+        );
+        // Wait for ad completion or skip (handled in build via callbacks)
+        return;
+      }
+    } catch (e) {
+      debugPrint('[StreamViewer] Pre-stream ad error: $e');
+    }
+
+    await _proceedToJoinStream();
+  }
+
+  /// Actually join the stream (called after pre-stream ad completes or directly).
+  Future<void> _proceedToJoinStream() async {
     final joinResult = await _streamService.joinStream(widget.stream.id, widget.currentUserId);
     if (!mounted) return;
 
@@ -662,8 +697,41 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
     return false;
   }
 
+  void _onPreStreamAdComplete() {
+    if (mounted) {
+      setState(() => _showPreStreamAd = false);
+      _proceedToJoinStream();
+    }
+  }
+
+  void _onPreStreamAdSkip() {
+    if (mounted) {
+      setState(() => _showPreStreamAd = false);
+      _proceedToJoinStream();
+    }
+  }
+
+  void _recordStreamAdClick() async {
+    if (_streamAd == null) return;
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, _streamAd!.campaignId, _streamAd!.creativeId,
+      widget.currentUserId, 'live_stream', 'click',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Show full-screen pre-stream ad overlay
+    if (_showPreStreamAd && _streamAd != null) {
+      return StoryAdOverlay(
+        servedAd: _streamAd,
+        onComplete: _onPreStreamAdComplete,
+        onSkip: _onPreStreamAdSkip,
+        onClick: _recordStreamAdClick,
+      );
+    }
     if (_sessionInvalid) {
       return _buildSessionEndedBody();
     }
@@ -691,6 +759,16 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
               _buildCommentInput(),
               if (_showGifts) _buildGiftsPanel(),
             ],
+            // Sponsor badge — always visible (non-intrusive)
+            if (_streamAd != null)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                child: StreamSponsorBadge(
+                  servedAd: _streamAd!,
+                  onTap: _recordStreamAdClick,
+                ),
+              ),
           ],
         ),
       ),

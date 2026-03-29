@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
 import 'screens/splash/splash_screen.dart';
@@ -42,17 +43,25 @@ import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'screens/sponsored/sponsored_posts_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/biashara/biashara_home_screen.dart';
+import 'screens/biashara/create_ad_campaign_screen.dart';
+import 'screens/biashara/campaign_detail_screen.dart';
+import 'screens/biashara/deposit_ad_balance_screen.dart';
 import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
 import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
 import 'services/language_notifier.dart';
 import 'services/fcm_service.dart';
 import 'services/event_tracking_service.dart';
+import 'services/ad_service.dart';
 import 'l10n/app_strings.dart';
 import 'l10n/app_strings_scope.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize AdMob
+  MobileAds.instance.initialize();
 
   // Initialize Hive for local storage
   await Hive.initFlutter();
@@ -146,7 +155,25 @@ class _TajiriAppState extends State<TajiriApp> {
     final storage = await LocalStorageService.getInstance();
     ThemeNotifier.init(storage.getThemeMode());
     LanguageNotifier.init(storage.getLanguageCode());
+    // Fire-and-forget ad settings refresh (non-blocking)
+    _fetchAdSettingsIfNeeded().ignore();
     if (mounted) setState(() => _themeReady = true);
+  }
+
+  Future<void> _fetchAdSettingsIfNeeded() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      if (!storage.shouldRefreshAdSettings()) return;
+      final token = storage.getAuthToken();
+      if (token == null) return;
+      final settings = await AdService.getClientSettings(token);
+      if (settings.isNotEmpty) {
+        await storage.saveAdSettings(settings);
+        debugPrint('[AdSettings] Refreshed ${settings.length} settings from server');
+      }
+    } catch (e) {
+      debugPrint('[AdSettings] Fetch failed: $e');
+    }
   }
 
   @override
@@ -788,6 +815,34 @@ class _TajiriAppState extends State<TajiriApp> {
               }
             }
             break;
+
+          case 'biashara':
+            // Sub-routes: /biashara/create, /biashara/deposit, /biashara/campaign/:id
+            if (pathSegments.length > 1) {
+              switch (pathSegments[1]) {
+                case 'create':
+                  return MaterialPageRoute(
+                    builder: (_) => const CreateAdCampaignScreen(),
+                  );
+                case 'deposit':
+                  return MaterialPageRoute(
+                    builder: (_) => const DepositAdBalanceScreen(),
+                  );
+                case 'campaign':
+                  if (pathSegments.length > 2) {
+                    final campaignId = int.tryParse(pathSegments[2]) ?? 0;
+                    if (campaignId > 0) {
+                      return MaterialPageRoute(
+                        builder: (_) => CampaignDetailScreen(campaignId: campaignId),
+                      );
+                    }
+                  }
+                  break;
+              }
+            }
+            return MaterialPageRoute(
+              builder: (_) => const BiasharaHomeScreen(),
+            );
 
           case 'login':
             return MaterialPageRoute(

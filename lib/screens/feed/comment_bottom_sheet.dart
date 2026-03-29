@@ -8,6 +8,10 @@ import '../../widgets/rich_comment_content.dart';
 import '../../widgets/user_avatar.dart';
 import '../search/search_screen.dart';
 import '../search/hashtag_screen.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
+import '../../widgets/native_ad_card.dart';
 
 void _log(String message) => debugPrint('[CommentBottomSheet] $message');
 
@@ -79,12 +83,16 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   final Set<int> _expandedReplyParents = {};
   int? _pinnedCommentId;
 
+  /// Ads served in the comments list (inserted after every 8 comments).
+  List<ServedAd> _commentAds = [];
+
   @override
   void initState() {
     super.initState();
     _commentsCount = widget.initialPost?.commentsCount ?? 0;
     _log('initState: postId=${widget.postId} displayCount=$_commentsCount');
     _loadComments();
+    _loadCommentAds();
     _scrollController.addListener(_onScroll);
   }
 
@@ -140,6 +148,38 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   }
 
   bool get _allowComments => widget.initialPost?.allowComments ?? true;
+
+  /// Fetch ads for the comments placement.
+  Future<void> _loadCommentAds() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'comments', 1);
+      if (mounted && ads.isNotEmpty) {
+        setState(() => _commentAds = ads);
+      }
+    } catch (e) {
+      _log('_loadCommentAds error: $e');
+    }
+  }
+
+  void _recordCommentAdImpression(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'comments', 'impression',
+    );
+  }
+
+  void _recordCommentAdClick(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'comments', 'click',
+    );
+  }
 
   Future<void> _loadComments() async {
     _log('loadComments: start postId=${widget.postId} _isLoadingComments=$_isLoadingComments');
@@ -619,12 +659,31 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
     }
 
     final topLevel = _topLevelComments;
+    final commentCount = _listItemCount(topLevel);
+    // Insert a compact ad after every 8 comments
+    final adSlots = _commentAds.isNotEmpty ? (commentCount ~/ 8) : 0;
+    final totalCount = commentCount + adSlots;
 
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.only(bottom: 16),
-      itemCount: _listItemCount(topLevel),
-      itemBuilder: (context, index) => _buildCommentItemAtIndex(index, topLevel),
+      itemCount: totalCount,
+      itemBuilder: (context, index) {
+        // Check if this index is an ad slot (positions 8, 17, 26, ...)
+        if (_commentAds.isNotEmpty && index > 0 && (index + 1) % 9 == 0) {
+          final adIndex = ((index + 1) ~/ 9 - 1) % _commentAds.length;
+          final ad = _commentAds[adIndex];
+          return NativeAdCard(
+            servedAd: ad,
+            onImpression: () => _recordCommentAdImpression(ad),
+            onClick: () => _recordCommentAdClick(ad),
+          );
+        }
+        // Map visual index to comment index by subtracting ad slots before it
+        final adsBefore = _commentAds.isNotEmpty ? ((index + 1) ~/ 9) : 0;
+        final commentIndex = index - adsBefore;
+        return _buildCommentItemAtIndex(commentIndex, topLevel);
+      },
     );
   }
 

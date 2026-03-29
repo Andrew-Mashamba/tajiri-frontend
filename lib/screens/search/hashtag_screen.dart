@@ -6,6 +6,10 @@ import '../../widgets/share_post_sheet.dart';
 import '../feed/comment_bottom_sheet.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
 import 'search_screen.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
+import '../../widgets/native_ad_card.dart';
 
 // DESIGN.md: background #FAFAFA, primary #1A1A1A, secondary #666666, accent #999999, min touch 48dp
 const Color _kBg = Color(0xFFFAFAFA);
@@ -37,6 +41,9 @@ class _HashtagScreenState extends State<HashtagScreen> {
   bool _hasMore = true;
   int _currentPage = 1;
   String? _error;
+
+  List<ServedAd> _hashtagAds = [];
+  static const int _adInterval = 6;
 
   @override
   void initState() {
@@ -81,6 +88,20 @@ class _HashtagScreenState extends State<HashtagScreen> {
           _error = result.message;
         }
       });
+    }
+    _loadHashtagAds();
+  }
+
+  Future<void> _loadHashtagAds() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'hashtag', 2);
+      if (mounted && ads.isNotEmpty) {
+        setState(() => _hashtagAds = ads);
+      }
+    } catch (_) {
+      // Non-critical
     }
   }
 
@@ -328,65 +349,113 @@ class _HashtagScreenState extends State<HashtagScreen> {
       );
     }
 
+    // Ad slots are inserted after every _adInterval posts.
+    // Ad positions in the list (0-indexed): _adInterval, 2*_adInterval+1, 3*_adInterval+2, ...
+    // i.e. position = k * _adInterval + (k - 1) for k = 1, 2, 3, ...
+    // Simplified: position p is an ad when (p + 1) % (_adInterval + 1) == 0
+    final bool hasAds = _hashtagAds.isNotEmpty;
+    final int adSlots = hasAds ? (_posts.length ~/ _adInterval) : 0;
+    final int totalItems = _posts.length + adSlots + (_hasMore ? 1 : 0);
+
     return RefreshIndicator(
       onRefresh: _loadPosts,
       color: _kPrimaryText,
       child: ListView.builder(
         controller: _scrollController,
-        itemCount: _posts.length + (_hasMore ? 1 : 0),
+        itemCount: totalItems,
         itemBuilder: (context, index) {
-          if (index == _posts.length) {
+          // Loading indicator at the end
+          if (index >= _posts.length + adSlots) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
 
-          final post = _posts[index];
-          return PostCard(
-            post: post,
-            currentUserId: widget.currentUserId,
-            onTap: () => Navigator.pushNamed(context, '/post/${post.id}'),
-            onLike: () => _onLike(post),
-            onComment: () => _onComment(post),
-            onShare: () => _onShare(post),
-            onSave: () => _onSave(post),
-            onUserTap: () {
-              Navigator.pushNamed(context, '/profile/${post.userId}');
-            },
-            onHashtagTap: (hashtag) {
-              if (hashtag != widget.hashtag) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => HashtagScreen(
-                      hashtag: hashtag,
-                      currentUserId: widget.currentUserId,
-                    ),
-                  ),
+          // Determine if this index is an ad or a post.
+          // Ad slots sit at indices: _adInterval, 2*(_adInterval+1)-1, ...
+          // Simple formula: every (_adInterval+1)-th item is an ad.
+          if (hasAds && index >= _adInterval && (index + 1) % (_adInterval + 1) == 0) {
+            final adNum = (index + 1) ~/ (_adInterval + 1); // 1-based ad number
+            final adIdx = (adNum - 1) % _hashtagAds.length;
+            final ad = _hashtagAds[adIdx];
+            return NativeAdCard(
+              key: ValueKey('hashtag_ad_${ad.campaignId}_${ad.creativeId}_$index'),
+              servedAd: ad,
+              onImpression: () {
+                AdService.recordAdEvent(
+                  null, ad.campaignId, ad.creativeId,
+                  widget.currentUserId, 'hashtag', 'impression',
                 );
-              }
-            },
-            onMentionTap: _onMentionTap,
-            onReaction: (reaction) => _onReaction(post, reaction),
-            onThreadTap: post.threadId != null
-                ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
-                : null,
-            onSubscribe: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SubscribeToCreatorScreen(
-                    creatorId: post.userId,
-                    currentUserId: widget.currentUserId,
-                    creatorDisplayName: post.user?.fullName,
-                  ),
-                ),
-              );
-            },
-          );
+              },
+              onClick: () {
+                AdService.recordAdEvent(
+                  null, ad.campaignId, ad.creativeId,
+                  widget.currentUserId, 'hashtag', 'click',
+                );
+              },
+            );
+          }
+
+          // Map list index to post index (subtract ad slots before this position)
+          final int adsBefore = hasAds
+              ? (index + 1) ~/ (_adInterval + 1)
+              : 0;
+          final int postIndex = index - adsBefore;
+
+          if (postIndex < 0 || postIndex >= _posts.length) {
+            return const SizedBox.shrink();
+          }
+
+          final post = _posts[postIndex];
+          return _buildPostCard(post);
         },
       ),
+    );
+  }
+
+  Widget _buildPostCard(Post post) {
+    return PostCard(
+      post: post,
+      currentUserId: widget.currentUserId,
+      onTap: () => Navigator.pushNamed(context, '/post/${post.id}'),
+      onLike: () => _onLike(post),
+      onComment: () => _onComment(post),
+      onShare: () => _onShare(post),
+      onSave: () => _onSave(post),
+      onUserTap: () {
+        Navigator.pushNamed(context, '/profile/${post.userId}');
+      },
+      onHashtagTap: (hashtag) {
+        if (hashtag != widget.hashtag) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HashtagScreen(
+                hashtag: hashtag,
+                currentUserId: widget.currentUserId,
+              ),
+            ),
+          );
+        }
+      },
+      onMentionTap: _onMentionTap,
+      onReaction: (reaction) => _onReaction(post, reaction),
+      onThreadTap: post.threadId != null
+          ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
+          : null,
+      onSubscribe: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SubscribeToCreatorScreen(
+              creatorId: post.userId,
+              currentUserId: widget.currentUserId,
+              creatorDisplayName: post.user?.fullName,
+            ),
+          ),
+        );
+      },
     );
   }
 }

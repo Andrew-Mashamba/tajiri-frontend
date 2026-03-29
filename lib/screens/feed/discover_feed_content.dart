@@ -22,6 +22,9 @@ import '../wallet/subscribe_to_creator_screen.dart';
 import '../search/hashtag_screen.dart';
 import '../search/search_screen.dart';
 import 'post_detail_screen.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../widgets/native_ad_card.dart';
 
 /// Section type for the Discover tab
 enum DiscoverSection {
@@ -50,6 +53,8 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
   List<Post> _trendingPosts = [];
   List<Post> _nearbyPosts = [];
   List<GossipThread> _threads = [];
+
+  ServedAd? _promotedAd;
 
   bool _loadingDiscover = true;
   bool _loadingNearby = true;
@@ -81,6 +86,7 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
       _loadDiscover(),
       _loadNearby(),
       _loadThreads(),
+      _loadPromotedAd(),
     ]);
   }
 
@@ -150,6 +156,19 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
         _errorNearby = result.message ?? 'Imeshindwa kupakia';
       }
     });
+  }
+
+  Future<void> _loadPromotedAd() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'search', 1);
+      if (mounted && ads.isNotEmpty) {
+        setState(() => _promotedAd = ads.first);
+      }
+    } catch (_) {
+      // Non-critical — skip promoted ad
+    }
   }
 
   void _onLike(Post post, DiscoverSection section) {
@@ -529,6 +548,26 @@ class _DiscoverFeedContentState extends State<DiscoverFeedContent> {
               ),
             ),
           ),
+          if (_promotedAd != null)
+            SliverToBoxAdapter(
+              child: NativeAdCard(
+                servedAd: _promotedAd,
+                onImpression: () {
+                  final ad = _promotedAd!;
+                  AdService.recordAdEvent(
+                    null, ad.campaignId, ad.creativeId,
+                    widget.currentUserId, 'search', 'impression',
+                  );
+                },
+                onClick: () {
+                  final ad = _promotedAd!;
+                  AdService.recordAdEvent(
+                    null, ad.campaignId, ad.creativeId,
+                    widget.currentUserId, 'search', 'click',
+                  );
+                },
+              ),
+            ),
           _buildThreadsSection(),
           _buildSection(
             title: 'Gundua',

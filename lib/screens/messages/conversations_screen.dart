@@ -22,6 +22,9 @@ import '../../l10n/app_strings_scope.dart';
 import '../calls/call_history_screen.dart' show OutgoingCallScreen;
 import '../calls/outgoing_call_flow_screen.dart';
 import '../../services/local_storage_service.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../widgets/conversation_ad_card.dart';
 
 // Design: DOCS/DESIGN.md — #FAFAFA background, #1A1A1A primary text, 48dp min touch targets.
 // Pill tabs pattern from Posts → Live (streams_screen.dart).
@@ -87,6 +90,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   String _chatsFilter = 'all'; // all | favorites | archived | Work | Friends | Personal
   String _callsFilter = 'all'; // all | missed
 
+  /// Ads served in the conversations list (inserted every N conversations, server-controlled).
+  List<ServedAd> _conversationAds = [];
+  int _conversationAdFrequency = 5; // default; overridden from server settings in initState
+
   /// Search: chats + Tajiri users (+ contacts when available). DESIGN.md: 48dp touch, smooth clear/cancel.
   final TextEditingController _searchController = TextEditingController();
   static const Duration _searchDebounce = Duration(milliseconds: 320);
@@ -120,9 +127,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _groupSearchController.addListener(() {
       if (mounted) setState(() => _groupSearchQuery = _groupSearchController.text.trim());
     });
+    // Read server-controlled ad frequency (falls back to 5 if not cached)
+    final adStorage = LocalStorageService.instanceSync;
+    if (adStorage != null) {
+      _conversationAdFrequency = adStorage.getAdFrequency('ad_conversations_frequency', 5);
+    }
     _loadChatPrefs();
     _loadConversations();
     _loadCallHistory();
+    _loadConversationAds();
     // Real-time: refresh chat list on push (new message, etc.) so list stays in sync without polling
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
       if (event is MessagesUpdateEvent && mounted) _loadConversations();
@@ -311,7 +324,38 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (mounted) setState(() {});
   }
 
-  @override
+  /// Fetch ads for the conversations list placement.
+  Future<void> _loadConversationAds() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'conversations', 2);
+      if (mounted && ads.isNotEmpty) {
+        setState(() => _conversationAds = ads);
+      }
+    } catch (e) {
+      debugPrint('[Messages] _loadConversationAds error: $e');
+    }
+  }
+
+  void _recordAdImpression(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'conversations', 'impression',
+    );
+  }
+
+  void _recordAdClick(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'conversations', 'click',
+    );
+  }
+
   Future<void> _loadConversations() async {
     if (!mounted) return;
     if (widget.currentUserId == 0) {
@@ -944,10 +988,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       );
     }
 
-    // Single virtualized list: main tiles, then divider + archived header, then (if expanded) archived tiles
+    // Single virtualized list: main tiles + ad slots, then divider + archived header, then (if expanded) archived tiles
     const double _cacheExtent = 400; // Pre-render ~5–6 rows off-screen for smooth scroll
+    // Insert an ad after every _conversationAdFrequency conversations
+    final int adStride = _conversationAdFrequency + 1; // stride = freq + 1 ad slot
+    final int adSlots = _conversationAds.isNotEmpty ? (list.length ~/ _conversationAdFrequency) : 0;
+    final int mainSectionCount = list.length + adSlots;
     final int archivedSectionCount = hasArchived ? 2 + (_archivedExpanded ? archived.length : 0) : 0;
-    final int itemCount = list.length + archivedSectionCount;
+    final int itemCount = mainSectionCount + archivedSectionCount;
 
     return RefreshIndicator(
       onRefresh: _loadConversations,
@@ -957,10 +1005,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         itemCount: itemCount,
         cacheExtent: _cacheExtent,
         itemBuilder: (context, index) {
-          if (index < list.length) {
-            final tile = _wrapSlidable(list[index], s, showFavoriteArchive: false);
-            final showSeparator = index < list.length - 1;
-            if (!showSeparator) return tile;
+          if (index < mainSectionCount) {
+            // Check if this index is an ad slot (every adStride-th item)
+            if (_conversationAds.isNotEmpty && index > 0 && (index + 1) % adStride == 0) {
+              final adIndex = ((index + 1) ~/ adStride - 1) % _conversationAds.length;
+              final ad = _conversationAds[adIndex];
+              return ConversationAdCard(
+                servedAd: ad,
+                onImpression: () => _recordAdImpression(ad),
+                onClick: () => _recordAdClick(ad),
+              );
+            }
+            // Map visual index back to conversation index (subtract ad slots before this index)
+            final adsBefore = _conversationAds.isNotEmpty ? ((index + 1) ~/ adStride) : 0;
+            final convIndex = index - adsBefore;
+            if (convIndex >= list.length) return const SizedBox.shrink();
+            final tile = _wrapSlidable(list[convIndex], s, showFavoriteArchive: false);
+            final isLastConv = convIndex == list.length - 1;
+            if (isLastConv) return tile;
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -972,10 +1034,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ],
             );
           }
-          if (hasArchived && index == list.length) {
+          final archivedBaseIndex = mainSectionCount;
+          if (hasArchived && index == archivedBaseIndex) {
             return const Divider(height: 1);
           }
-          if (hasArchived && index == list.length + 1) {
+          if (hasArchived && index == archivedBaseIndex + 1) {
             return Material(
               color: Colors.transparent,
               child: InkWell(
@@ -1004,9 +1067,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
             );
           }
-          if (_archivedExpanded && index < list.length + 2 + archived.length) {
-            final tile = _wrapSlidable(archived[index - list.length - 2], s, showFavoriteArchive: false);
-            final showSeparator = index < list.length + 2 + archived.length - 1;
+          if (_archivedExpanded && index < archivedBaseIndex + 2 + archived.length) {
+            final tile = _wrapSlidable(archived[index - archivedBaseIndex - 2], s, showFavoriteArchive: false);
+            final showSeparator = index < archivedBaseIndex + 2 + archived.length - 1;
             if (!showSeparator) return tile;
             return Column(
               mainAxisSize: MainAxisSize.min,

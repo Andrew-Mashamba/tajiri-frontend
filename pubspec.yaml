@@ -121,6 +121,9 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   share_plus: ^12.0.1
 
+  # AdMob monetization
+  google_mobile_ads: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

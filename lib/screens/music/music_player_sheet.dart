@@ -4,8 +4,12 @@ import 'package:just_audio/just_audio.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/music_models.dart';
+import '../../models/ad_models.dart';
 import '../../services/music_service.dart';
 import '../../services/simple_audio_service.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
+import '../../widgets/music_ad_overlay.dart';
 
 /// Spotify-style Music Player Sheet with Background Playback
 /// Features:
@@ -62,6 +66,12 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
   // Error state
   String? _errorMessage;
 
+  // Ad state
+  int _tracksSinceLastAd = 0;
+  ServedAd? _nextMusicAd;
+  bool _showingAd = false;
+  int _musicAdFrequency = 4; // default; overridden from server settings in initState
+
   // Animation
   late AnimationController _rotationController;
 
@@ -73,7 +83,13 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
       vsync: this,
       duration: const Duration(seconds: 10),
     );
+    // Read server-controlled ad frequency (falls back to 4 if not cached)
+    final storage = LocalStorageService.instanceSync;
+    if (storage != null) {
+      _musicAdFrequency = storage.getAdFrequency('ad_music_frequency', 4);
+    }
     _initAudio();
+    _prefetchMusicAd();
   }
 
   Future<void> _initAudio() async {
@@ -130,11 +146,21 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
     // Listen to processing state (for track changes and buffering)
     _processingStateSub = _audioService.processingStateStream.listen((state) {
       if (mounted) {
+        final previousTrackId = _currentTrack?.id;
+        final newTrack = _audioService.currentTrack;
         setState(() {
           _processingState = state;
-          _currentTrack = _audioService.currentTrack;
+          _currentTrack = newTrack;
           _isSaved = _currentTrack?.isSaved ?? false;
         });
+        // Detect track change — show ad every _musicAdFrequency tracks
+        if (newTrack != null && previousTrackId != null && newTrack.id != previousTrackId) {
+          _tracksSinceLastAd++;
+          if (_tracksSinceLastAd >= _musicAdFrequency && _nextMusicAd != null && !_showingAd) {
+            _tracksSinceLastAd = 0;
+            _showMusicAd();
+          }
+        }
       }
     });
 
@@ -190,6 +216,47 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
         _isSaved = _currentTrack?.isSaved ?? widget.track.isSaved ?? false;
       });
     }
+  }
+
+  // ── Ad helpers ────────────────────────────────────────────────────────
+
+  Future<void> _prefetchMusicAd() async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    final ads = await AdService.getServedAds(token, 'music', 1);
+    if (mounted && ads.isNotEmpty) {
+      setState(() => _nextMusicAd = ads.first);
+    }
+  }
+
+  Future<void> _showMusicAd() async {
+    _audioService.pause();
+    setState(() => _showingAd = true);
+    // Record impression
+    final ad = _nextMusicAd!;
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'music', 'impression',
+    );
+  }
+
+  void _onMusicAdComplete() {
+    setState(() => _showingAd = false);
+    _audioService.play();
+    _prefetchMusicAd();
+  }
+
+  Future<void> _onMusicAdClick() async {
+    final ad = _nextMusicAd;
+    if (ad == null) return;
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'music', 'click',
+    );
   }
 
   Future<void> _toggleSave() async {
@@ -310,41 +377,58 @@ class _MusicPlayerSheetState extends State<MusicPlayerSheet>
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: SafeArea(
-        child: _isContentLocked
-            ? _buildSubscriberOverlay(title, artist, artUri)
-            : Column(
-                children: [
-                  // Header
-                  _buildHeader(context),
+        child: Stack(
+          children: [
+            _isContentLocked
+                ? _buildSubscriberOverlay(title, artist, artUri)
+                : Column(
+                    children: [
+                      // Header
+                      _buildHeader(context),
 
-                  const Spacer(),
+                      const Spacer(),
 
-                  // Album Art with rotation animation
-                  _buildAlbumArt(artUri),
+                      // Album Art with rotation animation
+                      _buildAlbumArt(artUri),
 
-                  const Spacer(),
+                      const Spacer(),
 
-                  // Track Info
-                  _buildTrackInfo(title, artist),
+                      // Track Info
+                      _buildTrackInfo(title, artist),
 
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  // Progress Slider
-                  _buildProgressSlider(progress),
+                      // Progress Slider
+                      _buildProgressSlider(progress),
 
-                  const SizedBox(height: 8),
+                      const SizedBox(height: 8),
 
-                  // Main Controls
-                  _buildMainControls(),
+                      // Main Controls
+                      _buildMainControls(),
 
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  // Bottom Actions
-                  _buildBottomActions(),
+                      // Bottom Actions
+                      _buildBottomActions(),
 
-                  const SizedBox(height: 32),
-                ],
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+            // Music ad overlay — shown between tracks
+            if (_showingAd && _nextMusicAd != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: MusicAdOverlay(
+                  servedAd: _nextMusicAd!,
+                  onComplete: _onMusicAdComplete,
+                  onImpression: () {}, // already recorded in _showMusicAd
+                  onClick: _onMusicAdClick,
+                ),
               ),
+          ],
+        ),
       ),
     );
   }

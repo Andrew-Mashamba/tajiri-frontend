@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart' hide Clip;
 import 'package:flutter/material.dart' as material show Clip;
 import 'package:video_player/video_player.dart';
+import '../../models/ad_models.dart';
 import '../../models/clip_models.dart';
+import '../../services/ad_service.dart';
 import '../../services/clip_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../services/video_cache_service.dart';
+import '../../widgets/story_ad_overlay.dart';
 import 'create_clip_screen.dart';
 
 class ClipsScreen extends StatefulWidget {
@@ -25,10 +29,22 @@ class _ClipsScreenState extends State<ClipsScreen> {
   int _currentIndex = 0;
   bool _isMuted = false;
 
+  // Ad integration — show ad every N clips (default 5, server-controlled)
+  int _clipsSinceLastAd = 0;
+  ServedAd? _nextClipAd;
+  bool _showingAd = false;
+  int _clipAdFrequency = 5; // overridden from server settings in initState
+
   @override
   void initState() {
     super.initState();
+    // Read server-controlled ad frequency (falls back to 5 if not cached)
+    final storage = LocalStorageService.instanceSync;
+    if (storage != null) {
+      _clipAdFrequency = storage.getAdFrequency('ad_clips_frequency', 5);
+    }
     _loadClips();
+    _prefetchClipAd();
   }
 
   Future<void> _loadClips() async {
@@ -65,11 +81,54 @@ class _ClipsScreenState extends State<ClipsScreen> {
     }
   }
 
+  Future<void> _prefetchClipAd() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'clips', 1);
+      if (ads.isNotEmpty && mounted) {
+        setState(() => _nextClipAd = ads.first);
+      }
+    } catch (_) {
+      // Ad prefetch failure is non-fatal
+    }
+  }
+
+  Future<void> _recordClipAdEvent(ServedAd ad, String eventType) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      AdService.recordAdEvent(
+        token, ad.campaignId, ad.creativeId,
+        widget.currentUserId, 'clips', eventType,
+      );
+    } catch (_) {}
+  }
+
+  void _onClipAdComplete() {
+    setState(() => _showingAd = false);
+    _prefetchClipAd();
+  }
+
+  void _onClipAdSkip() {
+    setState(() => _showingAd = false);
+    _prefetchClipAd();
+  }
+
   void _onPageChanged(int index) {
     setState(() => _currentIndex = index);
     _videoCacheService.preloadForFeed(_clips, index);
     if (index >= _clips.length - 2) {
       _loadMoreClips();
+    }
+
+    // Ad frequency check
+    _clipsSinceLastAd++;
+    if (_clipsSinceLastAd >= _clipAdFrequency && _nextClipAd != null) {
+      _clipsSinceLastAd = 0;
+      setState(() => _showingAd = true);
+      // Record impression (fire-and-forget)
+      _recordClipAdEvent(_nextClipAd!, 'impression');
     }
   }
 
@@ -127,82 +186,100 @@ class _ClipsScreenState extends State<ClipsScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : _clips.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.video_library, size: 64, color: Colors.grey[600]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Hakuna klipu',
-                        style: TextStyle(color: Colors.grey[400], fontSize: 18),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : _clips.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.video_library, size: 64, color: Colors.grey[600]),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Hakuna klipu',
+                            style: TextStyle(color: Colors.grey[400], fontSize: 18),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _createClip,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Unda Klipu'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _createClip,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Unda Klipu'),
-                      ),
-                    ],
-                  ),
-                )
-              : PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  itemCount: _clips.length,
-                  onPageChanged: _onPageChanged,
-                  itemBuilder: (context, index) {
-                    return ClipItem(
-                      clip: _clips[index],
-                      isActive: index == _currentIndex,
-                      isMuted: _isMuted,
-                      currentUserId: widget.currentUserId,
-                      onLikeChanged: (isLiked) {
-                        setState(() {
-                          _clips[index] = Clip(
-                            id: _clips[index].id,
-                            userId: _clips[index].userId,
-                            videoPath: _clips[index].videoPath,
-                            thumbnailPath: _clips[index].thumbnailPath,
-                            caption: _clips[index].caption,
-                            duration: _clips[index].duration,
-                            musicId: _clips[index].musicId,
-                            musicStart: _clips[index].musicStart,
-                            hashtags: _clips[index].hashtags,
-                            mentions: _clips[index].mentions,
-                            locationName: _clips[index].locationName,
-                            latitude: _clips[index].latitude,
-                            longitude: _clips[index].longitude,
-                            privacy: _clips[index].privacy,
-                            allowComments: _clips[index].allowComments,
-                            allowDuet: _clips[index].allowDuet,
-                            allowStitch: _clips[index].allowStitch,
-                            allowDownload: _clips[index].allowDownload,
-                            viewsCount: _clips[index].viewsCount,
-                            likesCount: _clips[index].likesCount + (isLiked ? 1 : -1),
-                            commentsCount: _clips[index].commentsCount,
-                            sharesCount: _clips[index].sharesCount,
-                            savesCount: _clips[index].savesCount,
-                            duetsCount: _clips[index].duetsCount,
-                            isFeatured: _clips[index].isFeatured,
-                            status: _clips[index].status,
-                            originalClipId: _clips[index].originalClipId,
-                            clipType: _clips[index].clipType,
-                            createdAt: _clips[index].createdAt,
-                            user: _clips[index].user,
-                            music: _clips[index].music,
-                            originalClip: _clips[index].originalClip,
-                            isLiked: isLiked,
-                            isSaved: _clips[index].isSaved,
-                          );
-                        });
+                    )
+                  : PageView.builder(
+                      controller: _pageController,
+                      scrollDirection: Axis.vertical,
+                      itemCount: _clips.length,
+                      onPageChanged: _onPageChanged,
+                      itemBuilder: (context, index) {
+                        return ClipItem(
+                          clip: _clips[index],
+                          isActive: index == _currentIndex && !_showingAd,
+                          isMuted: _isMuted,
+                          currentUserId: widget.currentUserId,
+                          onLikeChanged: (isLiked) {
+                            setState(() {
+                              _clips[index] = Clip(
+                                id: _clips[index].id,
+                                userId: _clips[index].userId,
+                                videoPath: _clips[index].videoPath,
+                                thumbnailPath: _clips[index].thumbnailPath,
+                                caption: _clips[index].caption,
+                                duration: _clips[index].duration,
+                                musicId: _clips[index].musicId,
+                                musicStart: _clips[index].musicStart,
+                                hashtags: _clips[index].hashtags,
+                                mentions: _clips[index].mentions,
+                                locationName: _clips[index].locationName,
+                                latitude: _clips[index].latitude,
+                                longitude: _clips[index].longitude,
+                                privacy: _clips[index].privacy,
+                                allowComments: _clips[index].allowComments,
+                                allowDuet: _clips[index].allowDuet,
+                                allowStitch: _clips[index].allowStitch,
+                                allowDownload: _clips[index].allowDownload,
+                                viewsCount: _clips[index].viewsCount,
+                                likesCount: _clips[index].likesCount + (isLiked ? 1 : -1),
+                                commentsCount: _clips[index].commentsCount,
+                                sharesCount: _clips[index].sharesCount,
+                                savesCount: _clips[index].savesCount,
+                                duetsCount: _clips[index].duetsCount,
+                                isFeatured: _clips[index].isFeatured,
+                                status: _clips[index].status,
+                                originalClipId: _clips[index].originalClipId,
+                                clipType: _clips[index].clipType,
+                                createdAt: _clips[index].createdAt,
+                                user: _clips[index].user,
+                                music: _clips[index].music,
+                                originalClip: _clips[index].originalClip,
+                                isLiked: isLiked,
+                                isSaved: _clips[index].isSaved,
+                              );
+                            });
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
+          // Clip ad overlay — shown between clips
+          if (_showingAd && _nextClipAd != null)
+            Positioned.fill(
+              child: StoryAdOverlay(
+                servedAd: _nextClipAd,
+                onComplete: _onClipAdComplete,
+                onSkip: _onClipAdSkip,
+                onClick: () {
+                  if (_nextClipAd != null) {
+                    _recordClipAdEvent(_nextClipAd!, 'click');
+                  }
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 

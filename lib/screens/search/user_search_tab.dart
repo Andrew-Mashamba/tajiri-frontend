@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/friend_models.dart';
+import '../../models/ad_models.dart';
 import '../../services/friend_service.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/native_ad_card.dart';
 
 // DESIGN.md: background #FAFAFA, primary text #1A1A1A, secondary #666666, min touch 48dp
 const Color _kBg = Color(0xFFFAFAFA);
@@ -31,6 +35,9 @@ class _UserSearchTabState extends State<UserSearchTab> {
   bool _isLoading = false;
   String? _error;
   bool _hasSearched = false;
+
+  // Ad state
+  List<ServedAd> _searchAds = [];
 
   @override
   void initState() {
@@ -83,6 +90,40 @@ class _UserSearchTabState extends State<UserSearchTab> {
       _results = result.success ? result.friends : [];
       _error = result.success ? null : (result.message ?? 'Imeshindwa kutafuta');
     });
+
+    // Fetch promoted search ads
+    if (result.success && _results.isNotEmpty) {
+      _fetchSearchAds();
+    } else {
+      setState(() => _searchAds = []);
+    }
+  }
+
+  Future<void> _fetchSearchAds() async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    final ads = await AdService.getServedAds(token, 'search', 2);
+    if (mounted) {
+      setState(() => _searchAds = ads);
+    }
+  }
+
+  void _recordAdImpression(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'search', 'impression',
+    );
+  }
+
+  void _recordAdClick(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'search', 'click',
+    );
   }
 
   @override
@@ -187,12 +228,35 @@ class _UserSearchTabState extends State<UserSearchTab> {
       );
     }
 
+    // Build mixed list: ads at positions 0 and 4 (if available)
+    final adInsertPositions = <int>[];
+    if (_searchAds.isNotEmpty) adInsertPositions.add(0);
+    if (_searchAds.length >= 2) adInsertPositions.add(4); // position 4 = after 3 user results + 1 ad
+    final totalCount = _results.length + adInsertPositions.length;
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _results.length,
+      itemCount: totalCount,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final user = _results[index];
+        // Check if this index is an ad slot
+        if (adInsertPositions.contains(index)) {
+          final adIndex = adInsertPositions.indexOf(index);
+          final ad = _searchAds[adIndex];
+          return NativeAdCard(
+            servedAd: ad,
+            onImpression: () => _recordAdImpression(ad),
+            onClick: () => _recordAdClick(ad),
+          );
+        }
+
+        // Adjust index for inserted ads
+        int userIndex = index;
+        for (final adPos in adInsertPositions) {
+          if (index > adPos) userIndex--;
+        }
+        if (userIndex >= _results.length) return const SizedBox.shrink();
+        final user = _results[userIndex];
         return Material(
           color: Colors.white,
           child: InkWell(

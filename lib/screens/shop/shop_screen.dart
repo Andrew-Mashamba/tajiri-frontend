@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
+import '../../models/ad_models.dart';
 import '../../services/shop_service.dart';
+import '../../services/ad_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../widgets/shop/product_card.dart';
 import '../../widgets/cached_media_image.dart';
+import '../../widgets/native_ad_card.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -64,6 +68,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
   // Staggered animation tracking
   final Set<int> _animatedIndices = {};
+
+  // Ad state
+  List<ServedAd> _shopAds = [];
 
   @override
   void initState() {
@@ -162,6 +169,40 @@ class _ShopScreenState extends State<ShopScreen> {
         _currentPage = 1;
       }
     });
+
+    // Fetch promoted marketplace ads
+    if (result.success && _products.isNotEmpty) {
+      _fetchShopAds();
+    } else {
+      setState(() => _shopAds = []);
+    }
+  }
+
+  Future<void> _fetchShopAds() async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    final ads = await AdService.getServedAds(token, 'marketplace', 2);
+    if (mounted) {
+      setState(() => _shopAds = ads);
+    }
+  }
+
+  void _recordShopAdImpression(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'marketplace', 'impression',
+    );
+  }
+
+  void _recordShopAdClick(ServedAd ad) async {
+    final storage = await LocalStorageService.getInstance();
+    final token = storage.getAuthToken();
+    AdService.recordAdEvent(
+      token, ad.campaignId, ad.creativeId,
+      widget.currentUserId, 'marketplace', 'click',
+    );
   }
 
   Future<void> _loadMoreProducts() async {
@@ -412,7 +453,21 @@ class _ShopScreenState extends State<ShopScreen> {
                   hasScrollBody: false,
                   child: _buildEmptyState(),
                 )
-              else
+              else ...[
+                // Promoted ad at top of product grid
+                if (_shopAds.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: NativeAdCard(
+                        servedAd: _shopAds[0],
+                        onImpression: () => _recordShopAdImpression(_shopAds[0]),
+                        onClick: () => _recordShopAdClick(_shopAds[0]),
+                      ),
+                    ),
+                  ),
+
+                // First section of products (first 4)
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
@@ -440,10 +495,61 @@ class _ShopScreenState extends State<ShopScreen> {
                           ),
                         );
                       },
-                      childCount: _products.length,
+                      childCount: _products.length > 4 && _shopAds.length >= 2
+                          ? 4
+                          : _products.length,
                     ),
                   ),
                 ),
+
+                // Second promoted ad after first 4 products
+                if (_shopAds.length >= 2 && _products.length > 4)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: NativeAdCard(
+                        servedAd: _shopAds[1],
+                        onImpression: () => _recordShopAdImpression(_shopAds[1]),
+                        onClick: () => _recordShopAdClick(_shopAds[1]),
+                      ),
+                    ),
+                  ),
+
+                // Remaining products (after 4)
+                if (_shopAds.length >= 2 && _products.length > 4)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 0.65,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final realIndex = index + 4;
+                          final product = _products[realIndex];
+                          return _StaggeredGridItem(
+                            index: realIndex,
+                            alreadyAnimated: _animatedIndices.contains(realIndex),
+                            onAnimated: () => _animatedIndices.add(realIndex),
+                            child: ProductCard(
+                              product: product,
+                              onTap: () => _openProductDetail(product),
+                              onFavorite: () => _onToggleFavorite(product),
+                              onAddToCart: product.isInStock
+                                  ? () => _onAddToCart(product)
+                                  : null,
+                            ),
+                          );
+                        },
+                        childCount: _products.length - 4,
+                      ),
+                    ),
+                  ),
+              ],
 
               // 6. Loading more spinner
               if (_isLoadingMore)

@@ -4,6 +4,7 @@ class Wallet {
   final String currency;
   final bool isActive;
   final bool hasPin;
+  final double adBalance;
 
   Wallet({
     required this.balance,
@@ -11,6 +12,7 @@ class Wallet {
     this.currency = 'TZS',
     this.isActive = true,
     this.hasPin = false,
+    this.adBalance = 0.0,
   });
 
   factory Wallet.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class Wallet {
       currency: json['currency'] ?? 'TZS',
       isActive: json['is_active'] ?? true,
       hasPin: json['has_pin'] ?? false,
+      adBalance: (json['ad_balance'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

@@ -37,6 +37,9 @@ import '../../services/creator_service.dart';
 import '../../services/content_engine_service.dart';
 import '../../models/flywheel_models.dart';
 import '../../widgets/posting_nudge_card.dart';
+import '../../models/ad_models.dart';
+import '../../services/ad_service.dart';
+import '../../widgets/native_ad_card.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
 
 /// Estimated height for a typical post card (used for scroll optimization)
@@ -111,6 +114,10 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   // Engagement intensity graduation (Spec §6)
   EngagementLevel _engagementLevel = EngagementLevel.gentle;
 
+  // Native ads for feed
+  List<ServedAd> _feedAds = [];
+  int _adInterval = 10; // default; overridden from server settings in initState
+
   // Depth milestone tracking
   int _sessionPostsViewed = 0;
   bool _showed25Milestone = false;
@@ -131,6 +138,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     _threadPositions = [];
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
+    // Read server-controlled ad frequency (falls back to 10 if not cached)
+    final storage = LocalStorageService.instanceSync;
+    if (storage != null) {
+      _adInterval = storage.getAdFrequency('ad_feed_frequency', 10);
+    }
     _loadEngagementLevel();
     _loadFeed();
     _loadStories();
@@ -369,6 +381,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     _feedItems = [];
     _generateInsertionPositions(_posts.length);
     int threadIdx = 0;
+    int adIdx = 0;
 
     for (int i = 0; i < _posts.length; i++) {
       _feedItems.add(_FeedItem.post(i));
@@ -379,6 +392,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       if (_threadPositions.contains(i + 1) && _gossipThreads.isNotEmpty) {
         _feedItems.add(_FeedItem.threadCard(threadIdx % _gossipThreads.length));
         threadIdx++;
+      }
+      // Insert an ad every _adInterval posts
+      if (_feedAds.isNotEmpty && (i + 1) % _adInterval == 0) {
+        _feedItems.add(_FeedItem.ad(adIdx % _feedAds.length));
+        adIdx++;
       }
     }
   }
@@ -625,6 +643,21 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       });
     }
     _buildFeedItems();
+    _loadFeedAds();
+  }
+
+  Future<void> _loadFeedAds() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'feed', 3);
+      if (mounted && ads.isNotEmpty) {
+        setState(() => _feedAds = ads);
+        _buildFeedItems();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FeedScreen] Failed to load feed ads: $e');
+    }
   }
 
   Future<void> _loadMore() async {
@@ -1099,6 +1132,29 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
                 },
               );
 
+            case _FeedItemType.ad:
+              final adIndex = feedItem.adIndex;
+              if (adIndex == null || _feedAds.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              final ad = _feedAds[adIndex % _feedAds.length];
+              return NativeAdCard(
+                key: ValueKey('feed_ad_${ad.campaignId}_${ad.creativeId}'),
+                servedAd: ad,
+                onImpression: () {
+                  AdService.recordAdEvent(
+                    null, ad.campaignId, ad.creativeId,
+                    widget.currentUserId, 'feed', 'impression',
+                  );
+                },
+                onClick: () {
+                  AdService.recordAdEvent(
+                    null, ad.campaignId, ad.creativeId,
+                    widget.currentUserId, 'feed', 'click',
+                  );
+                },
+              );
+
             case _FeedItemType.post:
               final postIndex = feedItem.postIndex!;
               if (postIndex < 0 || postIndex >= _posts.length) {
@@ -1522,15 +1578,16 @@ class _FeedTabBarState extends State<_FeedTabBar> {
 }
 
 /// Type of item in the interleaved feed list.
-enum _FeedItemType { post, teaser, threadCard }
+enum _FeedItemType { post, teaser, threadCard, ad }
 
-/// Represents a single item in the feed: a post, teaser card, or gossip thread card.
+/// Represents a single item in the feed: a post, teaser card, gossip thread card, or ad.
 class _FeedItem {
   final _FeedItemType type;
   final int? postIndex;
   final int? threadIndex;
+  final int? adIndex;
 
-  _FeedItem._({required this.type, this.postIndex, this.threadIndex});
+  _FeedItem._({required this.type, this.postIndex, this.threadIndex, this.adIndex});
 
   factory _FeedItem.post(int postIndex) =>
       _FeedItem._(type: _FeedItemType.post, postIndex: postIndex);
@@ -1540,4 +1597,7 @@ class _FeedItem {
 
   factory _FeedItem.threadCard(int threadIndex) =>
       _FeedItem._(type: _FeedItemType.threadCard, threadIndex: threadIndex);
+
+  factory _FeedItem.ad(int adIndex) =>
+      _FeedItem._(type: _FeedItemType.ad, adIndex: adIndex);
 }

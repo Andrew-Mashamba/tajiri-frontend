@@ -4,10 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import '../models/ad_models.dart';
+import '../models/clip_models.dart';
+import '../services/ad_service.dart';
+import '../services/local_storage_service.dart';
 import '../services/media_cache_service.dart';
 import '../services/video_cache_service.dart';
-import '../models/clip_models.dart';
 import 'cached_media_image.dart';
+import 'video_preroll_overlay.dart';
 
 /// Debug logger for video player
 void _logVideo(String message) {
@@ -51,6 +55,12 @@ class VideoPlayerWidget extends StatefulWidget {
 }
 
 class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
+  // Pre-roll ad: show every 3rd video in the session
+  static int _videosThisSession = 0;
+  static const int _prerollFrequency = 3;
+  bool _showPreroll = false;
+  ServedAd? _prerollAd;
+
   VideoPlayerController? _videoController;
   bool _isInitialized = false;
   bool _isInitializing = false;
@@ -84,6 +94,55 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     _isMuted = widget.muted;
     // Pre-cache the video in background
     _cacheService.preloadMedia(widget.videoUrl);
+    // Check if this video should show a pre-roll ad
+    _videosThisSession++;
+    if (_videosThisSession % _prerollFrequency == 0) {
+      _fetchPrerollAd();
+    }
+  }
+
+  Future<void> _fetchPrerollAd() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final ads = await AdService.getServedAds(token, 'video_preroll', 1);
+      if (ads.isNotEmpty && mounted) {
+        setState(() {
+          _prerollAd = ads.first;
+          _showPreroll = true;
+        });
+        // Record impression (fire-and-forget)
+        final ad = ads.first;
+        AdService.recordAdEvent(
+          token, ad.campaignId, ad.creativeId,
+          0, 'video_preroll', 'impression',
+        );
+      }
+    } catch (_) {
+      // Pre-roll fetch failure is non-fatal — just play the video
+    }
+  }
+
+  Future<void> _recordPrerollClick() async {
+    if (_prerollAd == null) return;
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      AdService.recordAdEvent(
+        token, _prerollAd!.campaignId, _prerollAd!.creativeId,
+        0, 'video_preroll', 'click',
+      );
+    } catch (_) {}
+  }
+
+  void _onPrerollComplete() {
+    if (mounted) {
+      setState(() => _showPreroll = false);
+      // Auto-play video after preroll
+      if (_isVisible && widget.autoPlayOnVisible) {
+        _play();
+      }
+    }
   }
 
   bool _disposed = false;
@@ -150,8 +209,8 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
           _isInitializing = false;
         });
 
-        // Auto-play if visible
-        if (_isVisible && widget.autoPlayOnVisible) {
+        // Auto-play if visible (but not if preroll ad is showing)
+        if (_isVisible && widget.autoPlayOnVisible && !_showPreroll) {
           _play();
         }
       }
@@ -404,7 +463,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
             _buildSeekIndicator(),
 
           // Play/Pause visual indicator (non-interactive, shows when paused)
-          if (_isInitialized && !_isPlaying && !_showSeekIndicator)
+          if (_isInitialized && !_isPlaying && !_showSeekIndicator && !_showPreroll)
             Center(
               child: Container(
                 width: 64,
@@ -418,7 +477,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
             ),
 
           // Play/Pause + Mute buttons (bottom-right)
-          if (_isInitialized)
+          if (_isInitialized && !_showPreroll)
             Positioned(
               bottom: 12,
               right: 12,
@@ -456,6 +515,16 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
               bottom: 8,
               left: 8,
               child: _buildVideoBadge(),
+            ),
+
+          // Pre-roll ad overlay
+          if (_showPreroll && _prerollAd != null)
+            Positioned.fill(
+              child: VideoPrerollOverlay(
+                servedAd: _prerollAd!,
+                onComplete: _onPrerollComplete,
+                onClick: _recordPrerollClick,
+              ),
             ),
         ],
       ),
