@@ -31,10 +31,10 @@ All extracted text is stored on `content_documents` and indexed in Typesense + e
 3. Receive 2-3 sentence English description
 4. Store in `media_descriptions.images[]`
 
-**Audio Posts:**
-1. Resolve audio file from `posts.audio_path`
-2. Whisper transcription (model: `medium`, language hint: `sw`)
-3. Claude Haiku cleanup: fix Swahili spelling/grammar, generate English summary
+**Audio Posts (standalone audio or PostMedia with `media_type = 'audio'`):**
+1. Resolve audio file from `posts.audio_path` or `post_media.file_path`
+2. Whisper transcription (model: `small`, language: auto-detect)
+3. Claude Haiku cleanup: fix spelling/grammar, generate English summary
 4. Store raw transcript, clean transcript, summary, detected language
 
 **Video Posts:**
@@ -52,9 +52,14 @@ Within a single post: images first (fastest), then audio, then video (slowest). 
 
 ## 4. Storage
 
-### New Column
+### New Columns
 
-`content_documents.media_descriptions` — JSONB, nullable. Stores structured output per media item:
+Two new columns on `content_documents`:
+
+1. `media_descriptions` — JSONB, nullable. Stores structured output per media item.
+2. `media_text` — TEXT, nullable. Combined human-readable summary text for search indexing. Kept separate from `body` so re-enrichment is idempotent (overwrite `media_text`, never mutate `body`).
+
+Structured output per media item:
 
 ```json
 {
@@ -82,21 +87,30 @@ Within a single post: images first (fastest), then audio, then video (slowest). 
 ### Integration With Search
 
 1. `MediaEnrichmentJob` stores `media_descriptions` JSON on content_document
-2. Appends combined summary text to `content_documents.body` after a `\n\n---\n` separator
-3. Dispatches `SyncToTypesenseJob` (body changed → Typesense re-index)
+2. Writes combined summary text to `content_documents.media_text` (separate column, never appended to `body`)
+3. Dispatches `SyncToTypesenseJob` (media_text changed → Typesense re-index)
 4. Dispatches `GenerateEmbeddingTextJob` (richer text → better semantic embedding)
 5. If Claude's summary suggests a category and user didn't set one, auto-fills `content_documents.category`
 
 ### What Typesense Indexes
 
-The `body` field becomes:
+Typesense indexes both `body` and `media_text` as searchable fields. A search for "Kariakoo market vegetables" matches the `media_text` field:
 
 ```
-Soko langu 🥕
-
----
 [Image: A woman selling vegetables at Kariakoo market in Dar es Salaam, colorful produce arranged on wooden tables]
 ```
+
+The original `body` ("Soko langu 🥕") remains untouched. Re-enrichment simply overwrites `media_text`.
+
+### Typesense Schema Change
+
+Add `media_text` as a searchable string field to the existing `content_documents` Typesense collection:
+
+```json
+{"name": "media_text", "type": "string", "optional": true}
+```
+
+`SyncToTypesenseJob` must include `media_text` in the document payload.
 
 Someone searching "Kariakoo market vegetables" now finds this post.
 
@@ -110,7 +124,7 @@ Someone searching "Kariakoo market vegetables" now finds this post.
 
 | File | Purpose |
 |------|---------|
-| `database/migrations/2026_03_29_400001_add_media_descriptions_to_content_documents.php` | Add `media_descriptions` JSONB column |
+| `database/migrations/2026_03_29_400001_add_media_descriptions_to_content_documents.php` | Add `media_descriptions` JSONB + `media_text` TEXT columns |
 | `app/Services/ContentEngine/MediaEnrichmentService.php` | Orchestrator — routes each media type to the right processor |
 | `app/Services/ContentEngine/ImageAnalysisService.php` | Claude CLI vision for single image |
 | `app/Services/ContentEngine/AudioTranscriptionService.php` | Whisper + Claude cleanup |
@@ -123,18 +137,22 @@ Someone searching "Kariakoo market vegetables" now finds this post.
 | File | Change |
 |------|--------|
 | `app/Jobs/ContentEngine/ContentIngestionJob.php` | Dispatch `MediaEnrichmentJob` after existing jobs |
+| `app/Jobs/ContentEngine/SyncToTypesenseJob.php` | Include `media_text` in Typesense document payload |
+| `app/Console/Commands/ContentHealthCheck.php` | Add FFmpeg/Whisper/enrichment checks |
 | `/etc/supervisor/conf.d/tajiri-workers.conf` | Add `tajiri-media-enrichment` worker |
 
 ### Service Boundaries
 
 ```
-MediaEnrichmentJob (queue job)
+MediaEnrichmentJob (queue job, timeout: 600s)
   └── MediaEnrichmentService::enrich(contentDocumentId): bool
-        ├── ImageAnalysisService::describe(imagePath): ?string
-        ├── AudioTranscriptionService::transcribe(audioPath): ?array
-        └── VideoAnalysisService::analyze(videoPath, duration): ?array
-              ├── uses AudioTranscriptionService internally (extracted audio)
-              └── uses ImageAnalysisService internally (each keyframe)
+        ├── per PostMedia:
+        │     ├── media_type='image' → ImageAnalysisService::describe(imagePath): ?string
+        │     ├── media_type='audio' → AudioTranscriptionService::transcribe(audioPath): ?array
+        │     └── media_type='video' → VideoAnalysisService::analyze(videoPath, duration): ?array
+        │           ├── uses AudioTranscriptionService internally (extracted audio)
+        │           └── uses ImageAnalysisService internally (each keyframe)
+        └── standalone audio_path → AudioTranscriptionService::transcribe(audioPath): ?array
 ```
 
 Each service is a focused static-method class following TAJIRI's existing service patterns.
@@ -147,8 +165,9 @@ describe(string $imagePath): ?string
 
 - Validates file exists and is an image
 - Sanitizes path for shell
-- Calls: `timeout 15 claude -p "{prompt}" --model haiku --output-format text < {image_path}`
+- Calls: `timeout 30 claude -p "{prompt}" --files {image_path} --model haiku --output-format text`
 - Prompt: "Describe this image from a Tanzanian social media post. What do you see? Include people, objects, locations, text visible in the image, and cultural context. Write 2-3 sentences in English."
+- Note: Claude CLI uses `--files` flag for image input, not stdin piping
 - Returns description string or null on failure
 
 ### AudioTranscriptionService
@@ -158,9 +177,10 @@ transcribe(string $audioPath): ?array
 ```
 
 - Validates file exists
-- Runs: `whisper {audio_path} --model medium --language sw --output_format txt --output_dir /tmp/whisper_{id}/`
+- Runs: `whisper {audio_path} --model small --output_format txt --output_dir /tmp/whisper_{id}/`
+- Note: Uses `small` model (~2GB RAM) instead of `medium` (~5GB) for safety on 16GB server with other services. No `--language` flag — Whisper auto-detects language, supporting Swahili, English, and mixed content.
 - Reads raw transcript from output .txt file
-- Sends to Claude Haiku: "Fix spelling/grammar errors in this Swahili transcript. Clean up sentence boundaries. Write a 1-2 sentence English summary. Respond as JSON: {\"clean_transcript\": \"...\", \"summary\": \"...\", \"detected_language\": \"sw|en|mixed\"}"
+- Sends to Claude Haiku: "Fix spelling/grammar errors in this transcript. Clean up sentence boundaries. Write a 1-2 sentence English summary. Detect the language. Respond as JSON: {\"clean_transcript\": \"...\", \"summary\": \"...\", \"detected_language\": \"sw|en|mixed\"}"
 - Returns `['raw_transcript' => ..., 'clean_transcript' => ..., 'summary' => ..., 'detected_language' => ...]`
 - Cleans up temp directory in `finally` block
 
@@ -192,9 +212,11 @@ enrich(int $contentDocumentId, bool $force = false): bool
 - Processes each PostMedia by type:
   - `media_type = 'image'` → `ImageAnalysisService::describe()`
   - `media_type = 'video'` → `VideoAnalysisService::analyze()`
-- If post has `audio_path` → `AudioTranscriptionService::transcribe()`
+  - `media_type = 'audio'` → `AudioTranscriptionService::transcribe()`
+- If post has `audio_path` (standalone audio post, no PostMedia) → `AudioTranscriptionService::transcribe()`
+- If post has `document_path` → logged as unsupported, skipped (future: PDF text extraction)
 - Assembles `media_descriptions` JSON structure
-- Updates content_document: sets `media_descriptions`, appends summaries to `body`
+- Updates content_document: sets `media_descriptions` and `media_text` (separate column, never mutates `body`)
 - Auto-fills `category` if null and Claude suggested one
 - Dispatches `SyncToTypesenseJob` and `GenerateEmbeddingTextJob`
 - Returns true on success (even partial), false if nothing processed
@@ -210,8 +232,10 @@ apt install -y ffmpeg
 # Python 3 + pip (if not present)
 apt install -y python3 python3-pip
 
-# Whisper — speech-to-text (downloads ~1.5GB model on first run)
+# Whisper — speech-to-text (small model: ~500MB download, ~2GB RAM at runtime)
 pip3 install openai-whisper
+# Pre-download model to avoid first-run delay:
+python3 -c "import whisper; whisper.load_model('small')"
 ```
 
 ### Supervisor Worker
@@ -221,7 +245,7 @@ Add to `/etc/supervisor/conf.d/tajiri-workers.conf`:
 ```ini
 [program:tajiri-media-enrichment]
 process_name=%(program_name)s_%(process_num)02d
-command=php8.3 /var/www/tajiri.zimasystems.com/artisan queue:work redis --queue=media-enrichment --sleep=10 --tries=2 --timeout=300 --max-jobs=100
+command=php8.3 /var/www/tajiri.zimasystems.com/artisan queue:work redis --queue=media-enrichment --sleep=10 --tries=2 --timeout=600 --max-jobs=100
 autostart=true
 autorestart=true
 stopasgroup=true
@@ -238,15 +262,17 @@ Only 1 worker — Whisper is CPU-heavy. Running 2+ would thrash the 6-CPU server
 
 | Step | Max Time |
 |------|----------|
-| Image → Claude CLI | 15s per image |
+| Image → Claude CLI | 30s per image |
 | Audio → Whisper (up to 60s audio) | 60s |
 | Audio → Claude Haiku cleanup | 10s |
 | Video → FFmpeg extract audio | 10s |
 | Video → Whisper transcribe | 60s |
 | Video → FFmpeg keyframes | 5s |
-| Video → Claude CLI per frame (×6) | 90s |
+| Video → Claude CLI per frame (×6) | 180s |
 | Video → Claude Haiku final summary | 10s |
-| **Worst case total** | ~260s (within 300s job timeout) |
+| **Worst case (video + 5 images + audio)** | ~420s |
+
+**Job timeout: 600s** (10 minutes). A post with video + multiple images + audio can exceed 300s. The supervisor `stopwaitsecs` is set to 3600 to allow graceful completion.
 
 ### Cost Estimate
 
@@ -269,6 +295,7 @@ At 1,000 posts/day: ~$5-20/day. At 10,000 posts/day: ~$50-200/day.
 - **Retry**: Job retries once (`tries=2`) with 60s backoff. Transient failures self-heal
 - **Temp file cleanup**: All `/tmp/{post_id}_*` files deleted in `finally` block regardless of outcome
 - **Null byte sanitization**: All user-derived text sanitized before `escapeshellarg()` (consistent with Phase 5 pattern)
+- **Rate limiting**: 1-second `sleep(1)` between consecutive Claude CLI calls within a single job to avoid rate-limit errors when processing posts with many images/frames
 
 ## 8. Backfill Command
 
@@ -303,4 +330,4 @@ Add to existing `content:health-check`:
 - **Facial recognition** — auto-tagging people in photos/video. Deferred due to privacy/legal complexity. Requires user opt-in consent system.
 - **Video scene-change detection** — smarter keyframe extraction using FFmpeg `scene` filter. Can replace duration-based approach later.
 - **Real-time transcription** — for live streams. Different architecture needed.
-- **Multi-language Whisper** — current design hints `sw` (Swahili). Could auto-detect or use `--language auto` for mixed-language content.
+- **Whisper model upgrade** — `small` model used for RAM safety. If server RAM increases, upgrade to `medium` for better accuracy on Swahili content.
