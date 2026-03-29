@@ -10,6 +10,7 @@ import 'steps/location_step.dart';
 import 'steps/name_step.dart';
 import 'steps/phone_step.dart';
 import 'steps/photo_step.dart';
+import 'steps/pin_step.dart';
 import 'steps/school_step.dart';
 import 'steps/university_step.dart';
 
@@ -73,6 +74,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _StepConfig(
         chapter: 1,
         builder: () => PhoneStep(
+          state: _state,
+          onNext: _next,
+          onBack: _back,
+        ),
+      ),
+      _StepConfig(
+        chapter: 1,
+        builder: () => PinStep(
           state: _state,
           onNext: _next,
           onBack: _back,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../services/user_service.dart';
 import '../../services/local_storage_service.dart';
@@ -20,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color _secondaryText = Color(0xFF666666);
 
   final _phoneController = TextEditingController();
+  final _pinController = TextEditingController();
   final _userService = UserService();
   bool _isLoading = false;
   String? _error;
@@ -27,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -50,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
 
-    final result = await _userService.loginByPhone(normalized);
+    final result = await _userService.loginByPhone(normalized, pin: _pinController.text);
 
     if (!mounted) return;
 
@@ -152,6 +155,38 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: s?.phoneNumber ?? 'Nambari ya Simu',
                           labelStyle: const TextStyle(color: _secondaryText),
                           prefixIcon: const Icon(Icons.phone_outlined, color: _primary),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                        onSubmitted: (_) => _login(),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // PIN input
+                      TextField(
+                        controller: _pinController,
+                        keyboardType: TextInputType.number,
+                        obscureText: true,
+                        maxLength: 4,
+                        textAlign: TextAlign.center,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        style: const TextStyle(
+                          fontSize: 24,
+                          letterSpacing: 8,
+                          color: _primary,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'PIN',
+                          labelStyle: const TextStyle(color: _secondaryText),
+                          counterText: '',
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(

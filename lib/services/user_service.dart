@@ -86,6 +86,41 @@ class UserService {
     }
   }
 
+  /// Login by phone number. Returns user profile + access token if phone is registered.
+  /// POST /api/users/login-by-phone
+  Future<LoginResult> loginByPhone(String phoneNumber, {String? pin}) async {
+    try {
+      final body = <String, dynamic>{'phone_number': phoneNumber};
+      if (pin != null && pin.isNotEmpty) {
+        body['pin'] = pin;
+      }
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/login-by-phone'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final accessToken = data['access_token'] as String?;
+        final userData = data['user'] as Map<String, dynamic>?;
+        RegistrationState? user;
+        if (userData != null) {
+          user = _mapServerResponseToRegistrationState(userData);
+        }
+        return LoginResult(success: true, accessToken: accessToken, user: user);
+      }
+
+      return LoginResult(
+        success: false,
+        message: data['message'] as String? ?? 'Imeshindwa kuingia',
+      );
+    } catch (e) {
+      return LoginResult(success: false, message: 'Imeshindwa kuwasiliana na seva: $e');
+    }
+  }
+
   /// Check if a phone number is available for registration (uniqueness).
   /// POST /api/users/check-phone validates uniqueness; returns available/unavailable status.
   Future<PhoneAvailabilityResult> checkPhoneAvailability(String phoneNumber) async {
@@ -225,7 +260,10 @@ class UserService {
 
   /// Map server response to RegistrationState
   RegistrationState _mapServerResponseToRegistrationState(Map<String, dynamic> data) {
+    final rawId = data['id'];
+    final userId = rawId is int ? rawId : (rawId is num ? rawId.toInt() : null);
     return RegistrationState(
+      userId: userId,
       firstName: data['first_name'],
       lastName: data['last_name'],
       dateOfBirth: data['date_of_birth'] != null
@@ -355,6 +393,20 @@ class PhoneAvailabilityResult {
 }
 
 /// Result of PUT /api/users/phone/{phone}: profile update success/failure.
+class LoginResult {
+  final bool success;
+  final String? message;
+  final String? accessToken;
+  final RegistrationState? user;
+
+  const LoginResult({
+    required this.success,
+    this.message,
+    this.accessToken,
+    this.user,
+  });
+}
+
 class ProfileUpdateResult {
   final bool success;
   final String? message;

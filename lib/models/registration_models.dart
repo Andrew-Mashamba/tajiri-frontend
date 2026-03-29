@@ -20,6 +20,9 @@ class RegistrationState {
   bool isPhoneVerified;
   String? verificationId;
 
+  // Step 2b: PIN
+  String? pin;
+
   // Step 3: Location
   LocationSelection? location;
 
@@ -57,6 +60,7 @@ class RegistrationState {
     this.phoneNumber,
     this.isPhoneVerified = false,
     this.verificationId,
+    this.pin,
     this.location,
     this.primarySchool,
     this.secondarySchool,
@@ -114,6 +118,7 @@ class RegistrationState {
       'gender': gender?.name,
       'phone_number': phoneNumber,
       'is_phone_verified': isPhoneVerified,
+      'pin': pin,
       'location': location?.toJson(),
       'primary_school': primarySchool?.toJson(),
       'secondary_school': secondarySchool?.toJson(),
@@ -143,6 +148,7 @@ class RegistrationState {
           : null,
       phoneNumber: json['phone_number'],
       isPhoneVerified: json['is_phone_verified'] ?? false,
+      pin: json['pin'] as String?,
       location: json['location'] != null
           ? LocationSelection.fromJson(json['location'])
           : null,
