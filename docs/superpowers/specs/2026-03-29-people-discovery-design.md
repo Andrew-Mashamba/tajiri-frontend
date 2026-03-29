@@ -67,7 +67,7 @@ MEDIA UPLOAD (any type):
 | `created_at` | timestamp | |
 
 **Indexes:**
-- HNSW on `embedding` using cosine distance (same pattern as content embeddings)
+- HNSW on `embedding` using cosine distance: `CREATE INDEX ... USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)` (pgvector defaults, sufficient for <100K embeddings)
 - Unique partial index: one `is_primary = true` per `user_id`
 - Index on `user_id`
 
@@ -80,11 +80,12 @@ ORDER BY embedding <=> $input_embedding
 LIMIT 5
 ```
 
-Accept matches where `similarity >= 0.6` (dlib's recommended threshold). If multiple users match above threshold, take the highest similarity only to avoid false positives.
+Accept matches where `similarity >= 0.6` (dlib's recommended threshold). Each detected face maps to at most one user — if multiple stored embeddings match a single face above threshold, take the highest similarity match only to avoid false positives. A multi-person photo will return multiple matches (one per detected face).
 
 ### Embedding Lifecycle
 
 - **Registration:** Always create with `is_primary = true`, `source = 'registration'`
+- **Duplicate detection:** Before storing a new embedding, query existing embeddings for similarity >= 0.8 belonging to a *different* `user_id`. If found, log a warning (`face_embedding_duplicate: user {new} matches user {existing}`) and still store the embedding, but flag the account for review via a `flagged_accounts` log entry. This prevents identity confusion in the matching pipeline.
 - **Profile photo change with 1 face detected:** Set old primary to `is_primary = false`, insert new with `is_primary = true`, `source = 'profile_update'`
 - **Profile photo change without clear face:** Keep existing primary embedding, upload photo normally
 
@@ -94,17 +95,35 @@ Accept matches where `similarity >= 0.6` (dlib's recommended threshold). If mult
 
 - Path: `/opt/tajiri-face/`
 - Python 3.12, Flask, `face_recognition` library (dlib), `psycopg2` for pgvector queries
-- Port: 8300
+- Port: 8300, **bound to 127.0.0.1 only** (localhost — only Laravel on the same server can reach it)
 - Supervisor-managed process
 
 ### Dependencies
 
 ```bash
 apt install -y cmake build-essential libopenblas-dev liblapack-dev
-pip3 install face_recognition flask psycopg2-binary pgvector numpy
+pip3 install face_recognition flask psycopg2-binary pgvector numpy gunicorn
 ```
 
 Note: `face_recognition` compiles dlib from source (~5-10 min install). Requires cmake + build tools.
+
+### Configuration
+
+Database credentials via environment variables in Supervisor config (see below). The Flask app reads these at startup:
+
+```python
+DB_CONFIG = {
+    'host': os.environ.get('DB_HOST', '127.0.0.1'),
+    'port': os.environ.get('DB_PORT', '5432'),
+    'dbname': os.environ.get('DB_NAME', 'tajiri'),
+    'user': os.environ.get('DB_USER', 'tajiri'),
+    'password': os.environ.get('DB_PASSWORD'),
+}
+```
+
+### Path Validation
+
+All `image_path` parameters are validated to start with `/var/www/tajiri.zimasystems.com/storage/`. Requests with paths outside this prefix return 403 Forbidden.
 
 ### Endpoints
 
@@ -171,18 +190,32 @@ Response: `{"status": "ok", "embeddings_count": 28, "model": "dlib_128d"}`
 - Total for post with 5 images: ~2s
 - Total for video with 6 keyframes: ~2.5s
 
+### Requirements.txt
+
+```
+face_recognition==1.3.0
+flask==3.1.0
+psycopg2-binary==2.9.10
+pgvector==0.3.6
+numpy==2.2.4
+gunicorn==23.0.0
+```
+
 ### Supervisor Config
 
 ```ini
 [program:tajiri-face-service]
-command=python3 /opt/tajiri-face/app.py
+command=gunicorn --bind 127.0.0.1:8300 --workers 2 --timeout 120 app:app
+directory=/opt/tajiri-face
 autostart=true
 autorestart=true
 numprocs=1
 redirect_stderr=true
 stdout_logfile=/var/log/tajiri/face-service.log
-environment=FLASK_ENV=production
+environment=FLASK_ENV=production,DB_HOST=127.0.0.1,DB_PORT=5432,DB_NAME=tajiri,DB_USER=tajiri,DB_PASSWORD=%(ENV_TAJIRI_DB_PASSWORD)s
 ```
+
+Note: 2 gunicorn workers. Each loads its own copy of the dlib model (~200MB each, ~400MB total). This allows concurrent request handling during backfill without starving real-time enrichment. For single-server deployment with limited RAM, reduce to 1 worker.
 
 ## 6. Laravel Services
 
@@ -215,6 +248,8 @@ Static methods:
 
 **`discoverInMedia(int $contentDocumentId, array $mediaDescriptions): array`**
 - Reads existing `media_descriptions` to find image paths and video keyframe paths
+- **Image paths:** From `$mediaDescriptions['images'][*]['path']` (the storage path of each uploaded image)
+- **Video keyframe paths:** The existing `VideoAnalysisService` extracts keyframes to `/tmp/tajiri_video_{hash}/frame_*.jpg` during enrichment, and stores their paths in `$mediaDescriptions['video']['keyframes']` (array of file paths). `FaceDiscoveryService` reads these paths. **Important:** keyframe files are temporary — face discovery MUST run in the same job invocation as video analysis, before temp files are cleaned up.
 - For each image: calls `FaceEmbeddingService::getMatchesForImage()`
 - For video keyframes: calls on each extracted frame, deduplicates (same user across frames counted once, keep highest similarity)
 - Creates `APPEARS_IN` graph edges via `GraphEdgeService`
@@ -281,7 +316,7 @@ New `people` key added alongside existing `images`, `audio`, `video`:
 
 ### Package
 
-`google_mlkit_face_detection` added to `pubspec.yaml`.
+The project already has `google_ml_kit: ^0.20.1` (umbrella package that includes face detection). Use `GoogleMlKit.vision.faceDetector()` from this existing package — no new dependency needed.
 
 ### FaceValidator Utility
 
@@ -302,22 +337,40 @@ class FaceValidator {
 ```
 
 **`validate()`** — Strict mode for registration:
-- 0 faces → error: "Picha yako haionyeshi uso. Tafadhali piga picha inayoonyesha uso wako vizuri"
-- 2+ faces → error: "Picha ina watu wengi. Tafadhali piga picha yako peke yako"
+- 0 faces → error (via `AppStrings.faceNotDetected`): "Picha yako haionyeshi uso. Tafadhali piga picha inayoonyesha uso wako vizuri" / "Your photo doesn't show a face. Please take a photo that clearly shows your face"
+- 2+ faces → error (via `AppStrings.multipleFacesDetected`): "Picha ina watu wengi. Tafadhali piga picha yako peke yako" / "Photo has multiple people. Please take a photo of just yourself"
 - 1 face → success with bounding box
 
 **`detectLargestFace()`** — Lenient mode for profile updates:
 - Returns the largest face bounding box if any face found, null otherwise
 - Never blocks the upload
 
-### Registration Screen Changes
+### New Registration Step: Profile Photo
 
-In the registration profile photo step:
-1. User picks/captures photo
+The current registration flow (`lib/screens/registration/registration_screen.dart`) has steps: Bio → Phone → Location → Schools → Employer. There is **no profile photo step**. A new step must be added.
+
+**New file:** `lib/screens/registration/steps/profile_photo_step.dart`
+
+**Position:** Insert as step 1 (after Bio, before Phone). Bio collects name/username/email/password, then the user immediately captures their face photo. This ensures every account has a face embedding from the start.
+
+**Step UI:**
+- Camera preview (front camera, using `image_picker` which is already in pubspec)
+- "Piga picha yako" ("Take your photo") heading
+- Capture button → call `FaceValidator.validate(photo)`
+- If invalid: show error below photo (Swahili), allow retake
+- If valid: show photo with green checkmark overlay, "Endelea" (Continue) button enabled
+- Also allow gallery pick (with same validation)
+
+**Registration state change:** Add `profilePhoto` (File?) and `faceBbox` (Map<String, int>?) to `RegistrationState` model in `lib/models/registration_models.dart`.
+
+**Registration submit change:** In the `register()` call in `UserService`, send the profile photo as a multipart upload alongside the registration JSON. The backend `RegisterController` must accept and save the photo, then call `FaceEmbeddingService::extractAndStore()`.
+
+**Step flow:**
+1. User captures/picks photo
 2. Call `FaceValidator.validate(photo)`
 3. If invalid: show Swahili error message, don't proceed
 4. If valid: show photo preview with green checkmark, proceed to next step
-5. On upload: include `face_bbox` parameter (`{x, y, width, height}` from `faceBounds`)
+5. On final registration submit: include photo file + `face_bbox` parameter (`{x, y, width, height}` from `faceBounds`)
 
 ### Profile Photo Update Changes
 
@@ -331,10 +384,13 @@ In profile screen photo change flow:
 
 | File | Change |
 |------|--------|
-| `pubspec.yaml` | Add `google_mlkit_face_detection` dependency |
-| `lib/utils/face_validator.dart` | New — ML Kit wrapper |
-| Registration screen (profile photo step) | Add validation gate |
-| `lib/services/profile_service.dart` | Add `faceBbox` parameter to `updateProfilePhoto()` |
+| `lib/utils/face_validator.dart` | New — ML Kit face validation wrapper (uses existing `google_ml_kit`) |
+| `lib/screens/registration/steps/profile_photo_step.dart` | New — Profile photo capture step with face validation |
+| `lib/screens/registration/registration_screen.dart` | Add profile photo step after Bio step |
+| `lib/models/registration_models.dart` | Add `profilePhoto` (File?) and `faceBbox` (Map?) fields |
+| `lib/services/user_service.dart` | Modify `register()` to send profile photo as multipart upload |
+| `lib/services/profile_service.dart` | Add `Map<String, int>? faceBbox` param to instance method `updateProfilePhoto()` |
+| `lib/l10n/app_strings.dart` | Add `faceNotDetected`, `multipleFacesDetected`, `takeYourPhoto` bilingual getters |
 | `lib/screens/profile/profile_screen.dart` | Optional face detection on photo change |
 
 ### Modified Backend Files
@@ -342,6 +398,7 @@ In profile screen photo change flow:
 | File | Change |
 |------|--------|
 | Profile photo controller | Call `FaceEmbeddingService::extractAndStore()` after save |
+| Register controller | Accept profile photo multipart, save, call `FaceEmbeddingService::extractAndStore()` |
 
 ## 8. Error Handling
 
@@ -365,6 +422,7 @@ In profile screen photo change flow:
 | `app/Services/ContentEngine/FaceEmbeddingService.php` | Extract + store embeddings, match query |
 | `app/Services/ContentEngine/FaceDiscoveryService.php` | Orchestrate face matching during enrichment |
 | `lib/utils/face_validator.dart` | Flutter ML Kit face validation wrapper |
+| `lib/screens/registration/steps/profile_photo_step.dart` | New registration step — camera/gallery with face validation |
 
 ### Modified Files
 
@@ -374,31 +432,40 @@ In profile screen photo change flow:
 | `app/Services/ContentEngine/GraphEdgeService.php` | Add APPEARS_IN edge type |
 | `/opt/tajiri-graph/content_rank.py` | Add APPEARS_IN to edge types (weight 1.5) |
 | `app/Console/Commands/ContentHealthCheck.php` | Add face service health check |
-| `/etc/supervisor/conf.d/tajiri-workers.conf` | Add face service program (not a queue worker — a Flask process) |
-| Profile photo controller (backend) | Call FaceEmbeddingService after photo save |
-| Registration screen (frontend) | ML Kit face validation gate |
-| `lib/services/profile_service.dart` | Add face_bbox parameter |
+| `/etc/supervisor/conf.d/tajiri-workers.conf` | Add face service program (gunicorn, not a queue worker) |
+| `app/Http/Controllers/ProfileController.php` | Call `FaceEmbeddingService::extractAndStore()` after photo save |
+| `app/Http/Controllers/Auth/RegisterController.php` | Accept profile photo multipart, call `FaceEmbeddingService::extractAndStore()` |
+| `lib/screens/registration/registration_screen.dart` | Add profile photo step after Bio |
+| `lib/models/registration_models.dart` | Add profilePhoto + faceBbox fields |
+| `lib/services/user_service.dart` | Modify register() for multipart photo upload |
+| `lib/services/profile_service.dart` | Add faceBbox parameter to updateProfilePhoto() |
 | `lib/screens/profile/profile_screen.dart` | Optional face detection on photo change |
-| `pubspec.yaml` | Add google_mlkit_face_detection |
+| `lib/l10n/app_strings.dart` | Add face validation bilingual strings |
 
 ## 10. Backfill Strategy
 
 **Phase 1: Build embedding database**
 ```bash
-php8.3 artisan face:extract-from-profiles --batch-size=50
+php8.3 artisan face:extract-from-profiles --batch-size=50 --delay=200
 ```
 Scans all users with `profile_photo_path`, sends each to face service, stores embeddings. Only users with detectable faces get embeddings.
 
+- `--delay` adds 200ms pause between requests to avoid saturating the face service
+- **Estimate:** At ~300ms per extraction + 200ms delay, ~100 users = ~50s, ~1000 users = ~8min
+
 **Phase 2: Scan existing media**
 ```bash
-php8.3 artisan content:enrich-media --force --batch-size=20
+php8.3 artisan content:enrich-media --force --batch-size=20 --source-type=post,photo,clip
 ```
 Re-runs media enrichment on existing content. Now includes face discovery. Creates APPEARS_IN edges for historical content.
+
+- **Estimate:** At ~400ms per image, a batch of 20 posts with average 2 images each = ~16s per batch. For 1000 posts = ~800s (~13min). Videos with keyframes take longer (~2.5s each).
+- Run during off-peak hours. The 2-worker gunicorn setup allows backfill and real-time enrichment to run concurrently.
 
 ## 11. Future Considerations (Out of Scope)
 
 - **Multiple embeddings per user** — extract from album photos for better matching accuracy across angles/lighting. Would improve recall but adds complexity.
 - **Face clustering** — group unmatched faces that appear together across posts. Could suggest "who is this?" to the uploader.
-- **User opt-out** — allow users to opt out of face detection. Required if expanding to markets with stricter privacy laws.
+- **User opt-out** — allow users to opt out of face detection. Required if expanding to markets with stricter privacy laws. **Note:** The registration flow's face photo capture step establishes implicit consent for face recognition as part of the platform's terms of service. For markets with biometric data laws (GDPR, Kenya DPA 2019), explicit consent language should be added to the ToS.
 - **GPU acceleration** — dlib can use CUDA for 10x faster detection. Not needed at current scale.
 - **Object/product recognition** — Claude vision already describes objects in images. Structured object extraction (linking to Product models) deferred to a future phase.
