@@ -214,6 +214,22 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
           ? 'Hatua imethibitishwa.'
           : 'Hatua imeghairiwa.');
       setState(() {
+        // Update the original action card to reflect new status
+        final idx = _messages.indexWhere((m) =>
+          m.type == 'action_card' &&
+          m.actionCard?.actionCardId == card.actionCardId);
+        if (idx != -1) {
+          _messages[idx] = _ChatItem(
+            type: 'action_card',
+            actionCard: ActionCard(
+              actionCardId: card.actionCardId,
+              action: card.action,
+              preview: card.preview,
+              confirmPrompt: card.confirmPrompt,
+              status: confirmed ? 'confirmed' : 'rejected',
+            ),
+          );
+        }
         _messages.add(_ChatItem(
           type: 'action_result',
           text: '${confirmed ? '\u{2705}' : '\u{274C}'} $message',
