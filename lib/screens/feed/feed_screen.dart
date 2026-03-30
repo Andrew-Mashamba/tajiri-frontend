@@ -29,6 +29,7 @@ import 'full_screen_post_viewer_screen.dart';
 import 'thread_viewer_screen.dart';
 import '../search/hashtag_screen.dart';
 import '../search/search_screen.dart';
+import 'tea_chat_screen.dart';
 import '../../services/live_update_service.dart';
 import '../../services/engagement_level_service.dart';
 import '../../services/event_tracking_service.dart';
@@ -135,7 +136,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     super.initState();
     _teaserPositions = [];
     _threadPositions = [];
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_onTabChanged);
     // Read server-controlled ad frequency (falls back to 10 if not cached)
     final storage = LocalStorageService.instanceSync;
@@ -175,7 +176,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   void _onTabChanged() {
     if (_tabController.indexIsChanging) return;
 
-    final feedTypes = ['posts', 'friends', 'live'];
+    final feedTypes = ['posts', 'friends', 'live', 'tea'];
     final newType = feedTypes[_tabController.index];
 
     if (newType != _currentFeedType) {
@@ -970,6 +971,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
             s?.postsTab ?? 'Posts',
             s?.friendsFeed ?? 'Friends',
             s?.live ?? 'Live',
+            s?.teaTab ?? 'Tea',
           ],
         ),
       ),
@@ -981,6 +983,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     // Story 89: Feed Live tab → StreamsScreen (browse live streams, Live/All tabs, Go Live FAB)
     if (_currentFeedType == 'live') {
       return StreamsScreen(currentUserId: widget.currentUserId);
+    }
+
+    // Tea tab → Shangazi Tea Chat
+    if (_currentFeedType == 'tea') {
+      return const TeaChatScreen();
     }
 
     // Regular feed content for 'posts' and 'friends' tabs
@@ -1497,7 +1504,7 @@ class _FeedTabBarState extends State<_FeedTabBar> {
     return SizedBox(
       height: _FeedTabBar._kHeight,
       child: Row(
-        children: List.generate(3, (index) {
+        children: List.generate(4, (index) {
           final selected = widget.controller.index == index;
           final color = selected ? _FeedTabBar._primary : _FeedTabBar._secondary;
           final style = selected ? HeroIconStyle.solid : HeroIconStyle.outline;
@@ -1540,6 +1547,8 @@ class _FeedTabBarState extends State<_FeedTabBar> {
         return HeroIcon(HeroIcons.users, style: style, size: _FeedTabBar._iconSize, color: color);
       case 2:
         return HeroIcon(HeroIcons.signal, style: style, size: _FeedTabBar._iconSize, color: color);
+      case 3:
+        return HeroIcon(HeroIcons.chatBubbleLeftRight, style: style, size: _FeedTabBar._iconSize, color: color);
       default:
         return const SizedBox.shrink();
     }

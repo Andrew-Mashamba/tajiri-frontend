@@ -1484,4 +1484,12 @@ class AppStrings {
   String get endeleza => isSwahili ? 'Endeleza' : 'Resume';
   String get ghairi => isSwahili ? 'Ghairi' : 'Cancel';
   String get ctr => 'CTR';
+
+  // ——— Shangazi Tea ———
+  String get teaTab => isSwahili ? 'Chai' : 'Tea';
+  String get shangaziTeaRoom => isSwahili ? 'Chumba cha Chai cha Shangazi' : "Shangazi's Tea Room";
+  String get askShangazi => isSwahili ? 'Uliza Shangazi...' : 'Ask Shangazi...';
+  String get shangaziBrewing => isSwahili ? 'Shangazi anapika chai...' : 'Shangazi is brewing tea...';
+  String get confirmAction => isSwahili ? 'Thibitisha' : 'Confirm';
+  String get cancelAction => isSwahili ? 'Ghairi' : 'Cancel';
 }

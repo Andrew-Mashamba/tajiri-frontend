@@ -20,7 +20,7 @@ import 'local_storage_service.dart';
 /// - Discards events older than 24 hours
 class EventTrackingService with WidgetsBindingObserver {
   static const String _hiveBoxName = 'event_queue';
-  static const int _flushIntervalSeconds = 30;
+  static const int _flushIntervalSeconds = 10;
   static const int _maxBatchSize = 100;
   static const int _maxEventAgeHours = 24;
 
@@ -239,6 +239,76 @@ class EventTrackingService with WidgetsBindingObserver {
     if (!_isTestMode) {
       WidgetsBinding.instance.removeObserver(this);
     }
+  }
+
+  /// Track Tea tab interactions
+  void trackTeaCardTapped(int topicId, String cardType) {
+    trackEvent(eventType: 'tea_card_tapped', metadata: {
+      'topic_id': topicId,
+      'card_type': cardType,
+    });
+  }
+
+  void trackTeaCardSkipped(int topicId, String cardType) {
+    trackEvent(eventType: 'tea_card_skipped', metadata: {
+      'topic_id': topicId,
+      'card_type': cardType,
+    });
+  }
+
+  void trackTeaQuestionAsked(String query) {
+    trackEvent(eventType: 'tea_question_asked', metadata: {
+      'query_text': query,
+    });
+  }
+
+  void trackTeaActionConfirmed(String actionType, String target) {
+    trackEvent(eventType: 'tea_action_confirmed', metadata: {
+      'action_type': actionType,
+      'target': target,
+    });
+  }
+
+  void trackTeaActionRejected(String actionType, String target) {
+    trackEvent(eventType: 'tea_action_rejected', metadata: {
+      'action_type': actionType,
+      'target': target,
+    });
+  }
+
+  /// Track additional signals for profile matrix
+  void trackMessageSent(int recipientId, {bool hasMedia = false, String? mediaType}) {
+    trackEvent(eventType: 'message_sent', creatorId: recipientId, metadata: {
+      'has_media': hasMedia,
+      if (mediaType != null) 'media_type': mediaType,
+    });
+  }
+
+  void trackProfileViewed(int userId, int dwellMs) {
+    trackEvent(eventType: 'profile_viewed', creatorId: userId, metadata: {
+      'dwell_ms': dwellMs,
+    });
+  }
+
+  void trackSearch(String query, int resultsTapped) {
+    trackEvent(eventType: 'search', metadata: {
+      'query': query,
+      'results_tapped': resultsTapped,
+    });
+  }
+
+  void trackTrackPlayed(int trackId, int durationMs, bool completed) {
+    trackEvent(eventType: 'track_played', postId: trackId, metadata: {
+      'duration_ms': durationMs,
+      'completed': completed,
+    });
+  }
+
+  void trackHashtagViewed(String hashtagName, int dwellMs) {
+    trackEvent(eventType: 'hashtag_viewed', metadata: {
+      'hashtag_name': hashtagName,
+      'dwell_ms': dwellMs,
+    });
   }
 
   /// Generate a UUID v4 string. Backend validates session_id as 'uuid'.
