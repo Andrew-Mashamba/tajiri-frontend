@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../home/home_screen.dart';
-import '../registration/registration_screen.dart';
+import '../login/login_screen.dart';
 
 /// Splash screen shown on app launch. Checks Hive for stored user and
 /// redirects to [RegistrationScreen] if no user, or [HomeScreen] if user exists.
@@ -51,16 +52,33 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     try {
-      final storage = await LocalStorageService.getInstance();
-      final user = storage.getUser();
+      // Initialize AuthService (loads tokens from secure storage, fetches pin config)
+      await AuthService.instance.init();
+
+      // One-time Hive → secure storage migration
+      final migration = await AuthService.instance.migrateFromHive();
 
       if (!mounted) return;
 
-      if (user != null &&
-          user.userId != null &&
-          user.userId! > 0 &&
-          storage.isLoggedIn()) {
-        _navigateToHome(user.userId!);
+      // Migration found expired token — must re-login
+      if (migration == MigrationResult.tokenExpired) {
+        _navigateToRegistration();
+        return;
+      }
+
+      // Check if authenticated
+      final isAuth = await AuthService.instance.isAuthenticated();
+
+      if (!mounted) return;
+
+      if (isAuth) {
+        final storage = await LocalStorageService.getInstance();
+        final user = storage.getUser();
+        if (user != null && user.userId != null && user.userId! > 0) {
+          _navigateToHome(user.userId!);
+        } else {
+          _navigateToRegistration();
+        }
       } else {
         _navigateToRegistration();
       }
@@ -91,12 +109,12 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  /// Smooth transition to RegistrationScreen (DESIGN.md: 600ms fade).
+  /// Smooth transition to LoginScreen (DESIGN.md: 600ms fade).
   void _navigateToRegistration() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const RegistrationScreen(),
+            const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: CurvedAnimation(
@@ -137,7 +155,7 @@ class _SplashScreenState extends State<SplashScreen>
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: const Color.fromRGBO(0, 0, 0, 0.1),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),

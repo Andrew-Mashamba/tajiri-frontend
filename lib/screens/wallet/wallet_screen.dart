@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/wallet_models.dart';
+import '../../services/biometric_service.dart';
 import '../../services/wallet_service.dart';
 import 'subscription_tiers_setup_screen.dart';
 import 'my_subscriptions_screen.dart';
@@ -1022,6 +1023,18 @@ class _DepositSheetState extends State<_DepositSheet> {
   }
 
   Future<void> _deposit() async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ili kuweka pesa',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount < 1000) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1211,6 +1224,18 @@ class _WithdrawSheetState extends State<_WithdrawSheet> {
   }
 
   Future<void> _withdraw() async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ili kutoa pesa',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount < 5000) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1482,6 +1507,18 @@ class _TransferSheetState extends State<_TransferSheet> {
   }
 
   Future<void> _transfer() async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ili kutuma pesa',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
     final amount = double.tryParse(_amountController.text);
     final recipientText = _recipientController.text.trim();
 

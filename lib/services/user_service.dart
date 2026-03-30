@@ -54,12 +54,18 @@ class UserService {
             ? Map<String, dynamic>.from(responseData)
             : null;
         final accessToken = profileMap?['access_token'] ?? profileMap?['token'] ?? data['access_token'] ?? data['token'];
+        final refreshToken = data['refresh_token'] as String?;
+        final accessExpiresIn = data['access_expires_in'] as int?;
+        final refreshExpiresIn = data['refresh_expires_in'] as int?;
         return UserRegistrationResult(
           success: true,
           userId: userId,
           message: data['message'] as String?,
           profileData: profileMap,
           accessToken: accessToken is String ? accessToken : accessToken?.toString(),
+          refreshToken: refreshToken,
+          accessExpiresIn: accessExpiresIn,
+          refreshExpiresIn: refreshExpiresIn,
         );
       } else if (response.statusCode == 422) {
         final errors = data['errors'] as Map<String, dynamic>?;
@@ -370,6 +376,9 @@ class UserRegistrationResult {
   final Map<String, dynamic>? profileData;
   /// Bearer token if backend returns it (e.g. Laravel Sanctum). Persist via LocalStorageService.saveAuthToken.
   final String? accessToken;
+  final String? refreshToken;
+  final int? accessExpiresIn;
+  final int? refreshExpiresIn;
 
   UserRegistrationResult({
     required this.success,
@@ -378,6 +387,9 @@ class UserRegistrationResult {
     this.errors,
     this.profileData,
     this.accessToken,
+    this.refreshToken,
+    this.accessExpiresIn,
+    this.refreshExpiresIn,
   });
 }
 

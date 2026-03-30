@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/registration_models.dart';
-import '../../services/local_storage_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../home/home_screen.dart';
 
@@ -91,10 +91,17 @@ class _CompletionScreenState extends State<CompletionScreen>
           widget.state.applyServerProfile(result.profileData!);
         }
 
-        // Persist session.
-        final storage = await LocalStorageService.getInstance();
-        await storage.saveAuthToken(result.accessToken);
-        await storage.saveUser(widget.state);
+        // Persist session via AuthService (dual-token or legacy single-token).
+        final token = result.accessToken;
+        if (token != null && token.isNotEmpty) {
+          await AuthService.instance.saveSession(
+            accessToken: token,
+            refreshToken: result.refreshToken,
+            accessExpiresIn: result.accessExpiresIn ?? 86400,
+            refreshExpiresIn: result.refreshExpiresIn ?? 7776000,
+            user: widget.state,
+          );
+        }
 
         if (!mounted) return;
 

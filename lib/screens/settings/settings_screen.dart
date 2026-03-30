@@ -8,12 +8,14 @@ import '../../services/theme_notifier.dart';
 import '../../services/language_notifier.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
-import '../splash/splash_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import 'profile_tabs_settings_screen.dart';
 import 'username_settings_screen.dart';
+import 'about_screen.dart';
 import 'privacy_settings_screen.dart';
 import '../../services/user_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 
 /// Settings screen. Navigation: Home → Profile → ⚙ Settings → SettingsScreen (STORY-69).
 /// Sections: Account, Notifications, Privacy, Display (with theme toggle Light/Dark).
@@ -36,8 +38,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _notificationsEnabled = true;
   bool _isLoadingTheme = true;
-  late bool _darkMode;
-  late bool _isSwahili;
+  bool _darkMode = false;
+  bool _isSwahili = true;
 
   // Creator opt-out toggles
   bool _optOutSponsored = false;
@@ -90,8 +92,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
-    if (s == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (s == null || _isLoadingTheme) {
+      return Scaffold(
+        backgroundColor: _backgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
     final languageLabel = _isSwahili ? s.languageSwahili : s.languageEnglish;
     return Scaffold(
@@ -137,6 +142,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const ProfileTabsSettingsScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.info_outline_rounded,
+                title: 'Kuhusu',
+                subtitle: 'Taarifa zako zote za usajili',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AboutScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
                     ),
                   );
                 },
@@ -238,6 +258,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 24),
+              _buildActionButton(
+                icon: Icons.devices,
+                label: 'Toka kwenye vifaa vyote',
+                isDestructive: true,
+                onPressed: () => _showLogoutAllDevicesDialog(s),
+              ),
+              const SizedBox(height: 8),
               _buildActionButton(
                 icon: Icons.logout,
                 label: s.logout,
@@ -559,6 +586,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showLogoutAllDevicesDialog(AppStrings s) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.logoutConfirmTitle),
+        content: const Text(
+            'Utatolewa kwenye vifaa vyote vilivyoingia akaunti yako.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(s.no),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              if (mounted) {
+                await AuthService.instance.logoutAllDevices(context);
+              }
+            },
+            child: Text(
+              s.yesLogout,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLogoutDialog(AppStrings s) {
     showDialog(
       context: context,
@@ -583,18 +639,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final storage = await LocalStorageService.getInstance();
-    await storage.logout();
-
     if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SplashScreen()),
-        (route) => false,
-      );
+      await AuthService.instance.logout(context);
     }
   }
 
-  void _showDeleteAccountDialog(AppStrings s) {
+  Future<void> _showDeleteAccountDialog(AppStrings s) async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ni wewe kubadilisha mipangilio ya akaunti',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(

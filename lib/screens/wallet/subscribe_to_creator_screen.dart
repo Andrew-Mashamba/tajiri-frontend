@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/subscription_models.dart';
 import '../../models/wallet_models.dart';
+import '../../services/biometric_service.dart';
 import '../../services/subscription_service.dart';
 import '../../services/wallet_service.dart';
 
@@ -81,6 +82,18 @@ class _SubscribeToCreatorScreenState extends State<SubscribeToCreatorScreen> {
   }
 
   Future<void> _subscribe() async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ili kujisajili',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
     final s = AppStringsScope.of(context);
     if (_selectedTier == null) {
       ScaffoldMessenger.of(context).showSnackBar(

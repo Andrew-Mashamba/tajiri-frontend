@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
-import '../../services/user_service.dart';
-import '../../services/local_storage_service.dart';
+import '../../services/auth_service.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../home/home_screen.dart';
 
@@ -22,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
-  final _userService = UserService();
   bool _isLoading = false;
   String? _error;
 
@@ -40,12 +38,10 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Normalize: prepend +255 if user typed 0XXXXXXXXX
-    String normalized = phone;
-    if (phone.startsWith('0') && phone.length == 10) {
-      normalized = '+255${phone.substring(1)}';
-    } else if (!phone.startsWith('+')) {
-      normalized = '+$phone';
+    final pin = _pinController.text.trim();
+    if (pin.length != 4) {
+      setState(() => _error = 'Tafadhali ingiza PIN ya nambari 4');
+      return;
     }
 
     setState(() {
@@ -53,26 +49,21 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
 
-    final result = await _userService.loginByPhone(normalized, pin: _pinController.text);
+    final result = await AuthService.instance.login(phone, pin);
 
     if (!mounted) return;
 
-    if (result.success && result.accessToken != null && result.user != null) {
-      // Save auth state
-      final storage = await LocalStorageService.getInstance();
-      await storage.saveAuthToken(result.accessToken!);
-      await storage.saveUser(result.user!);
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+    if (result.success && result.userId != null && result.userId! > 0) {
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => HomeScreen(currentUserId: result.user!.userId!),
+          builder: (_) => HomeScreen(currentUserId: result.userId!),
         ),
+        (route) => false,
       );
     } else {
       setState(() {
         _isLoading = false;
-        _error = result.message ?? 'Imeshindwa kuingia';
+        _error = result.error ?? 'Imeshindwa kuingia';
       });
     }
   }
@@ -100,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: const Color.fromRGBO(0, 0, 0, 0.1),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),

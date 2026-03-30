@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
+import '../../services/biometric_service.dart';
 import '../../services/subscription_service.dart';
 
 /// Screen for requesting payouts to mobile money
@@ -50,6 +51,18 @@ class _PayoutRequestScreenState extends State<PayoutRequestScreen> {
   }
 
   Future<void> _submitRequest() async {
+    final authorized = await BiometricService.authenticate(
+      reason: 'Thibitisha ili kuomba malipo',
+    );
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uthibitisho umeshindwa')),
+        );
+      }
+      return;
+    }
+
     final s = AppStringsScope.of(context);
 
     if (!_formKey.currentState!.validate()) return;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/registration_models.dart';
 import '../models/profile_tab_config.dart';
+import 'auth_service.dart';
 
 class LocalStorageService {
   static const String _userBoxName = 'user_box';
@@ -62,11 +63,6 @@ class LocalStorageService {
   // Check if user exists
   bool hasUser() {
     return _userBox.containsKey(_userKey) && getUser() != null;
-  }
-
-  // Logout - clear user session but keep data
-  Future<void> logout() async {
-    await _userBox.put(_isLoggedInKey, false);
   }
 
   // Clear all user data
@@ -139,11 +135,19 @@ class LocalStorageService {
     await _userBox.put(_languageKey, code == 'sw' ? 'sw' : 'en');
   }
 
-  /// Auth token (e.g. Laravel Sanctum). Set after login for API/WebSocket auth.
+  /// Auth token — delegates to AuthService's in-memory cache.
+  ///
+  /// Returns the cached access token synchronously. AuthService.init() must be
+  /// called before this (done in SplashScreen). For async token with refresh,
+  /// use AuthService.instance.getValidAccessToken() directly.
+  ///
+  /// Preserved as thin wrapper for 30+ existing service callsites.
   String? getAuthToken() {
-    return _userBox.get(_authTokenKey) as String?;
+    return AuthService.instance.cachedAccessToken;
   }
 
+  /// @deprecated Use AuthService.saveSession() or AuthService.login() instead.
+  /// Kept temporarily for migration — clears the old Hive token slot.
   Future<void> saveAuthToken(String? token) async {
     if (token == null) {
       await _userBox.delete(_authTokenKey);

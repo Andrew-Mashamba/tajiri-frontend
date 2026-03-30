@@ -17,6 +17,7 @@ import '../../models/friend_models.dart' hide FriendshipStatus;
 import '../../services/message_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/event_tracking_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/post_grid_cell.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/gallery/photo_gallery_widget.dart';
@@ -25,7 +26,6 @@ import '../../widgets/gallery/shop_gallery_widget.dart';
 import '../feed/livegallerywidget_screen.dart';
 import '../michangogallerywidget_screen.dart';
 import '../campaigns/create_campaign_screen.dart';
-import '../registration/registration_screen.dart';
 import '../settings/settings_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
@@ -546,19 +546,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              try {
-                final storage = await LocalStorageService.getInstance();
-                await storage.clearUser();
-              } catch (e) {
-                debugPrint('Error clearing user: $e');
-              }
               if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const RegistrationScreen(),
-                  ),
-                  (route) => false,
-                );
+                await AuthService.instance.logout(context);
               }
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade400),
