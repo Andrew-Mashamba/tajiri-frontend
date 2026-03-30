@@ -1,0 +1,184 @@
+<h2>PostCard Redesign: Current vs Instagram-Style</h2>
+<p class="subtitle">Compare the two approaches side by side. Which direction should we take?</p>
+
+<div class="split" style="gap: 24px; align-items: start;">
+  <!-- CURRENT DESIGN -->
+  <div class="mockup">
+    <div class="mockup-header">Current TAJIRI PostCard</div>
+    <div class="mockup-body" style="padding: 0; background: #FAFAFA;">
+      <div style="background: white; border-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin: 8px 0;">
+        <!-- Header -->
+        <div style="padding: 16px; display: flex; align-items: center; gap: 8px;">
+          <div style="width: 44px; height: 44px; border-radius: 50%; background: #E0E0E0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #666;">AV</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 15px; color: #1A1A1A;">Aaron Parnas</div>
+            <div style="font-size: 12px; color: #666;">@aaronparnas &middot; Saa 2 &middot; &#x1F310;</div>
+          </div>
+          <div style="color: #1A1A1A; font-size: 18px;">&#x22EF;</div>
+        </div>
+        <!-- Content text -->
+        <div style="padding: 0 16px 8px; font-size: 14px; color: #1A1A1A; line-height: 1.5;">
+          Senate votes to fund most of DHS as... <span style="font-weight: 500;">#politics</span> <span style="font-weight: 500;">#breaking</span>
+        </div>
+        <!-- Media -->
+        <div style="width: 100%; aspect-ratio: 4/5; background: linear-gradient(135deg, #C9A96E 0%, #8B7355 100%); display: flex; align-items: center; justify-content: center;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 32px; color: white;">&#x25B6;</span>
+          </div>
+        </div>
+        <!-- Stats row -->
+        <div style="padding: 8px 16px; display: flex; justify-content: space-between; font-size: 13px; color: #666;">
+          <span>&#x1F44D; 42.3K</span>
+          <span>&#x1F441; 1.2M</span>
+          <span style="margin-left: auto;">Save 3.7K &middot; Comments 733 &middot; Share 3,704</span>
+        </div>
+        <!-- Divider -->
+        <div style="height: 1px; background: #E0E0E0;"></div>
+        <!-- Action buttons with text -->
+        <div style="display: flex; padding: 4px;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 0; color: #666; font-size: 13px; cursor: pointer;">
+            <span style="font-size: 16px;">&#x1F44D;</span> Like
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 0; color: #666; font-size: 13px; cursor: pointer;">
+            <span style="font-size: 16px;">&#x1F4AC;</span> Comment
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 0; color: #666; font-size: 13px; cursor: pointer;">
+            <span style="font-size: 16px;">&#x21AA;</span> Share
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; padding: 12px 16px; color: #666; font-size: 18px; cursor: pointer;">
+            &#x1F516;
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSTAGRAM-STYLE -->
+  <div class="mockup">
+    <div class="mockup-header">Instagram-Style PostCard</div>
+    <div class="mockup-body" style="padding: 0; background: #FFFFFF;">
+      <div style="background: white;">
+        <!-- Compact header -->
+        <div style="padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #E0E0E0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #666; border: 2px solid #1A1A1A;">AV</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 13px; color: #1A1A1A;">aaronparnas <span style="color: #999; font-weight: 400;">&middot; Saa 2</span></div>
+          </div>
+          <div style="color: #1A1A1A; font-size: 18px; letter-spacing: 2px;">&#x22EF;</div>
+        </div>
+        <!-- Full-bleed media -->
+        <div style="width: 100%; aspect-ratio: 4/5; background: linear-gradient(135deg, #C9A96E 0%, #8B7355 100%); display: flex; align-items: center; justify-content: center; position: relative;">
+          <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 28px; color: white;">&#x25B6;</span>
+          </div>
+          <!-- Mute icon overlay -->
+          <div style="position: absolute; bottom: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 12px; color: white;">&#x1F507;</span>
+          </div>
+        </div>
+        <!-- Action row: icons + counts -->
+        <div style="padding: 10px 12px 4px; display: flex; align-items: center; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span style="font-size: 22px;">&#x2764;&#xFE0F;</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span style="font-size: 20px;">&#x1F4AC;</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span style="font-size: 20px;">&#x21AA;&#xFE0F;</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span style="font-size: 20px;">&#x2708;&#xFE0F;</span>
+          </div>
+          <div style="flex: 1;"></div>
+          <div style="cursor: pointer;">
+            <span style="font-size: 20px;">&#x1F516;</span>
+          </div>
+        </div>
+        <!-- Counts row -->
+        <div style="padding: 0 12px 4px; font-size: 13px; font-weight: 600; color: #1A1A1A;">
+          42,300 likes
+        </div>
+        <!-- Caption: bold username + text -->
+        <div style="padding: 0 12px 4px; font-size: 13px; color: #1A1A1A; line-height: 1.4;">
+          <span style="font-weight: 600;">aaronparnas</span> Senate votes to fund most of DHS as... <span style="color: #999;">more</span>
+        </div>
+        <!-- View comments link -->
+        <div style="padding: 0 12px 4px; font-size: 13px; color: #999; cursor: pointer;">
+          View all 733 comments
+        </div>
+        <!-- Single comment preview -->
+        <div style="padding: 0 12px 10px; font-size: 13px; color: #1A1A1A; line-height: 1.4;">
+          <span style="font-weight: 600;">murphysmic</span> I'm just glad the TSA is getting paid now.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 32px;">
+  <h3>Key Differences</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px;">
+    <thead>
+      <tr style="border-bottom: 2px solid #333;">
+        <th style="text-align: left; padding: 8px;">Element</th>
+        <th style="text-align: left; padding: 8px;">Current</th>
+        <th style="text-align: left; padding: 8px;">Instagram-Style</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #e0e0e0;">
+        <td style="padding: 8px; font-weight: 500;">Header</td>
+        <td style="padding: 8px;">Large avatar (44px), full name, @username, badges</td>
+        <td style="padding: 8px;">Small avatar (32px), username only, compact</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e0e0e0;">
+        <td style="padding: 8px; font-weight: 500;">Content text</td>
+        <td style="padding: 8px;">Above media, separate section</td>
+        <td style="padding: 8px;">Below actions as caption with "...more"</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e0e0e0;">
+        <td style="padding: 8px; font-weight: 500;">Actions</td>
+        <td style="padding: 8px;">Text + icon buttons (Like, Comment, Share)</td>
+        <td style="padding: 8px;">Icon-only, larger touch targets</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e0e0e0;">
+        <td style="padding: 8px; font-weight: 500;">Stats</td>
+        <td style="padding: 8px;">Separate row above actions</td>
+        <td style="padding: 8px;">Merged: "42,300 likes" + "View all 733 comments"</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e0e0e0;">
+        <td style="padding: 8px; font-weight: 500;">Card style</td>
+        <td style="padding: 8px;">White card with shadow, margin</td>
+        <td style="padding: 8px;">Edge-to-edge, no shadow, clean dividers</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3 style="margin-top: 32px;">Which direction do you prefer?</h3>
+<p class="subtitle">Click to select, or describe what you want in the terminal</p>
+
+<div class="options">
+  <div class="option" data-choice="instagram-full" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Full Instagram-Style</h3>
+      <p>Adopt the Instagram layout completely: compact header, media-first, icon-only actions, caption below, comment preview, edge-to-edge. Major rewrite of PostCard.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Hybrid Approach</h3>
+      <p>Keep our header/content structure but adopt Instagram's action bar (icons + counts), "View all comments" link, edge-to-edge media, and caption truncation with "...more". Moderate changes.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="actions-only" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Action Bar Only</h3>
+      <p>Only change the bottom action bar and stats to match Instagram's icon-only style with counts. Keep everything else as-is. Minimal changes, focused improvement.</p>
+    </div>
+  </div>
+</div>

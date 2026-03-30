@@ -1,0 +1,172 @@
+<h2>How Each Platform Handles The Same 5 Images</h2>
+<p class="subtitle">Same content, three different strategies. See how each platform would display these aspect ratios.</p>
+
+<style>
+  .demo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 16px 0; }
+  .demo-cell { background: #f0f0f0; border-radius: 4px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+  .demo-cell .label { position: absolute; bottom: 4px; right: 6px; font-size: 10px; color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 3px; text-transform: none; letter-spacing: 0; margin: 0; }
+  .demo-cell .ratio { font-size: 11px; color: #999; font-weight: 500; }
+  .demo-cell img, .demo-cell .img-sim { width: 100%; height: 100%; object-fit: cover; }
+  .img-sim { display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .platform-row { margin-bottom: 32px; }
+  .platform-label { font-weight: 700; font-size: 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .platform-label .tag { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+  .crop-tag { background: #FEE2E2; color: #991B1B; }
+  .fit-tag { background: #DBEAFE; color: #1E40AF; }
+  .hybrid-tag { background: #FEF3C7; color: #92400E; }
+  .letterbox { background: #000 !important; }
+  .letterbox .img-sim { width: 60%; background: linear-gradient(135deg, #4A90D9, #357ABD); }
+  .bars { background: repeating-linear-gradient(45deg, #111, #111 2px, #1a1a1a 2px, #1a1a1a 4px); }
+  .original-row .demo-cell { border: 2px dashed #ccc; }
+</style>
+
+<!-- Source images -->
+<div class="section">
+  <h3>Source Images (raw aspect ratios)</h3>
+  <div class="demo-grid original-row">
+    <div class="demo-cell" style="aspect-ratio: 1/1;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8D5B7, #C4A882);">&#x1F3DE;</div>
+      <span class="label">1:1 Square</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 4/5;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7D5E8, #82A8C4);">&#x1F464;</div>
+      <span class="label">4:5 Portrait</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #D5B7E8, #A882C4);">&#x1F4F1;</div>
+      <span class="label">9:16 Story</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 16/9;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7E8D5, #82C4A8);">&#x1F3AC;</div>
+      <span class="label">16:9 Landscape</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 3/1;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8B7B7, #C48282);">&#x1F304;</div>
+      <span class="label">3:1 Panorama</span>
+    </div>
+  </div>
+</div>
+
+<!-- Instagram -->
+<div class="platform-row">
+  <div class="platform-label">Instagram <span class="tag crop-tag">CLAMP + CROP</span></div>
+  <p style="font-size: 13px; color: #666; margin: 0 0 8px;">Range: 4:5 to 1.91:1. Anything outside gets clamped and cropped with BoxFit.cover</p>
+  <div class="demo-grid">
+    <div class="demo-cell" style="aspect-ratio: 1/1;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8D5B7, #C4A882);">&#x1F3DE;</div>
+      <span class="label">1:1 &#x2714;</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 4/5;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7D5E8, #82A8C4);">&#x1F464;</div>
+      <span class="label">4:5 &#x2714;</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 4/5;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #D5B7E8, #A882C4);">&#x1F4F1;</div>
+      <span class="label">9:16 &#x2192; 4:5 crop</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 1.91/1;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7E8D5, #82C4A8);">&#x1F3AC;</div>
+      <span class="label">16:9 &#x2714;</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 1.91/1;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8B7B7, #C48282);">&#x1F304;</div>
+      <span class="label">3:1 &#x2192; 1.91:1 crop</span>
+    </div>
+  </div>
+</div>
+
+<!-- Twitter -->
+<div class="platform-row">
+  <div class="platform-label">X / Twitter <span class="tag crop-tag">SMART CROP</span></div>
+  <p style="font-size: 13px; color: #666; margin: 0 0 8px;">Range: 3:4 to 16:9. Uses saliency detection to crop around faces/text. Everything forced to ~16:9 in feed.</p>
+  <div class="demo-grid">
+    <div class="demo-cell" style="aspect-ratio: 16/9;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8D5B7, #C4A882);">&#x1F3DE;</div>
+      <span class="label">1:1 &#x2192; 16:9 crop</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 3/4;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7D5E8, #82A8C4);">&#x1F464;</div>
+      <span class="label">4:5 &#x2192; 3:4 crop</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 3/4;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #D5B7E8, #A882C4);">&#x1F4F1;</div>
+      <span class="label">9:16 &#x2192; 3:4 crop</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 16/9;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7E8D5, #82C4A8);">&#x1F3AC;</div>
+      <span class="label">16:9 &#x2714;</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 16/9;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8B7B7, #C48282);">&#x1F304;</div>
+      <span class="label">3:1 &#x2192; 16:9 crop</span>
+    </div>
+  </div>
+</div>
+
+<!-- TikTok -->
+<div class="platform-row">
+  <div class="platform-label">TikTok <span class="tag fit-tag">FIT + LETTERBOX</span></div>
+  <p style="font-size: 13px; color: #666; margin: 0 0 8px;">Native 9:16. Landscape content gets black bars (letterbox). Never crops — shows entire image.</p>
+  <div class="demo-grid">
+    <div class="demo-cell letterbox" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8D5B7, #C4A882); width: 80%;">&#x1F3DE;</div>
+      <span class="label">1:1 letterbox</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7D5E8, #82A8C4);">&#x1F464;</div>
+      <span class="label">4:5 zoom-fill</span>
+    </div>
+    <div class="demo-cell" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #D5B7E8, #A882C4);">&#x1F4F1;</div>
+      <span class="label">9:16 &#x2714;</span>
+    </div>
+    <div class="demo-cell letterbox" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #B7E8D5, #82C4A8); width: 55%; height: auto; aspect-ratio: 16/9;">&#x1F3AC;</div>
+      <span class="label">16:9 letterbox</span>
+    </div>
+    <div class="demo-cell letterbox" style="aspect-ratio: 9/16;">
+      <div class="img-sim" style="background: linear-gradient(135deg, #E8B7B7, #C48282); width: 90%; height: auto; aspect-ratio: 3/1;">&#x1F304;</div>
+      <span class="label">3:1 letterbox</span>
+    </div>
+  </div>
+</div>
+
+<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 32px 0;">
+
+<h2>Now: What Should TAJIRI Do?</h2>
+<p class="subtitle">We can combine the best of all three. Which hybrid approach appeals to you?</p>
+
+<div class="options">
+  <div class="option" data-choice="adaptive-zones" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Adaptive Zones (Recommended)</h3>
+      <p><strong>Instagram range (4:5 to 1.91:1) + TikTok letterbox for extremes + dominant color blur bg.</strong><br>
+      In-range images: display at natural ratio with BoxFit.cover (Instagram-style).<br>
+      Too-tall (< 4:5): show at 4:5 container but with blurred+scaled background behind the full image (TikTok-inspired, no content loss).<br>
+      Too-wide (> 1.91:1): show at 1.91:1 with dominant-color bands or blurred bg (no hard crop).<br>
+      <em>Result: No content ever lost. Feed stays rhythmic. Best of all three.</em></p>
+    </div>
+  </div>
+  <div class="option" data-choice="strict-clamp" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Strict Instagram Clamp</h3>
+      <p><strong>Pure Instagram: clamp to 4:5 - 1.91:1, crop everything else.</strong><br>
+      Simple. Consistent feed rhythm. But tall screenshots and panoramas lose content permanently in display.<br>
+      <em>Current implementation. Works but users lose parts of their photos.</em></p>
+    </div>
+  </div>
+  <div class="option" data-choice="content-aware" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Content-Aware Hybrid</h3>
+      <p><strong>Detect content type and pick strategy per-image.</strong><br>
+      Photos/selfies: Instagram clamp + cover crop (faces survive center-crop).<br>
+      Screenshots/text images: TikTok-style fit (never crop text).<br>
+      Videos: always natural ratio clamped to 4:5 - 16:9.<br>
+      Requires backend content classification (face detection, text detection).<br>
+      <em>Smartest result but needs ML classification from backend.</em></p>
+    </div>
+  </div>
+</div>

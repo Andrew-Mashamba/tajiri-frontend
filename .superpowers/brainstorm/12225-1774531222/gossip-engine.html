@@ -1,0 +1,170 @@
+<h2>Section 3: The Gossip-Virality Engine</h2>
+<p class="subtitle">Algorithm-driven trending + AI-packaged presentation — priority: Global (B) → East African (A) → Hyperlocal (C)</p>
+
+<!-- How Gossip Threads Are Born -->
+<div class="section">
+  <h3>How a Gossip Thread Is Born</h3>
+  <div style="display: grid; gap: 0.5rem; margin-top: 0.75rem;">
+
+    <div style="display: flex; gap: 1rem; align-items: center; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <div style="min-width: 44px; height: 44px; background: rgba(139,92,246,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(167,139,250); font-weight: bold;">1</div>
+      <div>
+        <strong style="color: white;">Velocity Spike Detection</strong>
+        <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Every 5 minutes, backend calculates engagement velocity for recent posts: <code style="color: rgb(167,139,250);">(likes + comments×2 + shares×3) / hours_since_posted</code>. Posts exceeding 2x their creator's average velocity are flagged as "heating up."</p>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 1rem; align-items: center; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <div style="min-width: 44px; height: 44px; background: rgba(245,158,11,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(251,191,36); font-weight: bold;">2</div>
+      <div>
+        <strong style="color: white;">Claude CLI Clusters Related Posts</strong>
+        <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Claude analyzes flagged posts: same hashtags? Same topic? Same person being discussed? Response posts to each other? Groups them into a <code style="color: rgb(251,191,36);">gossip_thread</code>. Assigns a seed post (the one that started it) and category tag.</p>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 1rem; align-items: center; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <div style="min-width: 44px; height: 44px; background: rgba(59,130,246,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(96,165,250); font-weight: bold;">3</div>
+      <div>
+        <strong style="color: white;">Template Title Assignment</strong>
+        <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Claude picks a title template from a predefined library (bilingual) and fills slots. Example: template <code style="color: rgb(96,165,250);">"trending_{category}_hot"</code> → "🔥 {category} Imewaka" / "🔥 {category} Is On Fire". Slots: category, city, creator name, count. <strong>No freeform text generation.</strong></p>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 1rem; align-items: center; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <div style="min-width: 44px; height: 44px; background: rgba(16,185,129,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(52,211,153); font-weight: bold;">4</div>
+      <div>
+        <strong style="color: white;">Thread Goes Live</strong>
+        <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Thread appears in Trending tab, personalized digests, and as inline cards in the main feed. As new related posts appear, Claude adds them to the thread. Thread stays active as long as velocity stays above threshold. Naturally dies when conversation moves on.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three Gossip Layers -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>The Three Gossip Layers</h3>
+  <p class="subtitle">Priority B → A → C, all running simultaneously</p>
+
+  <div style="display: grid; gap: 1rem; margin-top: 1rem;">
+
+    <!-- Layer B: Global/Algorithm -->
+    <div style="padding: 1.25rem; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 style="color: rgb(96,165,250); margin: 0;">Layer B: Global Trending (Primary)</h4>
+        <span style="padding: 0.25rem 0.75rem; background: rgba(59,130,246,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(96,165,250);">HIGHEST PRIORITY</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-top: 0.5rem;">Algorithm-driven, platform-wide trending. What the whole TAJIRI community is talking about.</p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Trending Topics</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Hashtag velocity spikes across all users. "#BongoFlava" suddenly gets 500 posts/hour → trending thread created. Shows post count and velocity indicator (🔥 rising, ⚡ exploding).</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Viral Chains</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">When a post gets shared 50+ times in an hour, track the repost chain. Thread shows: original post → top reactions → counter-reactions. "Challenge" posts that spawn response videos auto-thread.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Creator Battles</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">When two creators post about the same topic with opposing takes, Claude detects the "beef." Creates a split-thread: Side A vs Side B. Users can tap to "take a side" — engagement goldmine.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Milestone Moments</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Creator hits 10K followers? First post to break 1M views? Livestream breaks viewer record? Auto-generates a "milestone thread" celebrating the moment. Community rally point.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layer A: East African -->
+    <div style="padding: 1.25rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 style="color: rgb(251,191,36); margin: 0;">Layer A: East African Culture (Secondary)</h4>
+        <span style="padding: 0.25rem 0.75rem; background: rgba(245,158,11,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(251,191,36);">FLAVOR LAYER</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-top: 0.5rem;">Cultural context that makes TAJIRI feel Tanzanian, not generic.</p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Kumekucha Digest</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Morning push notification: "Kumekucha! Hizi ndio habari za leo..." (Dawn has broken! Here's today's news...). Top 3-5 threads personalized to user. Evening version: "Usiku Mwema — here's what you missed." Bilingual based on user's language setting.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Bongo Categories</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Thread categories that resonate locally: Bongo Flava (music), Mitumba & Biashara (fashion & business), Michezo (sports), Siasa Light (politics-lite), Burudani (entertainment), Uhusiano (relationships). Category tags drive personalization.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Local Celebrity Tracking</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">When verified/popular creators are mentioned across multiple posts, Claude detects a "personality trend." Groups all posts about that person. "Everyone is talking about @diamond_platnumz today — 15 posts and counting."</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Swahili Proverb of the Day</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Daily cultural anchor in the digest. Pre-written library of ~365 Swahili proverbs with English translations. Not AI-generated — curated human content. Creates a daily "tradition" touchpoint. Users share favorites.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layer C: Hyperlocal -->
+    <div style="padding: 1.25rem; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 style="color: rgb(52,211,153); margin: 0;">Layer C: Hyperlocal (Discovery)</h4>
+        <span style="padding: 0.25rem 0.75rem; background: rgba(16,185,129,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(52,211,153);">DISCOVERY LAYER</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-top: 0.5rem;">What's happening in your area — powered by the existing "Nearby" feed endpoint.</p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Neighborhood Threads</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Posts geotagged within 5km radius that spike in engagement get threaded. "Kinondoni is buzzing — 8 posts about the new market." Drives foot traffic for marketplace sellers.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Local Business Buzz</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">When multiple posts mention/tag the same shop or location, create a "Business Spotlight" thread. Bridges social → commerce: "3 people just reviewed Mama Lishe's Kitchen — see what they said." Links to shop page if seller is on TAJIRI.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Community Alerts</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">High-velocity local posts get "Alert" treatment: traffic, events, weather, marketplace scam warnings. Uses existing engagement velocity detection — anything spiking in a small geographic area gets flagged as potentially important.</p>
+        </div>
+        <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <strong style="color: white; font-size: 0.85rem;">Nearby Creator Discovery</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Surface creators who are popular in the user's area but the user doesn't follow yet. "5 creators in Mikocheni that 200 of your neighbors follow." Low-pressure follow suggestions tied to geographic community.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feed Integration -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>How Gossip Appears in the Feed</h3>
+  <p class="subtitle">Not a separate tab — woven into the existing feed experience</p>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <strong style="color: white;">Thread Cards in Main Feed</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Every 8-12 regular posts, inject a "Gossip Thread Card" showing: thread title, post count, top reaction, velocity indicator. Tap opens the full thread viewer. Card design matches PostCard but with a distinct "thread" visual (stacked cards effect, category color accent).</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(59,130,246,0.6);">
+      <strong style="color: white;">Trending Tab (Powered by Gossip Engine)</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Existing Discover → Trending tab becomes thread-first. Shows top threads ranked by velocity, personalized to user. Individual posts still show, but threads get priority placement. Filter chips: All, Entertainment, Business, Music, Sports, Local.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(16,185,129,0.6);">
+      <strong style="color: white;">Thread Viewer Screen</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">New screen: shows thread title, seed post at top, then related posts in engagement-ranked order. Live counter: "47 new posts since you opened this thread." Pull-to-refresh adds new posts. Swipe left/right between threads. Bottom bar: thread stats (total posts, participants, duration active).</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(236,72,153,0.6);">
+      <strong style="color: white;">Digest Screen</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Opened from morning/evening push notification. Shows 3-5 personalized thread summaries: title, post count, top post preview, "continue reading" CTA. Swahili proverb of the day at top. "Threads you left unfinished" section at bottom. One-tap into any thread.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Safety Rails -->
+<div style="margin-top: 1.5rem; padding: 1rem; background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">
+  <h4 style="color: rgb(248,113,113); margin: 0 0 0.5rem 0;">Safety Rails</h4>
+  <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6);">
+    <p style="margin: 0 0 0.5rem 0;"><strong>Auto-suppress threshold:</strong> If a thread gets 10+ reports in 1 hour, auto-hide from trending until manual review.</p>
+    <p style="margin: 0 0 0.5rem 0;"><strong>No hate amplification:</strong> Claude CLI checks thread sentiment — threads driven by harassment/hate speech don't get promoted (still visible, just not boosted).</p>
+    <p style="margin: 0 0 0.5rem 0;"><strong>Cooldown:</strong> Same topic can't trend more than 3 times in 24 hours (prevents manipulation/spam).</p>
+    <p style="margin: 0;"><strong>Creator opt-out:</strong> Creators can toggle "Don't include my posts in gossip threads" in settings.</p>
+  </div>
+</div>

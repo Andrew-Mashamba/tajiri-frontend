@@ -144,8 +144,8 @@ class _NavItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: color.withOpacity(0.08),
-        highlightColor: color.withOpacity(0.04),
+        splashColor: color.withValues(alpha: 0.08),
+        highlightColor: color.withValues(alpha: 0.04),
         child: SizedBox(
           width: double.infinity,
           height: double.infinity,

@@ -189,22 +189,6 @@ class _PhotoStepState extends State<PhotoStep> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ── Back button row ──
-            if (widget.onBack != null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  onPressed: widget.onBack,
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  color: _primary,
-                  tooltip: 'Rudi',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                ),
-              ),
-
-            const SizedBox(height: 8),
-
             // ── Headline ──
             const Text(
               'Tupige picha!',

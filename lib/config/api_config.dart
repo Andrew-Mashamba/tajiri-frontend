@@ -2,8 +2,8 @@
 
 class ApiConfig {
   // Remote backend (production/UAT)
-  static const String baseUrl = 'https://zima-uat.site:8003/api';
-  static const String storageUrl = 'https://zima-uat.site:8003/storage';
+  static const String baseUrl = 'https://tajiri.zimasystems.com/api';
+  static const String storageUrl = 'https://tajiri.zimasystems.com/storage';
 
   // Local backend (for development)
   // static const String baseUrl = 'http://127.0.0.1:1617/api';
@@ -51,13 +51,13 @@ class ApiConfig {
   }
 
   /// Sanitize URLs from backend to ensure HTTPS
-  /// Converts http:// to https:// for zima-uat.site URLs
+  /// Normalizes URLs from backend responses
   static String? sanitizeUrl(String? url) {
     if (url == null || url.isEmpty) return null;
 
     // Convert HTTP to HTTPS for our backend URLs
-    if (url.startsWith('http://zima-uat.site')) {
-      return url.replaceFirst('http://', 'https://');
+    if (url.startsWith('http://tajiri.zimasystems.com')) {
+      return url; // Already correct
     }
 
     // Handle localhost URLs - convert to storage URL

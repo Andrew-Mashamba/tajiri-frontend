@@ -37,6 +37,18 @@ String get _baseUrl => ApiConfig.baseUrl;
 class FeedService {
   final PostService _postService = PostService();
 
+  /// Retrieve auth headers for feed requests that require authentication.
+  static Future<Map<String, String>> _authHeaders() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token != null && token.isNotEmpty) {
+        return ApiConfig.authHeaders(token);
+      }
+    } catch (_) {}
+    return ApiConfig.headers;
+  }
+
   /// Get feed by type (posts, friends, following, discover, shorts, trending, live)
   /// 'posts' = all posts from everyone. 'friends' = posts from people you follow.
   Future<PostListResult> getFeed({
@@ -99,10 +111,12 @@ class FeedService {
     int perPage = 20,
   }) async {
     try {
+      final headers = await _authHeaders();
       final response = await http.get(
         Uri.parse(
           '$_baseUrl/posts/feed/shorts?user_id=$userId&page=$page&per_page=$perPage',
         ),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -134,10 +148,12 @@ class FeedService {
     int perPage = 20,
   }) async {
     try {
+      final headers = await _authHeaders();
       final response = await http.get(
         Uri.parse(
           '$_baseUrl/posts/feed/following?user_id=$userId&page=$page&per_page=$perPage',
         ),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -170,10 +186,12 @@ class FeedService {
     int perPage = 20,
   }) async {
     try {
+      final headers = await _authHeaders();
       final response = await http.get(
         Uri.parse(
           '$_baseUrl/posts/feed/for-you?user_id=$userId&page=$page&per_page=$perPage',
         ),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -248,8 +266,10 @@ class FeedService {
     int perPage = 20,
   }) async {
     try {
+      final headers = await _authHeaders();
       final response = await http.get(
         Uri.parse('$_baseUrl/feed?user_id=$userId&page=$page&per_page=$perPage'),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -276,8 +296,10 @@ class FeedService {
     int perPage = 20,
   }) async {
     try {
+      final headers = await _authHeaders();
       final response = await http.get(
         Uri.parse('$_baseUrl/feed/friends?user_id=$userId&page=$page&per_page=$perPage'),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -308,7 +330,8 @@ class FeedService {
       String url = '$_baseUrl/feed/discover?page=$page&per_page=$perPage';
       if (userId != null) url += '&user_id=$userId';
 
-      final response = await http.get(Uri.parse(url));
+      final headers = await _authHeaders();
+      final response = await http.get(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -337,7 +360,8 @@ class FeedService {
       String url = '$_baseUrl/feed/trending?page=$page&per_page=$perPage';
       if (userId != null) url += '&user_id=$userId';
 
-      final response = await http.get(Uri.parse(url));
+      final headers = await _authHeaders();
+      final response = await http.get(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -368,7 +392,8 @@ class FeedService {
       if (userId != null) url += '&user_id=$userId';
       if (regionId != null) url += '&region_id=$regionId';
 
-      final response = await http.get(Uri.parse(url));
+      final headers = await _authHeaders();
+      final response = await http.get(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -1,0 +1,216 @@
+<h2>TAJIRI Adaptive Media System — Based on Real Backend Data</h2>
+<p class="subtitle">Real ratios from your backend: 0.45, 0.67, 1.00, 1.33, 1.78 + videos with no dimensions. Posts can be collections.</p>
+
+<style>
+  .zone { border: 2px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin: 8px 0; background: #fafafa; }
+  .zone-label { font-size: 11px; font-weight: 600; color: #999; padding: 6px 10px; background: #f0f0f0; text-transform: uppercase; letter-spacing: 0.5px; }
+  .media-sim { display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .media-sim .tag { position: absolute; bottom: 6px; right: 8px; font-size: 10px; background: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 4px; }
+  .media-sim .info { position: absolute; top: 6px; left: 8px; font-size: 10px; background: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 4px; }
+  .blur-bg { filter: blur(20px) brightness(0.7); position: absolute; inset: -20px; z-index: 0; }
+  .fit-img { position: relative; z-index: 1; }
+  .phone-frame { width: 280px; margin: 0 auto; }
+  .post-card-sim { background: white; border-bottom: 1px solid #e0e0e0; }
+  .header-sim { padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .avatar-sim { width: 28px; height: 28px; border-radius: 50%; background: #ddd; border: 1.5px solid #333; flex-shrink: 0; }
+  .actions-sim { padding: 6px 10px; font-size: 16px; display: flex; gap: 12px; }
+  .caption-sim { padding: 2px 10px 8px; font-size: 11px; color: #333; }
+  .split-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .grid-2x2 > div { aspect-ratio: 1; }
+  .carousel-dots { display: flex; justify-content: center; gap: 4px; padding: 6px; }
+  .carousel-dots span { width: 6px; height: 6px; border-radius: 50%; background: #ccc; }
+  .carousel-dots span.active { background: #333; }
+</style>
+
+<h3>The Problem: 6 Real Scenarios TAJIRI Must Handle</h3>
+
+<div class="split-3">
+  <!-- 1. Ultra-tall -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>mwanaa</b> <span style="color:#999">· 2h</span></div></div>
+      <div class="media-sim" style="aspect-ratio: 4/5; background: #D6D7D9; position: relative;">
+        <div style="position:absolute;inset:-20px;background:#D6D7D9;filter:blur(20px) brightness(0.7);"></div>
+        <div style="position:relative;z-index:1;width:60%;aspect-ratio:486/1080;background:linear-gradient(#eee,#ccc);border:1px solid rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;font-size:10px;color:#666;">486x1080<br>screenshot</div>
+        <span class="info">0.45 — ultra-tall</span>
+        <span class="tag">FIT in 4:5 + blur bg</span>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>mwanaa</b> Black...</div>
+    </div>
+  </div>
+
+  <!-- 2. Tall (0.67) -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>juma_k</b> <span style="color:#999">· 5h</span></div></div>
+      <div class="media-sim" style="aspect-ratio: 4/5; background: #313232;">
+        <div style="width:100%;aspect-ratio:365/547;background:linear-gradient(135deg,#444,#222);display:flex;align-items:center;justify-content:center;font-size:10px;color:#999;">365x547</div>
+        <span class="info">0.67 — tall portrait</span>
+        <span class="tag">FIT in 4:5 + color bg</span>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>juma_k</b> Metal...</div>
+    </div>
+  </div>
+
+  <!-- 3. Square (1.00) -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>amina</b> <span style="color:#999">· 1d</span></div></div>
+      <div class="media-sim" style="aspect-ratio: 1/1; background: #799197;">
+        <div style="width:100%;height:100%;background:linear-gradient(135deg,#8aa,#6a8);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;">554x554</div>
+        <span class="info">1.00 — square</span>
+        <span class="tag">Native &#x2714;</span>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>amina</b> Green...</div>
+    </div>
+  </div>
+
+  <!-- 4. Landscape 16:9 -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>hassan</b> <span style="color:#999">· 3h</span></div></div>
+      <div class="media-sim" style="aspect-ratio: 16/9; background: #778393;">
+        <div style="width:100%;height:100%;background:linear-gradient(135deg,#8a9,#7a8);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;">1080x608</div>
+        <span class="info">1.78 — landscape</span>
+        <span class="tag">Native &#x2714;</span>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>hassan</b> Day one...</div>
+    </div>
+  </div>
+
+  <!-- 5. Multi-image collection -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>fatma</b> <span style="color:#999">· 6h</span></div></div>
+      <div style="position:relative;">
+        <div class="media-sim" style="aspect-ratio: 4/5; background: linear-gradient(135deg, #E8D5B7, #C4A882);">
+          <div style="font-size:10px;color:white;">Lead image at its ratio</div>
+          <span class="info">Collection: 5 images</span>
+        </div>
+        <div class="carousel-dots">
+          <span class="active"></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>fatma</b> Safari trip!</div>
+    </div>
+  </div>
+
+  <!-- 6. Mixed collection (video + images) -->
+  <div class="phone-frame">
+    <div class="post-card-sim">
+      <div class="header-sim"><div class="avatar-sim"></div><div><b>baraka</b> <span style="color:#999">· 8h</span></div></div>
+      <div style="position:relative;">
+        <div class="grid-2x2">
+          <div style="background:linear-gradient(135deg,#4a6,#357);display:flex;align-items:center;justify-content:center;position:relative;">
+            <span style="font-size:24px;">&#x25B6;</span>
+            <span style="position:absolute;bottom:2px;right:4px;font-size:9px;color:white;background:rgba(0,0,0,0.5);padding:1px 4px;border-radius:2px;">0:45</span>
+          </div>
+          <div style="background:linear-gradient(135deg,#E8D5B7,#C4A882);"></div>
+          <div style="background:linear-gradient(135deg,#B7D5E8,#82A8C4);"></div>
+          <div style="background:linear-gradient(135deg,#333,#111);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;font-weight:bold;">+3</div>
+        </div>
+        <span style="position:absolute;top:4px;left:6px;font-size:9px;background:rgba(0,0,0,0.6);color:white;padding:2px 6px;border-radius:3px;">Mixed: 1 video + 5 images</span>
+      </div>
+      <div class="actions-sim">&#x2661; &#x1F4AC; &#x2708; <span style="flex:1"></span> &#x1F516;</div>
+      <div class="caption-sim"><b>baraka</b> Concert highlights!</div>
+    </div>
+  </div>
+</div>
+
+<hr style="border:none;border-top:1px solid #e0e0e0;margin:32px 0;">
+
+<h2>Proposed: TAJIRI Adaptive Media System</h2>
+<p class="subtitle">Combines all three platform strategies based on what the content actually is</p>
+
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0;">
+  <thead>
+    <tr style="border-bottom:2px solid #333;">
+      <th style="text-align:left;padding:8px;">Scenario</th>
+      <th style="text-align:left;padding:8px;">Strategy</th>
+      <th style="text-align:left;padding:8px;">Container</th>
+      <th style="text-align:left;padding:8px;">Inspired By</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>In-range single</b><br><span style="color:#666;">ratio 0.8 — 1.91</span></td>
+      <td style="padding:8px;">Show at natural ratio, BoxFit.cover</td>
+      <td style="padding:8px;">AspectRatio(natural)</td>
+      <td style="padding:8px;">&#x1F4F7; Instagram</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Ultra-tall single</b><br><span style="color:#666;">ratio < 0.8 (screenshots, stories)</span></td>
+      <td style="padding:8px;">Fit full image inside 4:5 container with blurred dominant-color background</td>
+      <td style="padding:8px;">AspectRatio(4/5) + blur bg</td>
+      <td style="padding:8px;">&#x1F3B5; TikTok</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Ultra-wide single</b><br><span style="color:#666;">ratio > 1.91 (panoramas)</span></td>
+      <td style="padding:8px;">Fit full image inside 1.91:1 container with dominant-color bands top/bottom</td>
+      <td style="padding:8px;">AspectRatio(1.91) + color bg</td>
+      <td style="padding:8px;">&#x1F3B5; TikTok</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Unknown dimensions</b><br><span style="color:#666;">no width/height (videos, broken metadata)</span></td>
+      <td style="padding:8px;">Default to 1:1 square, resolve ratio after load</td>
+      <td style="padding:8px;">AspectRatio(1.0) initially</td>
+      <td style="padding:8px;">&#x1F426; Twitter</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Multi-image (2-4)</b><br><span style="color:#666;">all same type</span></td>
+      <td style="padding:8px;">Grid layout: 2=side-by-side, 3=one big + two small, 4=2x2 grid</td>
+      <td style="padding:8px;">Fixed height grid with cover</td>
+      <td style="padding:8px;">&#x1F426; Twitter</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Multi-image (5+)</b><br><span style="color:#666;">carousel collection</span></td>
+      <td style="padding:8px;">Instagram carousel: swipeable PageView, lead image sets container ratio, dots indicator</td>
+      <td style="padding:8px;">Lead image ratio + PageView</td>
+      <td style="padding:8px;">&#x1F4F7; Instagram</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px;"><b>Mixed media</b><br><span style="color:#666;">video + images, audio + images</span></td>
+      <td style="padding:8px;">Lead media full-width (video plays), remaining as thumbnail strip below</td>
+      <td style="padding:8px;">Lead ratio + strip</td>
+      <td style="padding:8px;">&#x1F4F7;+&#x1F426; Hybrid</td>
+    </tr>
+    <tr>
+      <td style="padding:8px;"><b>Video (no dims)</b><br><span style="color:#666;">width/height null from backend</span></td>
+      <td style="padding:8px;">Start at 16:9 default, auto-correct to real ratio once video metadata loads</td>
+      <td style="padding:8px;">AspectRatio(16/9 &#x2192; real)</td>
+      <td style="padding:8px;">&#x1F4F7;+&#x1F3B5; Hybrid</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Does this cover your use cases? Pick one:</h3>
+
+<div class="options">
+  <div class="option" data-choice="approve-full" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>This looks right — design it</h3>
+      <p>The 8 scenarios cover everything. Move forward with the full adaptive system.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="simpler" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Simplify — skip carousel, keep grid only</h3>
+      <p>Always use grid for multi-image. Simpler implementation, good enough for now.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="add-more" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Missing something — let me explain</h3>
+      <p>There's a scenario or requirement not covered here.</p>
+    </div>
+  </div>
+</div>

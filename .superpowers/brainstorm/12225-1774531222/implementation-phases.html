@@ -1,0 +1,264 @@
+<h2>Section 6: Implementation Phases</h2>
+<p class="subtitle">Ship in 4 phases — each phase delivers standalone value</p>
+
+<div style="display: grid; gap: 1.25rem;">
+
+  <!-- Phase 1 -->
+  <div style="padding: 1.25rem; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="color: rgb(52,211,153); margin: 0;">Phase 1: Foundation & Tracking</h3>
+      <span style="padding: 0.25rem 0.75rem; background: rgba(16,185,129,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(52,211,153);">BUILD FIRST</span>
+    </div>
+    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Invisible to users. Lays the data pipeline everything else depends on.</p>
+
+    <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">user_events table + POST /api/events endpoint</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Migration, model, controller. Accepts batched events. Partition strategy.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">EventTrackingService</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Dart service: captures view, dwell, scroll_past, like, share, save events. Batches locally, flushes every 30s or on app background. Integrates into PostCard, FullScreenPostViewer, FeedScreen.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">user_interest_profiles table + Claude CLI profile builder</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Scheduled job every 15 min. Sends user event batch to Claude CLI. Stores computed interest profile. Redis cache layer.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">creator_streaks + viewer_streaks tables</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Migrations, models. Streak calculation logic. Updated on post creation (creator) and app open (viewer). Bank/freeze logic.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">creator_scores table + weekly calculation job</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Score formula: community (reply rate) + quality (engagement rate) + consistency (posting frequency). Tier assignment. GET /api/creators/{id}/score endpoint.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(16,185,129,0.1); border-radius: 6px;">
+      <strong style="font-size: 0.8rem; color: rgb(52,211,153);">Ship gate:</strong>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);"> Events flowing, profiles computing, streaks tracking. No user-visible changes yet.</span>
+    </div>
+  </div>
+
+  <!-- Phase 2 -->
+  <div style="padding: 1.25rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="color: rgb(251,191,36); margin: 0;">Phase 2: Gossip Engine + Personalized Feed</h3>
+      <span style="padding: 0.25rem 0.75rem; background: rgba(245,158,11,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(251,191,36);">CORE VALUE</span>
+    </div>
+    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">First user-visible changes. Feed gets smarter, gossip threads appear.</p>
+
+    <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">gossip_threads + thread_title_templates tables</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Migrations, models. Seed ~50 bilingual title templates. Thread CRUD. GET /api/gossip/threads and /threads/{id} endpoints.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Thread detection job (Claude CLI, every 5 min)</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Velocity spike detection. Claude clusters related posts. Template + slot assignment. Thread lifecycle (active → cooling → archived).</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Personalized feed ranking (Claude CLI)</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">GET /api/feed/personalized. Sends candidate posts + user interest profile to Claude. Returns ranked post_ids. 5-min cache per user. Fallback to trending_score sort.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">GossipThreadCard widget + ThreadViewerScreen</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Thread card injected into feed every 8-12 posts. Thread viewer: title, seed post, related posts, live counter, swipe between threads. Post model gains thread_id/thread_title fields.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Feed switches to personalized endpoint</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">FeedScreen and DiscoverFeedContent use /api/feed/personalized. Trending tab shows threads first. Existing discover/nearby unchanged as fallback.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Thread indicator on PostCard</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Small badge on posts that are part of a gossip thread. Tap opens thread viewer.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(245,158,11,0.1); border-radius: 6px;">
+      <strong style="font-size: 0.8rem; color: rgb(251,191,36);">Ship gate:</strong>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);"> Gossip threads appearing, feed personalized, users can browse and enter threads.</span>
+    </div>
+  </div>
+
+  <!-- Phase 3 -->
+  <div style="padding: 1.25rem; background: rgba(236,72,153,0.08); border: 1px solid rgba(236,72,153,0.25); border-radius: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="color: rgb(244,114,182); margin: 0;">Phase 3: Addiction Loops + Creator Payments</h3>
+      <span style="padding: 0.25rem 0.75rem; background: rgba(236,72,153,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(244,114,182);">RETENTION</span>
+    </div>
+    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Hooks that keep users coming back and creators posting. The Flywheel starts spinning.</p>
+
+    <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">creator_fund_pools + creator_fund_payouts tables</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Monthly pool config (thresholds at 0 for testing). Distribution job on 1st of month. Multiplier calculation: tier × streak × community × virality. Full transparency in payout records.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">notification_templates table + digest/FOMO push notifications</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Bilingual templates seeded. Morning/evening digest job (Claude CLI selects threads per user). FOMO trigger job (thread velocity spike → push to relevant users, max 3/day). Streak warning notifications.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(52,211,153);">BE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">GET /api/gossip/digest + weekly report endpoints</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Digest: personalized thread selection + proverb of the day. Weekly report: earnings summary, best post, trend arrows, engagement comparison.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">DigestScreen + WeeklyReportScreen</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Digest: proverb, thread summaries, unfinished threads, one-tap navigation. Weekly report: earnings card, best post, trend arrows, tip of the week.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">StreakIndicatorWidget + CreatorTierBadge + MilestoneOverlay</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Flame streak on profile. Tier badge on profile + post cards. Full-screen milestone celebration. Integrated into ProfileScreen and CreatorStatsPanel.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Enhanced Creator Stats Panel + Earnings Dashboard</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Existing panels gain: tier badge, streak multiplier display, community bonus indicator, virality bonus, fund pool share projection, each multiplier shown transparently.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">FCM notification routing for new types</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">digest → DigestScreen, thread_trending → ThreadViewerScreen, streak_warning → CreatePostScreen, weekly_report → WeeklyReportScreen, milestone → MilestoneOverlay.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <div style="min-width: 20px; color: rgb(96,165,250);">FE</div>
+        <div>
+          <strong style="color: white; font-size: 0.85rem;">Rabbit hole mechanics in feed</strong>
+          <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Teaser cards between posts ("A creator you follow just went viral"). Autoplay chain enhancements (Up Next preview, reduced swipe friction after 3+ posts). Invisible depth milestones (better content at 10+, thread recommendation at 25+).</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(236,72,153,0.1); border-radius: 6px;">
+      <strong style="font-size: 0.8rem; color: rgb(244,114,182);">Ship gate:</strong>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);"> Flywheel is spinning. Creators earning, viewers hooked, gossip driving engagement.</span>
+    </div>
+  </div>
+
+  <!-- Phase 4 -->
+  <div style="padding: 1.25rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25); border-radius: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="color: rgb(167,139,250); margin: 0;">Phase 4: Advanced + Optimization</h3>
+      <span style="padding: 0.25rem 0.75rem; background: rgba(139,92,246,0.2); border-radius: 20px; font-size: 0.75rem; color: rgb(167,139,250);">SCALE</span>
+    </div>
+    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Polish, advanced features, and monetization expansion. Flywheel accelerates.</p>
+
+    <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Sponsored posts marketplace</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Business-to-creator matching. Sponsored post creation flow. "Sponsored" tag on posts. Commission handling. Star/Legend tier only.</p>
+      </div>
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Collaboration radar</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Claude CLI detects creator pairs in similar niches with growing audiences. Suggests collaborations. 2x algorithm boost for collab posts.</p>
+      </div>
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Intensity graduation system</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Per-user addiction intensity level (gentle → medium → full) based on engagement response. Users who respond to FOMO get more FOMO. Users who don't, stay at gentle.</p>
+      </div>
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Creator battles / split threads</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">When two creators post opposing takes, Claude creates "Side A vs Side B" thread. Users pick sides. Engagement amplifier.</p>
+      </div>
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Ad revenue share (when ads launch)</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">55/45 creator/platform split. In-feed ads, pre-roll on videos. Only on posts with 1K+ views. Creator opt-out available.</p>
+      </div>
+      <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <strong style="color: white; font-size: 0.85rem;">Analytics & A/B testing framework</strong>
+        <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Measure: DAU/MAU, session depth, streak retention, feed CTR, thread entry rate, creator earnings satisfaction. A/B test multiplier values, notification frequency, thread card placement.</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(139,92,246,0.1); border-radius: 6px;">
+      <strong style="font-size: 0.8rem; color: rgb(167,139,250);">Ship gate:</strong>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);"> Full Flywheel with all 3 revenue tiers, advanced gossip, and data-driven optimization.</span>
+    </div>
+  </div>
+</div>
+
+<!-- Summary -->
+<div style="margin-top: 1.5rem; padding: 1.25rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
+  <h3 style="margin: 0 0 0.75rem 0;">Design Complete — Summary</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+    <div>
+      <div style="color: rgb(96,165,250); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem;">Addiction Engine</div>
+      <ul style="margin: 0; padding-left: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+        <li>3 viewer loops (rabbit hole, daily pull, social pull)</li>
+        <li>3 creator loops (tribe, craft, rhythm)</li>
+        <li>Graduated intensity per user</li>
+        <li>AI-personalized feed ranking</li>
+      </ul>
+    </div>
+    <div>
+      <div style="color: rgb(244,114,182); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem;">Gossip-Virality Engine</div>
+      <ul style="margin: 0; padding-left: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+        <li>3 layers (global, EA culture, hyperlocal)</li>
+        <li>Algorithm + AI packaging</li>
+        <li>Template-based titles (no AI text)</li>
+        <li>Thread viewer + digest screens</li>
+      </ul>
+    </div>
+    <div>
+      <div style="color: rgb(52,211,153); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem;">Creator Payments</div>
+      <ul style="margin: 0; padding-left: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+        <li>Fund pool + direct + future ads</li>
+        <li>4 stacking multipliers</li>
+        <li>Mobile money payouts</li>
+        <li>Full transparency dashboard</li>
+      </ul>
+    </div>
+  </div>
+</div>

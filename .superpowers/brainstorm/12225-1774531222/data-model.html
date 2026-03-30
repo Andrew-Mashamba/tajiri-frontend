@@ -1,0 +1,299 @@
+<h2>Section 5: Data Model & API Design</h2>
+<p class="subtitle">New tables, endpoints, and how they connect to existing infrastructure</p>
+
+<!-- New Backend Tables -->
+<div class="section">
+  <h3>New Database Tables</h3>
+  <p class="subtitle">Additions to the existing Laravel backend — no changes to existing tables</p>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 1rem;">
+
+    <!-- user_events -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(59,130,246,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(96,165,250); font-size: 0.95rem;">user_events</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">AI Personalization — behavioral tracking</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, user_id, event_type (view|like|share|save|scroll_past|dwell|comment|follow|unfollow), post_id?, creator_id?, duration_ms?, metadata (JSON), created_at
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">High-write table. Partitioned by month. Pruned after 90 days (profiles are pre-computed).</p>
+    </div>
+
+    <!-- user_interest_profiles -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(251,191,36); font-size: 0.95rem;">user_interest_profiles</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">AI Personalization — computed by Claude CLI</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, user_id (unique), topic_weights (JSON), creator_affinities (JSON), format_preferences (JSON), activity_patterns (JSON), gossip_affinity (JSON), commerce_signals (JSON), updated_at
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">One row per user. Refreshed every 15 min by scheduled job. Cached in Redis.</p>
+    </div>
+
+    <!-- gossip_threads -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(236,72,153,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(244,114,182); font-size: 0.95rem;">gossip_threads</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Gossip Engine — thread metadata</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, seed_post_id, title_key, title_slots (JSON), category (entertainment|business|music|sports|politics|relationships|local), velocity_score, post_count, participant_count, status (active|cooling|archived), geographic_scope (global|national|local), location_lat?, location_lng?, location_radius_km?, created_at, updated_at, archived_at
+      </div>
+    </div>
+
+    <!-- gossip_thread_posts -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(236,72,153,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(244,114,182); font-size: 0.95rem;">gossip_thread_posts</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Gossip Engine — post-to-thread mapping</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, thread_id, post_id, relevance_score, added_at
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">A post can belong to multiple threads. Relevance score determines display order within thread.</p>
+    </div>
+
+    <!-- thread_title_templates -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(251,191,36); font-size: 0.95rem;">thread_title_templates</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Gossip Engine — bilingual templates</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, key (unique), template_en, template_sw, slots (JSON array of slot names), category, tone (hot|breaking|milestone|battle|local)
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">Pre-written by humans. ~50-100 templates covering all categories and tones. Claude picks template + fills slots.</p>
+    </div>
+
+    <!-- creator_scores -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(16,185,129,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(52,211,153); font-size: 0.95rem;">creator_scores</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Creator Payments — rolling 30-day score</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, user_id (unique), score (0-100), tier (rising|established|star|legend), community_score, quality_score, consistency_score, follower_growth_velocity, threads_triggered_30d, avg_engagement_rate_30d, calculated_at
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">Recalculated weekly by scheduled job. Historical snapshots in creator_score_history.</p>
+    </div>
+
+    <!-- creator_streaks -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(16,185,129,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(52,211,153); font-size: 0.95rem;">creator_streaks</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Addiction Engine — posting streak tracker</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, user_id (unique), current_streak_days, longest_streak_days, last_post_at, banked_skip_days, streak_frozen (bool), frozen_at?, multiplier (computed)
+      </div>
+    </div>
+
+    <!-- viewer_streaks -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(59,130,246,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(96,165,250); font-size: 0.95rem;">viewer_streaks</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Addiction Engine — daily open tracker</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, user_id (unique), current_streak_days, longest_streak_days, last_active_date, streak_frozen (bool)
+      </div>
+    </div>
+
+    <!-- creator_fund_pool -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(139,92,246,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(167,139,250); font-size: 0.95rem;">creator_fund_pools</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Creator Payments — monthly pool config</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, month (YYYY-MM), total_amount, currency, distributed (bool), distributed_at?, qualification_min_followers, qualification_min_posts, qualification_min_views
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">Testing: min_followers=0, min_posts=1, min_views=0. Adjustable per month.</p>
+    </div>
+
+    <!-- creator_fund_payouts -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(139,92,246,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(167,139,250); font-size: 0.95rem;">creator_fund_payouts</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Creator Payments — individual payout records</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, pool_id, user_id, base_score, tier_multiplier, streak_multiplier, community_multiplier, virality_multiplier, final_score, pool_share_pct, payout_amount, status (pending|paid|failed), paid_at?
+      </div>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0;">Full transparency — every multiplier recorded. Creator can see exactly why they earned what they earned.</p>
+    </div>
+
+    <!-- notification_templates -->
+    <div style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 10px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: rgb(251,191,36); font-size: 0.95rem;">notification_templates</strong>
+        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Addiction Engine — push notification templates</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.7;">
+        id, key (unique), title_en, title_sw, body_en, body_sw, slots (JSON), category (digest|fomo|milestone|streak|earnings), max_per_day, priority
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New API Endpoints -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>New API Endpoints</h3>
+
+  <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(16,185,129,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(52,211,153);">POST</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/events</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Log user behavior event (batch)</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/feed/personalized</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">AI-ranked feed for current user</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/gossip/threads</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">List active gossip threads (personalized, paginated)</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/gossip/threads/{id}</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Thread detail with posts</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/gossip/digest</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Personalized morning/evening digest</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/creators/{id}/score</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Creator score, tier, multipliers</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/creators/{id}/streak</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Posting streak status and multiplier</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/creators/{id}/fund-payout</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Current month fund pool projection</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/creators/{id}/weekly-report</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Weekly performance summary</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(59,130,246,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(96,165,250);">GET</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/users/{id}/streak</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Viewer daily open streak</span>
+      </div>
+    </div>
+
+    <div style="padding: 0.5rem 0;">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <span style="padding: 0.15rem 0.5rem; background: rgba(16,185,129,0.2); border-radius: 4px; font-family: monospace; font-size: 0.7rem; color: rgb(52,211,153);">POST</span>
+        <code style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">/api/creators/{id}/payout/request</code>
+        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Request mobile money payout</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- What Changes in Existing Code -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Changes to Existing Infrastructure</h3>
+  <p class="subtitle">Minimal — mostly additive</p>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+    <div style="padding: 0.75rem; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15); border-radius: 8px;">
+      <strong style="color: rgb(52,211,153); font-size: 0.85rem;">Feed endpoints enhanced</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Existing <code>/api/feed/discover</code> and <code>/api/feed/trending</code> gain optional <code>?personalized=true</code> param. When set, backend uses AI-ranked order. Fallback to current behavior when omitted. Non-breaking change.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 8px;">
+      <strong style="color: rgb(251,191,36); font-size: 0.85rem;">PostCard gains thread indicator</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Post model gets optional <code>thread_id</code> and <code>thread_title</code> fields. PostCard shows small "Part of trending thread" badge when present. Tap opens thread viewer.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(139,92,246,0.06); border: 1px solid rgba(139,92,246,0.15); border-radius: 8px;">
+      <strong style="color: rgb(167,139,250); font-size: 0.85rem;">Creator Stats Panel enhanced</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Existing <code>_CreatorStatsPanel</code> in post_detail_screen.dart gains: tier badge, streak indicator, multiplier breakdown, gossip thread count. All data from new endpoints — no changes to existing earnings logic.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(236,72,153,0.06); border: 1px solid rgba(236,72,153,0.15); border-radius: 8px;">
+      <strong style="color: rgb(244,114,182); font-size: 0.85rem;">FCM notification routing extended</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">New notification types added to FCM payload routing: <code>digest</code> → DigestScreen, <code>thread_trending</code> → ThreadViewerScreen, <code>streak_warning</code> → CreatePostScreen, <code>weekly_report</code> → WeeklyReportScreen, <code>milestone</code> → celebration overlay.</p>
+    </div>
+  </div>
+</div>
+
+<!-- New Flutter Screens -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>New Flutter Screens & Widgets</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">ThreadViewerScreen</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Full gossip thread: title, seed post, related posts, live counter, swipe between threads</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">DigestScreen</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Morning/evening digest: proverb, top threads, unfinished threads, one-tap into any thread</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">WeeklyReportScreen</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Creator weekly summary: earnings, best post, trend arrows, tip of the week</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">GossipThreadCard</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Widget: stacked-cards visual, title, post count, velocity indicator, injected into feed</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">StreakIndicatorWidget</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Flame icon with day count, used on profile and creator stats panel</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">CreatorTierBadge</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Rising/Established/Star/Legend badge with tier color, used on profile and post cards</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">MilestoneOverlay</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Full-screen animated celebration for follower milestones, first viral post, etc.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+      <strong style="color: white; font-size: 0.85rem;">EventTrackingService</strong>
+      <p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin: 0.25rem 0 0;">Service: batches user events locally, flushes to POST /api/events every 30s or on app background</p>
+    </div>
+  </div>
+</div>

@@ -64,7 +64,7 @@ class _PhoneStepState extends State<PhoneStep> {
 
   String get _normalised => '+255$_digits';
 
-  bool get _isPhoneValid => _digits.length >= 9;
+  bool get _isPhoneValid => _digits.length == 9;
 
   // ---------------------------------------------------------------------------
   // Logic
@@ -248,7 +248,7 @@ class _PhoneStepState extends State<PhoneStep> {
               autofocus: widget.state.phoneNumber == null,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(10),
+                LengthLimitingTextInputFormatter(9),
               ],
               style: const TextStyle(
                 fontSize: 18,
@@ -263,7 +263,9 @@ class _PhoneStepState extends State<PhoneStep> {
                 contentPadding: EdgeInsets.symmetric(horizontal: 16),
               ),
               onChanged: (_) {
-                if (_phoneError != null) setState(() => _phoneError = null);
+                setState(() {
+                  _phoneError = null;
+                });
               },
               onSubmitted: (_) => _handleNext(),
             ),

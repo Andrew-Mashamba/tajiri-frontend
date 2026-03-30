@@ -1,0 +1,265 @@
+<h2>Section 4: Creator Incentive & Payment System</h2>
+<p class="subtitle">Hybrid model: Fund Pool (base) + Direct Monetization (tips/subs) + Ad Revenue Share (future)</p>
+
+<!-- Payment Architecture Overview -->
+<div class="mockup">
+  <div class="mockup-header">Revenue Flows to Creators</div>
+  <div class="mockup-body" style="padding: 1.5rem;">
+    <svg viewBox="0 0 650 320" style="max-width: 600px; width: 100%;">
+      <defs><marker id="pa" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="rgba(255,255,255,0.4)"/></marker></defs>
+
+      <!-- Three revenue sources -->
+      <rect x="0" y="20" width="180" height="70" rx="10" fill="rgba(16,185,129,0.15)" stroke="rgba(16,185,129,0.5)" stroke-width="1.5"/>
+      <text x="90" y="48" text-anchor="middle" fill="rgb(52,211,153)" font-size="12" font-weight="bold">FUND POOL</text>
+      <text x="90" y="68" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">Monthly platform allocation</text>
+      <text x="90" y="82" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8">Available now</text>
+
+      <rect x="235" y="20" width="180" height="70" rx="10" fill="rgba(139,92,246,0.15)" stroke="rgba(139,92,246,0.5)" stroke-width="1.5"/>
+      <text x="325" y="48" text-anchor="middle" fill="rgb(167,139,250)" font-size="12" font-weight="bold">DIRECT MONETIZATION</text>
+      <text x="325" y="68" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">Tips, Subs, Sponsored Posts</text>
+      <text x="325" y="82" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8">Available now</text>
+
+      <rect x="470" y="20" width="180" height="70" rx="10" fill="rgba(107,114,128,0.15)" stroke="rgba(107,114,128,0.5)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="560" y="48" text-anchor="middle" fill="rgba(156,163,175,0.8)" font-size="12" font-weight="bold">AD REVENUE SHARE</text>
+      <text x="560" y="68" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="9">% of ad revenue per post</text>
+      <text x="560" y="82" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="8">Future (when ads launch)</text>
+
+      <!-- Multipliers box -->
+      <rect x="140" y="140" width="370" height="55" rx="10" fill="rgba(245,158,11,0.1)" stroke="rgba(245,158,11,0.4)" stroke-width="1.5"/>
+      <text x="325" y="162" text-anchor="middle" fill="rgb(251,191,36)" font-size="11" font-weight="bold">FLYWHEEL MULTIPLIERS</text>
+      <text x="325" y="180" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">Creator Score Tier × Posting Streak × Community Bonus × Virality Bonus</text>
+
+      <!-- Creator wallet -->
+      <rect x="190" y="245" width="270" height="55" rx="10" fill="rgba(236,72,153,0.15)" stroke="rgba(236,72,153,0.5)" stroke-width="1.5"/>
+      <text x="325" y="268" text-anchor="middle" fill="rgb(244,114,182)" font-size="13" font-weight="bold">CREATOR WALLET</text>
+      <text x="325" y="288" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">Payout via mobile money (M-Pesa, Tigo Pesa, Airtel Money)</text>
+
+      <!-- Arrows -->
+      <line x1="90" y1="90" x2="250" y2="140" stroke="rgba(255,255,255,0.3)" stroke-width="1" marker-end="url(#pa)"/>
+      <line x1="325" y1="90" x2="325" y2="135" stroke="rgba(255,255,255,0.3)" stroke-width="1" marker-end="url(#pa)"/>
+      <line x1="560" y1="90" x2="410" y2="140" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#pa)"/>
+      <line x1="325" y1="195" x2="325" y2="240" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" marker-end="url(#pa)"/>
+    </svg>
+  </div>
+</div>
+
+<!-- Tier 1: Fund Pool -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3 style="color: rgb(52,211,153); border-bottom: 1px solid rgba(16,185,129,0.3); padding-bottom: 0.5rem;">Tier 1: Creator Fund Pool (Base Income)</h3>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 1rem;">
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <strong style="color: white;">How It Works</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin: 0.5rem 0 0;">TAJIRI allocates a monthly fund (configurable, starts at TSh 10M). Every qualifying creator gets a share proportional to their weighted engagement score relative to all other qualifying creators that month.</p>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <strong style="color: white;">Qualification Threshold</strong>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+        <div style="padding: 0.5rem; background: rgba(16,185,129,0.1); border-radius: 6px; text-align: center;">
+          <div style="color: rgb(52,211,153); font-weight: bold; font-size: 1.1rem;">100+</div>
+          <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Followers</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(16,185,129,0.1); border-radius: 6px; text-align: center;">
+          <div style="color: rgb(52,211,153); font-weight: bold; font-size: 1.1rem;">4+</div>
+          <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Posts/month</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(16,185,129,0.1); border-radius: 6px; text-align: center;">
+          <div style="color: rgb(52,211,153); font-weight: bold; font-size: 1.1rem;">1K+</div>
+          <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Total views/month</div>
+        </div>
+      </div>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.5rem 0 0;">Low thresholds by design — TAJIRI is for emerging creators, not just superstars. New creators can start earning within their first month.</p>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px;">
+      <strong style="color: white;">Engagement-Weighted Formula (Already Built)</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin: 0.5rem 0 0;">Uses the existing <code style="color: rgb(52,211,153);">creator_earnings_rates</code> table and <code style="color: rgb(52,211,153);">PostEarningsController</code>:</p>
+      <div style="margin-top: 0.5rem; padding: 0.75rem; background: rgba(0,0,0,0.3); border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+        base_score = (views × view_rate) + (likes × like_rate) + (shares × share_rate) + (saves × save_rate) + (comments × comment_rate) + (watch_seconds × watch_rate)
+      </div>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.5rem 0 0;">Rates are configurable in the backend table. Shares and saves weighted highest — they indicate genuine value.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Flywheel Multipliers -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3 style="color: rgb(251,191,36); border-bottom: 1px solid rgba(245,158,11,0.3); padding-bottom: 0.5rem;">Flywheel Multipliers (What Makes TAJIRI Unique)</h3>
+  <p class="subtitle">These multipliers stack on top of the base engagement score — rewarding the behaviors the Flywheel needs</p>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 1rem;">
+
+    <div style="padding: 1rem; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: white;">Creator Score Tier Multiplier</strong>
+        <span style="color: rgb(251,191,36); font-family: monospace; font-size: 0.85rem;">1.0x — 2.5x</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin: 0.5rem 0 0;">Based on rolling 30-day Creator Score (community + quality + consistency):</p>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Rising</div>
+          <div style="color: rgb(156,163,175); font-weight: bold;">1.0x</div>
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,0.3);">Score 0-30</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Established</div>
+          <div style="color: rgb(96,165,250); font-weight: bold;">1.5x</div>
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,0.3);">Score 30-60</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Star</div>
+          <div style="color: rgb(251,191,36); font-weight: bold;">2.0x</div>
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,0.3);">Score 60-85</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Legend</div>
+          <div style="color: rgb(244,114,182); font-weight: bold;">2.5x</div>
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,0.3);">Score 85-100</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: white;">Posting Streak Multiplier</strong>
+        <span style="color: rgb(251,191,36); font-family: monospace; font-size: 0.85rem;">1.0x — 1.5x</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">No streak</div>
+          <div style="color: rgb(156,163,175); font-weight: bold;">1.0x</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">7-day</div>
+          <div style="color: rgb(251,191,36); font-weight: bold;">1.1x</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">30-day</div>
+          <div style="color: rgb(251,191,36); font-weight: bold;">1.25x</div>
+        </div>
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">90-day</div>
+          <div style="color: rgb(251,191,36); font-weight: bold;">1.5x</div>
+        </div>
+      </div>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0.5rem 0 0;">Post every 48hrs. Bank 1 skip day per 7-day streak. Streak freezes (not resets) on miss.</p>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: white;">Community Bonus</strong>
+        <span style="color: rgb(251,191,36); font-family: monospace; font-size: 0.85rem;">1.0x — 1.5x</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin: 0.5rem 0 0;">Reply to 50%+ of comments on a post → 1.5x on that post's earnings. Measured per-post, not globally. Encourages creators to engage with their audience on every post, not just popular ones.</p>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong style="color: white;">Virality Bonus</strong>
+        <span style="color: rgb(251,191,36); font-family: monospace; font-size: 0.85rem;">1.0x — 5.0x</span>
+      </div>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin: 0.5rem 0 0;">Post triggers a gossip thread → 2x. Thread reaches 50+ posts → 3x. Thread reaches 200+ posts → 5x. This is the jackpot — makes creators think "what will people talk about?" which is exactly what feeds the Flywheel.</p>
+    </div>
+
+    <div style="padding: 0.75rem; background: rgba(245,158,11,0.15); border-radius: 8px; margin-top: 0.5rem;">
+      <strong style="color: rgb(251,191,36); font-size: 0.9rem;">Example Calculation:</strong>
+      <div style="font-family: monospace; font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-top: 0.5rem; line-height: 1.8;">
+        base_score = TSh 500 (from engagement formula)<br/>
+        × Star tier = 2.0x<br/>
+        × 30-day streak = 1.25x<br/>
+        × Community bonus = 1.5x (replied to 80% of comments)<br/>
+        × Virality bonus = 3.0x (gossip thread hit 50+ posts)<br/>
+        <strong style="color: rgb(52,211,153);">= TSh 5,625 for this single post</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tier 2: Direct Monetization -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3 style="color: rgb(167,139,250); border-bottom: 1px solid rgba(139,92,246,0.3); padding-bottom: 0.5rem;">Tier 2: Direct Monetization (Already Partially Built)</h3>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem;">
+    <div style="padding: 1rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(167,139,250);">Subscriptions</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Already built: subscription tiers, billing, subscriber management. Creator sets price, offers exclusive content to subscribers. Platform takes 15% commission. Payout to creator wallet.</p>
+      <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: rgba(16,185,129,0.15); border-radius: 4px; display: inline-block; font-size: 0.7rem; color: rgb(52,211,153);">EXISTS — enhance with Flywheel integration</div>
+    </div>
+    <div style="padding: 1rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(167,139,250);">Tips & Gifts</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Already built: SendTipScreen, tip models. Viewers send one-time tips to creators. Predefined amounts (TSh 500, 1K, 5K, 10K) + custom. Platform takes 10% commission. Visible on post as "X people tipped this post."</p>
+      <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: rgba(16,185,129,0.15); border-radius: 4px; display: inline-block; font-size: 0.7rem; color: rgb(52,211,153);">EXISTS — add gossip thread tipping</div>
+    </div>
+    <div style="padding: 1rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(167,139,250);">Livestream Gifts</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Already built: StreamSuperChat model, gift system. Real-time gifts during livestream with animated effects. Platform takes 20% commission. Higher commission because livestream infrastructure costs more.</p>
+      <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: rgba(16,185,129,0.15); border-radius: 4px; display: inline-block; font-size: 0.7rem; color: rgb(52,211,153);">EXISTS — no changes needed</div>
+    </div>
+    <div style="padding: 1rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(167,139,250);">Sponsored Posts (NEW)</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0 0;">Marketplace where businesses pay creators to feature products. Creator sets their rate based on their tier. Post tagged as "Sponsored" with business attribution. Business pays TAJIRI, TAJIRI pays creator (20% commission). Star/Legend tiers only.</p>
+      <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: rgba(245,158,11,0.15); border-radius: 4px; display: inline-block; font-size: 0.7rem; color: rgb(251,191,36);">NEW — build as part of Flywheel</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tier 3: Ad Revenue (Future) -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3 style="color: rgba(156,163,175,0.8); border-bottom: 1px solid rgba(107,114,128,0.3); padding-bottom: 0.5rem;">Tier 3: Ad Revenue Share (Future Phase)</h3>
+  <div style="padding: 1rem; background: rgba(0,0,0,0.15); border: 1px solid rgba(107,114,128,0.2); border-radius: 10px; margin-top: 0.75rem;">
+    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5);">When TAJIRI introduces advertising (in-feed ads, pre-roll on videos), creators get a % of ad revenue generated by views on their content. Split: 55% creator / 45% platform (industry standard). Ads only shown on posts with 1K+ views (protects small creators from low-value ads). Creator can opt out of ads on their content. This layer activates only when the ad system is built — no dependency on launch.</p>
+  </div>
+</div>
+
+<!-- Payout System -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Payout System</h3>
+  <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(16,185,129,0.6);">
+      <strong style="color: white;">Mobile Money First</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">M-Pesa, Tigo Pesa, Airtel Money, Halo Pesa. This is Tanzania — mobile money is how people get paid. Minimum payout: TSh 5,000. Processing: within 48 hours. No bank account required.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <strong style="color: white;">Payout Schedule</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Fund pool: distributed on the 1st of each month. Tips/gifts: available immediately (instant payout). Subscriptions: monthly on renewal date. Sponsored posts: on campaign completion. All visible in the existing Earnings Dashboard.</p>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(236,72,153,0.6);">
+      <strong style="color: white;">Transparency Dashboard</strong>
+      <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Enhance existing Creator Stats Panel and Earnings Dashboard to show: fund pool share calculation (your score / total pool), each multiplier applied with exact values, comparison to previous month, projection for current month based on current trajectory. Creators must trust the system — transparency builds trust.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Creator Journey -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Creator Journey: From Zero to Legend</h3>
+  <div style="position: relative; padding-left: 2rem; margin-top: 1rem;">
+    <!-- Timeline line -->
+    <div style="position: absolute; left: 0.6rem; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, rgb(156,163,175), rgb(96,165,250), rgb(251,191,36), rgb(244,114,182));"></div>
+
+    <div style="position: relative; padding: 0.75rem 0 1.5rem;">
+      <div style="position: absolute; left: -1.65rem; width: 12px; height: 12px; background: rgb(156,163,175); border-radius: 50%;"></div>
+      <strong style="color: rgb(156,163,175);">Week 1: New Creator</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Posts first content. Sees "You earned TSh 12 from 45 views" in Stats Panel. Small but real — proves the system works. Gets "First Post" celebration. Sees path to qualification (100 followers, 4 posts, 1K views).</p>
+    </div>
+
+    <div style="position: relative; padding: 0.75rem 0 1.5rem;">
+      <div style="position: absolute; left: -1.65rem; width: 12px; height: 12px; background: rgb(96,165,250); border-radius: 50%;"></div>
+      <strong style="color: rgb(96,165,250);">Month 1: Rising (Qualified)</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Hits thresholds, enters fund pool. First real payout: TSh 2,500. Starts posting streak (1.1x after 7 days). Sees which posts earn most — learns what works. Receives first tip from a viewer: TSh 1,000.</p>
+    </div>
+
+    <div style="position: relative; padding: 0.75rem 0 1.5rem;">
+      <div style="position: absolute; left: -1.65rem; width: 12px; height: 12px; background: rgb(251,191,36); border-radius: 50%;"></div>
+      <strong style="color: rgb(251,191,36);">Month 3: Star</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Creator Score hits 60+. Tier multiplier jumps to 2.0x. First post triggers a gossip thread — 3x virality bonus. Monthly earnings: TSh 45,000+. Opens subscription tier. Gets approached for sponsored post. Weekly performance reports show consistent growth.</p>
+    </div>
+
+    <div style="position: relative; padding: 0.75rem 0 0;">
+      <div style="position: absolute; left: -1.65rem; width: 12px; height: 12px; background: rgb(244,114,182); border-radius: 50%;"></div>
+      <strong style="color: rgb(244,114,182);">Month 6+: Legend</strong>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0.25rem 0 0;">Score 85+. 2.5x tier multiplier. 90-day posting streak (1.5x). Regular gossip thread triggers. Multiple income streams: fund pool (TSh 80K) + subscriptions (TSh 120K) + tips (TSh 30K) + sponsored posts (TSh 200K). This is now a real job. TAJIRI keeps them because no other platform offers this combination.</p>
+    </div>
+  </div>
+</div>

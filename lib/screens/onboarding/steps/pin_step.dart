@@ -213,7 +213,7 @@ class _PinStepState extends State<PinStep> {
               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
+              setState(() => _error = null);
             },
             onSubmitted: onSubmitted,
           ),

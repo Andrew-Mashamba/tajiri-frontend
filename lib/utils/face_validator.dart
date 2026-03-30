@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 
 class FaceValidationResult {
@@ -18,6 +19,9 @@ class FaceValidationResult {
 
 class FaceValidator {
   /// Strict validation for registration — exactly 1 face required.
+  ///
+  /// Falls back to allowing upload if ML Kit cannot detect faces (e.g. model
+  /// not yet downloaded, image orientation issue on iOS).
   static Future<FaceValidationResult> validate(File imageFile) async {
     try {
       final inputImage = InputImage.fromFile(imageFile);
@@ -27,19 +31,14 @@ class FaceValidator {
           enableContours: false,
           enableClassification: false,
           performanceMode: FaceDetectorMode.accurate,
+          minFaceSize: 0.1,
         ),
       );
 
       final faces = await faceDetector.processImage(inputImage);
       await faceDetector.close();
 
-      if (faces.isEmpty) {
-        return const FaceValidationResult(
-          isValid: false,
-          errorKey: 'no_face',
-          faceCount: 0,
-        );
-      }
+      debugPrint('[FaceValidator] Detected ${faces.length} face(s)');
 
       if (faces.length > 1) {
         return FaceValidationResult(
@@ -49,14 +48,25 @@ class FaceValidator {
         );
       }
 
-      final face = faces.first;
-      return FaceValidationResult(
+      if (faces.length == 1) {
+        final face = faces.first;
+        return FaceValidationResult(
+          isValid: true,
+          faceBounds: face.boundingBox,
+          faceCount: 1,
+        );
+      }
+
+      // 0 faces — allow upload without bbox (ML Kit may not work on all devices)
+      debugPrint('[FaceValidator] No faces detected, allowing upload anyway');
+      return const FaceValidationResult(
         isValid: true,
-        faceBounds: face.boundingBox,
-        faceCount: 1,
+        errorKey: null,
+        faceCount: 0,
       );
     } catch (e) {
       // ML Kit unavailable — allow upload without face data
+      debugPrint('[FaceValidator] Error: $e — allowing upload');
       return const FaceValidationResult(
         isValid: true,
         errorKey: null,

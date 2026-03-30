@@ -1,0 +1,113 @@
+<h2>Onboarding Flow: Chapter-Based Conversational</h2>
+<p class="subtitle">4 chapters, smart guide tone, TAJIRI monochrome design</p>
+
+<div class="split">
+  <!-- Current Flow -->
+  <div class="mockup">
+    <div class="mockup-header">Current: Stepper (Exam Feel)</div>
+    <div class="mockup-body" style="background:#FAFAFA; padding:20px; font-family:system-ui;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
+        <span style="color:#666; font-size:12px;">Step 5 of 11</span>
+        <span style="color:#666; font-size:12px;">45%</span>
+      </div>
+      <div style="height:4px; background:#E0E0E0; border-radius:2px; margin-bottom:24px;">
+        <div style="width:45%; height:100%; background:#1A1A1A; border-radius:2px;"></div>
+      </div>
+      <h3 style="color:#1A1A1A; font-size:16px; margin:0 0 8px;">Secondary School</h3>
+      <p style="color:#666; font-size:13px; margin:0 0 16px;">Enter your secondary school details</p>
+      <div style="background:white; border:1px solid #E0E0E0; border-radius:12px; padding:14px; margin-bottom:12px;">
+        <span style="color:#999; font-size:14px;">Search school name...</span>
+      </div>
+      <div style="background:white; border:1px solid #E0E0E0; border-radius:12px; padding:14px; margin-bottom:12px;">
+        <span style="color:#999; font-size:14px;">Start year</span>
+      </div>
+      <div style="background:white; border:1px solid #E0E0E0; border-radius:12px; padding:14px; margin-bottom:12px;">
+        <span style="color:#999; font-size:14px;">Graduation year</span>
+      </div>
+      <div style="display:flex; gap:12px; margin-top:20px;">
+        <button style="flex:1; padding:14px; border:1.5px solid #1A1A1A; background:transparent; border-radius:12px; font-size:14px; color:#1A1A1A;">Ruka</button>
+        <button style="flex:1; padding:14px; border:none; background:#1A1A1A; border-radius:12px; font-size:14px; color:white;">Endelea</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Flow -->
+  <div class="mockup">
+    <div class="mockup-header">New: Conversational Chapters</div>
+    <div class="mockup-body" style="background:#FAFAFA; padding:20px; font-family:system-ui;">
+      <!-- Chapter indicator -->
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <div style="flex:1; height:4px; background:#1A1A1A; border-radius:2px;"></div>
+        <div style="flex:1; height:4px; background:#1A1A1A; border-radius:2px;"></div>
+        <div style="flex:1; height:4px; background:#1A1A1A; border-radius:2px; opacity:0.4;"></div>
+        <div style="flex:1; height:4px; background:#E0E0E0; border-radius:2px;"></div>
+      </div>
+      <span style="color:#666; font-size:11px; letter-spacing:1px;">MASOMO</span>
+
+      <!-- Conversational prompt -->
+      <div style="margin-top:20px;">
+        <h3 style="color:#1A1A1A; font-size:20px; margin:0 0 4px; font-weight:600;">Ulisoma sekondari wapi?</h3>
+        <p style="color:#666; font-size:13px; margin:0 0:20px;">Tafuta jina la shule yako</p>
+      </div>
+
+      <!-- Search input with icon -->
+      <div style="background:white; border-radius:12px; padding:14px 14px 14px 44px; margin-top:16px; position:relative; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+        <span style="position:absolute; left:14px; top:14px; font-size:16px;">🔍</span>
+        <span style="color:#999; font-size:14px;">Mfano: Ilboru Secondary...</span>
+      </div>
+
+      <!-- Quick year selector -->
+      <div style="margin-top:16px;">
+        <span style="color:#666; font-size:12px;">Mwaka wa kumaliza</span>
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+          <span style="background:white; border:1px solid #E0E0E0; border-radius:20px; padding:8px 16px; font-size:13px; color:#1A1A1A;">2020</span>
+          <span style="background:white; border:1px solid #E0E0E0; border-radius:20px; padding:8px 16px; font-size:13px; color:#1A1A1A;">2021</span>
+          <span style="background:#1A1A1A; border:1px solid #1A1A1A; border-radius:20px; padding:8px 16px; font-size:13px; color:white;">2022</span>
+          <span style="background:white; border:1px solid #E0E0E0; border-radius:20px; padding:8px 16px; font-size:13px; color:#1A1A1A;">2023</span>
+          <span style="background:white; border:1px solid #E0E0E0; border-radius:20px; padding:8px 16px; font-size:13px; color:#1A1A1A;">2024</span>
+        </div>
+      </div>
+
+      <!-- Bottom actions -->
+      <div style="margin-top:24px; display:flex; justify-content:space-between; align-items:center;">
+        <button style="padding:12px 20px; border:none; background:transparent; font-size:13px; color:#666;">Sijasoma sekondari</button>
+        <button style="padding:14px 32px; border:none; background:#1A1A1A; border-radius:12px; font-size:14px; color:white; font-weight:600;">Endelea →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:32px;">Key Design Differences</h3>
+
+<div class="options">
+  <div class="option" data-choice="chapters" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Chapter bars, not "Step X of Y"</h3>
+      <p>4 thick bars at top showing chapters. Current chapter label below. No numbers = no counting.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="questions" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Questions, not form labels</h3>
+      <p>"Ulisoma sekondari wapi?" instead of "Secondary School". Feels like a conversation.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="chips" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Tap chips for years, not dropdowns</h3>
+      <p>Scrollable year chips are faster than opening a dropdown and scrolling. One tap vs three.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="skip" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Contextual skip text, not generic "Ruka"</h3>
+      <p>"Sijasoma sekondari" (I didn't go to secondary) instead of "Skip". Feels respectful, not dismissive.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Click the design differences that feel most important to you, or just tell me what you think in the terminal.</p>

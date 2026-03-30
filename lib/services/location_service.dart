@@ -8,7 +8,7 @@ class LocationService {
   LocationService({required this.baseUrl});
 
   Future<List<Region>> getRegions() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/locations/regions'));
+    final response = await http.get(Uri.parse('$baseUrl/locations/regions'));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -23,7 +23,7 @@ class LocationService {
 
   Future<List<District>> getDistricts(int regionId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/locations/regions/$regionId/districts'),
+      Uri.parse('$baseUrl/locations/regions/$regionId/districts'),
     );
 
     if (response.statusCode == 200) {
@@ -39,7 +39,7 @@ class LocationService {
 
   Future<List<Ward>> getWards(int districtId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/locations/districts/$districtId/wards'),
+      Uri.parse('$baseUrl/locations/districts/$districtId/wards'),
     );
 
     if (response.statusCode == 200) {
@@ -55,7 +55,7 @@ class LocationService {
 
   Future<List<Street>> getStreets(int wardId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/locations/wards/$wardId/streets'),
+      Uri.parse('$baseUrl/locations/wards/$wardId/streets'),
     );
 
     if (response.statusCode == 200) {
@@ -71,7 +71,7 @@ class LocationService {
 
   Future<Map<String, dynamic>> searchLocations(String query) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/locations/search?q=${Uri.encodeComponent(query)}'),
+      Uri.parse('$baseUrl/locations/search?q=${Uri.encodeComponent(query)}'),
     );
 
     if (response.statusCode == 200) {

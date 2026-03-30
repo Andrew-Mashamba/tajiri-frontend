@@ -8,12 +8,10 @@ import '../../../services/education_service.dart';
 import '../../../widgets/tap_chip_selector.dart';
 import '../../../widgets/year_chip_selector.dart';
 
-/// Chapter 3: University search + programme + degree level.
+/// Chapter 3: University → College → Department → Programme → Degree → Year.
 ///
-/// Receives [state] by reference and writes the result to
+/// Cascading selection: each level filters the next. Writes result to
 /// [state.universityEducation] before calling [onNext].
-///
-/// The user may also tap "Sijaenda chuo kikuu" to skip.
 class UniversityStep extends StatefulWidget {
   final RegistrationState state;
   final VoidCallback onNext;
@@ -37,7 +35,7 @@ class UniversityStep extends StatefulWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Degree level enum (internal, not stored in RegistrationState raw enum)
+// Degree level enum
 // ---------------------------------------------------------------------------
 enum _DegreeLevel { bachelor, masters, phd }
 
@@ -97,7 +95,17 @@ class _UniversityStepState extends State<UniversityStep> {
   // --- selected university
   UniversityDetailed? _selectedUniversity;
 
-  // --- programme search (filtered by university)
+  // --- college (loaded after university selected)
+  List<UniversityCollege> _colleges = [];
+  bool _collegesLoading = false;
+  UniversityCollege? _selectedCollege;
+
+  // --- department (loaded after college selected)
+  List<UniversityDepartment> _departments = [];
+  bool _departmentsLoading = false;
+  UniversityDepartment? _selectedDepartment;
+
+  // --- programme search (filtered by department → college → university)
   List<UniversityProgramme> _progResults = [];
   bool _progSearching = false;
   Timer? _progDebounce;
@@ -133,6 +141,30 @@ class _UniversityStepState extends State<UniversityStep> {
         type: '',
       );
       _uniSearchCtrl.text = existing.universityName ?? '';
+
+      // Load colleges for pre-selected university
+      _loadColleges(existing.universityId!);
+    }
+
+    // College
+    if (existing.collegeId != null) {
+      _selectedCollege = UniversityCollege(
+        id: existing.collegeId!,
+        code: '',
+        name: existing.collegeName ?? '',
+        universityId: existing.universityId ?? 0,
+      );
+      _loadDepartments(existing.collegeId!);
+    }
+
+    // Department
+    if (existing.departmentId != null) {
+      _selectedDepartment = UniversityDepartment(
+        id: existing.departmentId!,
+        code: '',
+        name: existing.departmentName ?? '',
+        collegeId: existing.collegeId ?? 0,
+      );
     }
 
     // Programme
@@ -163,7 +195,7 @@ class _UniversityStepState extends State<UniversityStep> {
   }
 
   // ---------------------------------------------------------------------------
-  // Search helpers
+  // University search
   // ---------------------------------------------------------------------------
 
   void _onUniQueryChanged(String query) {
@@ -198,11 +230,17 @@ class _UniversityStepState extends State<UniversityStep> {
       _selectedUniversity = uni;
       _uniSearchCtrl.text = uni.displayName;
       _uniResults = [];
-      // Reset downstream
+      // Reset all downstream
+      _selectedCollege = null;
+      _colleges = [];
+      _selectedDepartment = null;
+      _departments = [];
       _selectedProgramme = null;
       _progSearchCtrl.clear();
       _progResults = [];
+      _degreeLevel = null;
     });
+    _loadColleges(uni.id);
   }
 
   void _clearUniversity() {
@@ -210,11 +248,105 @@ class _UniversityStepState extends State<UniversityStep> {
       _selectedUniversity = null;
       _uniSearchCtrl.clear();
       _uniResults = [];
+      _selectedCollege = null;
+      _colleges = [];
+      _selectedDepartment = null;
+      _departments = [];
       _selectedProgramme = null;
       _progSearchCtrl.clear();
       _progResults = [];
+      _degreeLevel = null;
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // College loading
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadColleges(int universityId) async {
+    setState(() => _collegesLoading = true);
+    try {
+      final results = await _uniService.getColleges(universityId);
+      if (!mounted) return;
+      setState(() {
+        _colleges = results;
+        _collegesLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _collegesLoading = false);
+    }
+  }
+
+  void _selectCollege(UniversityCollege college) {
+    setState(() {
+      _selectedCollege = college;
+      // Reset downstream
+      _selectedDepartment = null;
+      _departments = [];
+      _selectedProgramme = null;
+      _progSearchCtrl.clear();
+      _progResults = [];
+      _degreeLevel = null;
+    });
+    _loadDepartments(college.id);
+  }
+
+  void _clearCollege() {
+    setState(() {
+      _selectedCollege = null;
+      _selectedDepartment = null;
+      _departments = [];
+      _selectedProgramme = null;
+      _progSearchCtrl.clear();
+      _progResults = [];
+      _degreeLevel = null;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Department loading
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadDepartments(int collegeId) async {
+    setState(() => _departmentsLoading = true);
+    try {
+      final results = await _uniService.getDepartments(collegeId);
+      if (!mounted) return;
+      setState(() {
+        _departments = results;
+        _departmentsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _departmentsLoading = false);
+    }
+  }
+
+  void _selectDepartment(UniversityDepartment dept) {
+    setState(() {
+      _selectedDepartment = dept;
+      // Reset downstream
+      _selectedProgramme = null;
+      _progSearchCtrl.clear();
+      _progResults = [];
+      _degreeLevel = null;
+    });
+  }
+
+  void _clearDepartment() {
+    setState(() {
+      _selectedDepartment = null;
+      _selectedProgramme = null;
+      _progSearchCtrl.clear();
+      _progResults = [];
+      _degreeLevel = null;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Programme search
+  // ---------------------------------------------------------------------------
 
   void _onProgQueryChanged(String query) {
     _progDebounce?.cancel();
@@ -231,15 +363,25 @@ class _UniversityStepState extends State<UniversityStep> {
     if (!mounted) return;
     setState(() => _progSearching = true);
     try {
-      final results = _selectedUniversity != null
-          ? await _uniService.searchProgrammes(
-              query,
-            ).then(
-              (all) => all
-                  .where((p) => p.universityId == _selectedUniversity!.id)
-                  .toList(),
-            )
-          : await _uniService.searchProgrammes(query);
+      List<UniversityProgramme> results;
+
+      if (_selectedDepartment != null) {
+        // Filter by department
+        results = await _uniService
+            .getProgrammesByDepartment(_selectedDepartment!.id)
+            .then((all) => all
+                .where((p) =>
+                    p.name.toLowerCase().contains(query.toLowerCase()))
+                .toList());
+      } else if (_selectedUniversity != null) {
+        // Filter by university
+        results = await _uniService.searchProgrammes(query).then((all) => all
+            .where((p) => p.universityId == _selectedUniversity!.id)
+            .toList());
+      } else {
+        results = await _uniService.searchProgrammes(query);
+      }
+
       if (!mounted) return;
       setState(() {
         _progResults = results;
@@ -303,6 +445,10 @@ class _UniversityStepState extends State<UniversityStep> {
       universityId: _selectedUniversity!.id,
       universityCode: _selectedUniversity!.code,
       universityName: _selectedUniversity!.displayName,
+      collegeId: _selectedCollege?.id,
+      collegeName: _selectedCollege?.name,
+      departmentId: _selectedDepartment?.id,
+      departmentName: _selectedDepartment?.name,
       programmeId: _selectedProgramme!.id,
       programmeName: _selectedProgramme!.name,
       degreeLevel: _degreeLevel!.apiValue,
@@ -334,6 +480,15 @@ class _UniversityStepState extends State<UniversityStep> {
                   _buildUniversitySection(),
                   if (_selectedUniversity != null) ...[
                     const SizedBox(height: 20),
+                    _buildCollegeSection(),
+                  ],
+                  if (_selectedCollege != null) ...[
+                    const SizedBox(height: 20),
+                    _buildDepartmentSection(),
+                  ],
+                  if (_selectedDepartment != null ||
+                      (_selectedUniversity != null && _colleges.isEmpty && !_collegesLoading)) ...[
+                    const SizedBox(height: 20),
                     _buildProgrammeSection(),
                   ],
                   if (_selectedProgramme != null) ...[
@@ -360,9 +515,9 @@ class _UniversityStepState extends State<UniversityStep> {
   // ---------------------------------------------------------------------------
 
   Widget _buildHeading() {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Text(
           'Chuo Kikuu gani?',
           style: TextStyle(
@@ -406,6 +561,82 @@ class _UniversityStepState extends State<UniversityStep> {
             subtitleBuilder: (u) => u.typeLabel,
             onTap: _selectUniversity,
           ),
+      ],
+    );
+  }
+
+  Widget _buildCollegeSection() {
+    if (_collegesLoading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLabel('College / Faculty'),
+          const SizedBox(height: 10),
+          const Center(
+            child: SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _secondary),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_colleges.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('College / Faculty'),
+        const SizedBox(height: 6),
+        _buildSelectionList<UniversityCollege>(
+          items: _colleges,
+          selectedItem: _selectedCollege,
+          labelBuilder: (c) => c.name,
+          subtitleBuilder: (c) => c.typeLabel,
+          isSelected: (c) => _selectedCollege?.id == c.id,
+          onTap: _selectCollege,
+          onClear: _clearCollege,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDepartmentSection() {
+    if (_departmentsLoading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLabel('Department'),
+          const SizedBox(height: 10),
+          const Center(
+            child: SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _secondary),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_departments.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Department'),
+        const SizedBox(height: 6),
+        _buildSelectionList<UniversityDepartment>(
+          items: _departments,
+          selectedItem: _selectedDepartment,
+          labelBuilder: (d) => d.name,
+          subtitleBuilder: (_) => '',
+          isSelected: (d) => _selectedDepartment?.id == d.id,
+          onTap: _selectDepartment,
+          onClear: _clearDepartment,
+        ),
       ],
     );
   }
@@ -501,7 +732,8 @@ class _UniversityStepState extends State<UniversityStep> {
         const SizedBox(height: 10),
         YearChipSelector(
           defaultYear: widget.defaultGradYear,
-          yearRange: 4,
+          startYear: 1950,
+          endYear: 2030,
           selectedYear: _graduationYear,
           onYearSelected: (y) => setState(() => _graduationYear = y),
         ),
@@ -623,6 +855,124 @@ class _UniversityStepState extends State<UniversityStep> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// Scrollable list for selecting from a pre-loaded set (colleges, departments).
+  Widget _buildSelectionList<T>({
+    required List<T> items,
+    required T? selectedItem,
+    required String Function(T) labelBuilder,
+    required String Function(T) subtitleBuilder,
+    required bool Function(T) isSelected,
+    required void Function(T) onTap,
+    required VoidCallback onClear,
+  }) {
+    if (selectedItem != null) {
+      // Show selected chip with clear button
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: _fieldBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _primary, width: 1.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 18, color: _primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                labelBuilder(selectedItem),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _primary,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            GestureDetector(
+              onTap: onClear,
+              child: const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.close_rounded, size: 20, color: _secondary),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show scrollable list
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      decoration: BoxDecoration(
+        color: _fieldBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        itemCount: items.length,
+        separatorBuilder: (_, _) =>
+            const Divider(height: 1, color: Color(0xFFEEEEEE)),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final subtitle = subtitleBuilder(item);
+          return InkWell(
+            onTap: () => onTap(item),
+            borderRadius: index == 0
+                ? const BorderRadius.vertical(top: Radius.circular(12))
+                : index == items.length - 1
+                    ? const BorderRadius.vertical(bottom: Radius.circular(12))
+                    : BorderRadius.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    labelBuilder(item),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: _primary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: _secondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

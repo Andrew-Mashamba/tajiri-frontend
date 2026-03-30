@@ -158,70 +158,79 @@ class _NameStepState extends State<NameStep> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Conversational heading
-            const Text(
-              'Jina lako ni nani?',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w700,
-                color: _primary,
-                height: 1.2,
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Conversational heading
+                    const Text(
+                      'Jina lako ni nani?',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: _primary,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tuambie jina lako na tarehe ya kuzaliwa',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: _secondary,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // First name
+                    _buildLabel('Jina la kwanza'),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _firstNameCtrl,
+                      hint: 'Mfano: Amina',
+                      errorText: _firstNameError,
+                      onChanged: _onFirstNameChanged,
+                      textCapitalization: TextCapitalization.words,
+                      autofocus: widget.state.firstName == null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Last name
+                    _buildLabel('Jina la ukoo'),
+                    const SizedBox(height: 6),
+                    _buildTextField(
+                      controller: _lastNameCtrl,
+                      hint: 'Mfano: Hassan',
+                      errorText: _lastNameError,
+                      onChanged: _onLastNameChanged,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Date of birth
+                    _buildLabel('Tarehe ya kuzaliwa'),
+                    const SizedBox(height: 6),
+                    _buildDobPicker(),
+                    const SizedBox(height: 16),
+
+                    // Gender
+                    _buildLabel('Jinsia'),
+                    const SizedBox(height: 6),
+                    TapChipSelector<Gender>(
+                      options: Gender.values,
+                      selectedOption: _selectedGender,
+                      labelBuilder: (g) => g.fullLabel,
+                      onSelected: _onGenderSelected,
+                      horizontal: true,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Tuambie jina lako na tarehe ya kuzaliwa',
-              style: TextStyle(
-                fontSize: 15,
-                color: _secondary,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 32),
 
-            // First name
-            _buildLabel('Jina la kwanza'),
-            const SizedBox(height: 6),
-            _buildTextField(
-              controller: _firstNameCtrl,
-              hint: 'Mfano: Amina',
-              errorText: _firstNameError,
-              onChanged: _onFirstNameChanged,
-              textCapitalization: TextCapitalization.words,
-              autofocus: widget.state.firstName == null,
-            ),
             const SizedBox(height: 16),
-
-            // Last name
-            _buildLabel('Jina la ukoo'),
-            const SizedBox(height: 6),
-            _buildTextField(
-              controller: _lastNameCtrl,
-              hint: 'Mfano: Hassan',
-              errorText: _lastNameError,
-              onChanged: _onLastNameChanged,
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 16),
-
-            // Date of birth
-            _buildLabel('Tarehe ya kuzaliwa'),
-            const SizedBox(height: 6),
-            _buildDobPicker(),
-            const SizedBox(height: 16),
-
-            // Gender
-            _buildLabel('Jinsia'),
-            const SizedBox(height: 6),
-            TapChipSelector<Gender>(
-              options: Gender.values,
-              selectedOption: _selectedGender,
-              labelBuilder: (g) => g.fullLabel,
-              onSelected: _onGenderSelected,
-              horizontal: true,
-            ),
-
-            const Spacer(),
 
             // Continue button
             _buildNextButton(),
@@ -292,7 +301,7 @@ class _NameStepState extends State<NameStep> {
   Widget _buildDobPicker() {
     final hasDate = _selectedDob != null;
     final label = hasDate
-        ? DateFormat('d MMMM yyyy', 'sw').format(_selectedDob!)
+        ? DateFormat('d MMMM yyyy').format(_selectedDob!)
         : 'Chagua tarehe';
 
     return GestureDetector(

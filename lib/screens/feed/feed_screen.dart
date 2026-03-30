@@ -9,7 +9,6 @@ import '../../models/gossip_models.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/story_models.dart';
-import '../../services/feed_service.dart';
 import '../../services/gossip_service.dart';
 import '../../services/post_service.dart';
 import '../../services/media_cache_service.dart';
@@ -61,7 +60,7 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateMixin {
-  final FeedService _feedService = FeedService();
+
   final PostService _postService = PostService();
   final MediaCacheService _cacheService = MediaCacheService();
   late TabController _tabController;
@@ -606,42 +605,27 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       _error = null;
     });
 
-    if (_currentFeedType == 'posts') {
-      // Use Content Engine v2 for the main "For You" feed (auto-fallback to v1)
-      final engineResult = await ContentEngineService.feed(
-        feedType: 'for_you',
-        userId: widget.currentUserId,
-        page: 1,
-      );
-      setState(() {
-        _isLoading = false;
-        _posts = engineResult.items
-            .where((item) => item.post != null)
-            .map((item) => item.post!)
-            .toList();
-        _currentPage = 1;
-        _hasMore = engineResult.meta.hasMore;
-        if (_posts.isEmpty && engineResult.items.isEmpty) {
-          _error = null; // Just empty, not an error
-        }
-      });
-    } else {
-      final result = await _feedService.getFeed(
-        userId: widget.currentUserId,
-        page: 1,
-        feedType: _currentFeedType,
-      );
-      setState(() {
-        _isLoading = false;
-        if (result.success) {
-          _posts = result.posts;
-          _currentPage = 1;
-          _hasMore = result.meta?.hasMore ?? false;
-        } else {
-          _error = result.message;
-        }
-      });
-    }
+    if (kDebugMode) debugPrint('[FeedScreen] _loadFeed called, feedType=$_currentFeedType, userId=${widget.currentUserId}');
+    final v2FeedType = _currentFeedType == 'posts' ? 'for_you' : _currentFeedType;
+    final engineResult = await ContentEngineService.feed(
+      feedType: v2FeedType,
+      userId: widget.currentUserId,
+      page: 1,
+    );
+    if (kDebugMode) debugPrint('[FeedScreen] ContentEngine returned ${engineResult.items.length} items');
+    setState(() {
+      _isLoading = false;
+      _posts = engineResult.items
+          .where((item) => item.post != null)
+          .map((item) => item.post!)
+          .toList();
+      _currentPage = 1;
+      _hasMore = engineResult.meta.hasMore;
+      if (kDebugMode) debugPrint('[FeedScreen] Parsed ${_posts.length} posts, hasMore=$_hasMore');
+      if (_posts.isEmpty && engineResult.items.isEmpty) {
+        _error = null; // Just empty, not an error
+      }
+    });
     _buildFeedItems();
     _loadFeedAds();
   }
@@ -665,37 +649,22 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 
     setState(() => _isLoadingMore = true);
 
-    if (_currentFeedType == 'posts') {
-      final engineResult = await ContentEngineService.feed(
-        feedType: 'for_you',
-        userId: widget.currentUserId,
-        page: _currentPage + 1,
-      );
-      setState(() {
-        _isLoadingMore = false;
-        final newPosts = engineResult.items
-            .where((item) => item.post != null)
-            .map((item) => item.post!)
-            .toList();
-        _posts.addAll(newPosts);
-        _currentPage++;
-        _hasMore = engineResult.meta.hasMore;
-      });
-    } else {
-      final result = await _feedService.getFeed(
-        userId: widget.currentUserId,
-        page: _currentPage + 1,
-        feedType: _currentFeedType,
-      );
-      setState(() {
-        _isLoadingMore = false;
-        if (result.success) {
-          _posts.addAll(result.posts);
-          _currentPage++;
-          _hasMore = result.meta?.hasMore ?? false;
-        }
-      });
-    }
+    final v2FeedType = _currentFeedType == 'posts' ? 'for_you' : _currentFeedType;
+    final engineResult = await ContentEngineService.feed(
+      feedType: v2FeedType,
+      userId: widget.currentUserId,
+      page: _currentPage + 1,
+    );
+    setState(() {
+      _isLoadingMore = false;
+      final newPosts = engineResult.items
+          .where((item) => item.post != null)
+          .map((item) => item.post!)
+          .toList();
+      _posts.addAll(newPosts);
+      _currentPage++;
+      _hasMore = engineResult.meta.hasMore;
+    });
     _buildFeedItems();
   }
 

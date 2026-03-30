@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 /// Horizontal scrollable year chip picker with smart default selection.
 /// Used in education steps to quickly pick graduation years.
 class YearChipSelector extends StatefulWidget {
-  /// Center year for the chip range (typically calculated from DOB).
+  /// Center year for the chip range (used for auto-scroll default).
   final int defaultYear;
 
-  /// Number of years to show on each side of defaultYear. Range = ±[yearRange].
+  /// Number of years to show on each side of defaultYear (ignored when startYear/endYear set).
   final int yearRange;
+
+  /// Explicit bounds. When provided, override defaultYear ± yearRange.
+  final int? startYear;
+  final int? endYear;
 
   /// Currently selected year (null = none selected).
   final int? selectedYear;
@@ -19,6 +23,8 @@ class YearChipSelector extends StatefulWidget {
     super.key,
     required this.defaultYear,
     this.yearRange = 3,
+    this.startYear,
+    this.endYear,
     this.selectedYear,
     required this.onYearSelected,
   });
@@ -32,8 +38,8 @@ class _YearChipSelectorState extends State<YearChipSelector> {
   late final ScrollController _scrollController;
 
   List<int> get _years {
-    final start = widget.defaultYear - widget.yearRange;
-    final end = widget.defaultYear + widget.yearRange;
+    final start = widget.startYear ?? (widget.defaultYear - widget.yearRange);
+    final end = widget.endYear ?? (widget.defaultYear + widget.yearRange);
     return List.generate(end - start + 1, (i) => start + i);
   }
 

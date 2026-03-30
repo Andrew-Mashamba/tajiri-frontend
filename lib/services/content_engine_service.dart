@@ -3,18 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/content_engine_models.dart';
-import 'feed_service.dart';
 import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 /// Service wrapping the Content Engine v2 API.
-/// Falls back to v1 FeedService when the v2 feature flag is off.
 class ContentEngineService {
-  static final FeedService _legacyFeedService = FeedService();
 
   /// Fetch a personalized feed via the Content Engine v2 pipeline.
-  /// Falls back to v1 FeedService if v2 returns fallback:true.
   static Future<ContentEngineResult> feed({
     required String feedType,
     required int userId,
@@ -41,15 +37,11 @@ class ContentEngineService {
         }
       }
 
-      // Feature flag off or error → fallback to v1
-      if (response.statusCode == 404) {
-        return _fallbackFeed(feedType: feedType, userId: userId, page: page, perPage: perPage);
-      }
-
-      return _fallbackFeed(feedType: feedType, userId: userId, page: page, perPage: perPage);
+      if (kDebugMode) debugPrint('[ContentEngineService] feed returned ${response.statusCode}');
+      return _emptyResult();
     } catch (e) {
-      debugPrint('[ContentEngineService] feed error: $e — falling back to v1');
-      return _fallbackFeed(feedType: feedType, userId: userId, page: page, perPage: perPage);
+      if (kDebugMode) debugPrint('[ContentEngineService] feed error: $e');
+      return _emptyResult();
     }
   }
 
@@ -172,26 +164,6 @@ class ContentEngineService {
   }
 
   // --- Private helpers ---
-
-  static Future<ContentEngineResult> _fallbackFeed({
-    required String feedType,
-    required int userId,
-    int page = 1,
-    int perPage = 20,
-  }) async {
-    try {
-      final result = await _legacyFeedService.getFeed(
-        userId: userId,
-        page: page,
-        perPage: perPage,
-        feedType: feedType,
-      );
-      return ContentEngineResult.fromLegacy(result.posts, result.meta);
-    } catch (e) {
-      debugPrint('[ContentEngineService] v1 fallback also failed: $e');
-      return _emptyResult();
-    }
-  }
 
   static ContentEngineResult _emptyResult() {
     return ContentEngineResult(items: [], meta: ContentEngineMeta());

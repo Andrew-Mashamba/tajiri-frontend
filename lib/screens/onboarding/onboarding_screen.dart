@@ -232,7 +232,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             chapter: 2,
             builder: () => SchoolStep(
               schoolType: 'secondary',
-              question: 'Ulisoma sekondari gani?',
+              question: 'Ulisoma sekondari gani? (O-Level)',
               skipText: 'Ruka',
               defaultGradYear: dobYear + 17,
               state: _state,
@@ -244,7 +244,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             chapter: 2,
             builder: () => SchoolStep(
               schoolType: 'postsecondary',
-              question: 'Ulisoma chuo gani?',
+              question: 'Ulisoma chuo gani cha ufundi/ualimu/afya?',
               skipText: 'Ruka',
               defaultGradYear: dobYear + 19,
               state: _state,
@@ -272,9 +272,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             chapter: 2,
             builder: () => SchoolStep(
               schoolType: 'secondary',
-              question: 'Ulisoma sekondari gani?',
+              question: 'Ulisoma sekondari gani? (O-Level)',
               skipText: 'Ruka',
               defaultGradYear: dobYear + 17,
+              state: _state,
+              onNext: _next,
+              onBack: _back,
+            ),
+          ),
+          _StepConfig(
+            chapter: 2,
+            builder: () => SchoolStep(
+              schoolType: 'alevel',
+              question: 'Kidato cha 5-6 ulisoma wapi? (A-Level)',
+              skipText: 'Ruka',
+              defaultGradYear: dobYear + 19,
+              showCombination: true,
               state: _state,
               onNext: _next,
               onBack: _back,
@@ -449,10 +462,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                    child: ChapterProgressBar(
-                      currentChapter: _currentChapter,
-                      chapterProgress: _chapterProgress,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
+                    child: Row(
+                      children: [
+                        if (_currentStepIndex > 0)
+                          IconButton(
+                            onPressed: _back,
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            color: const Color(0xFF1A1A1A),
+                            tooltip: 'Rudi',
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 48,
+                            ),
+                          )
+                        else
+                          const SizedBox(width: 48),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChapterProgressBar(
+                              currentChapter: _currentChapter,
+                              chapterProgress: _chapterProgress,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(

@@ -287,6 +287,7 @@ class EducationEntry {
   final int? graduationYear;
   final String? regionName;
   final String? districtName;
+  final String? programmeName;
 
   EducationEntry({
     this.schoolId,
@@ -297,6 +298,7 @@ class EducationEntry {
     this.graduationYear,
     this.regionName,
     this.districtName,
+    this.programmeName,
   });
 
   bool get isComplete => schoolId != null && graduationYear != null;
@@ -311,6 +313,7 @@ class EducationEntry {
       'graduation_year': graduationYear,
       'region_name': regionName,
       'district_name': districtName,
+      if (programmeName != null) 'programme_name': programmeName,
     };
   }
 
@@ -324,6 +327,7 @@ class EducationEntry {
       graduationYear: json['graduation_year'],
       regionName: json['region_name'],
       districtName: json['district_name'],
+      programmeName: json['programme_name'],
     );
   }
 }
@@ -397,6 +401,10 @@ class UniversityEducation {
   final int? universityId;
   final String? universityCode;
   final String? universityName;
+  final int? collegeId;
+  final String? collegeName;
+  final int? departmentId;
+  final String? departmentName;
   final int? programmeId;
   final String? programmeName;
   final String? degreeLevel;
@@ -408,6 +416,10 @@ class UniversityEducation {
     this.universityId,
     this.universityCode,
     this.universityName,
+    this.collegeId,
+    this.collegeName,
+    this.departmentId,
+    this.departmentName,
     this.programmeId,
     this.programmeName,
     this.degreeLevel,
@@ -426,6 +438,10 @@ class UniversityEducation {
       'university_id': universityId,
       'university_code': universityCode,
       'university_name': universityName,
+      if (collegeId != null) 'college_id': collegeId,
+      if (collegeName != null) 'college_name': collegeName,
+      if (departmentId != null) 'department_id': departmentId,
+      if (departmentName != null) 'department_name': departmentName,
       'programme_id': programmeId,
       'programme_name': programmeName,
       'degree_level': degreeLevel,
@@ -440,6 +456,10 @@ class UniversityEducation {
       universityId: json['university_id'],
       universityCode: json['university_code'],
       universityName: json['university_name'],
+      collegeId: json['college_id'],
+      collegeName: json['college_name'],
+      departmentId: json['department_id'],
+      departmentName: json['department_name'],
       programmeId: json['programme_id'],
       programmeName: json['programme_name'],
       degreeLevel: json['degree_level'],

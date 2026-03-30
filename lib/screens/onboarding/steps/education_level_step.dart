@@ -44,13 +44,13 @@ class _EducationLevelStepState extends State<EducationLevelStep> {
   String _labelFor(EducationPath path) {
     switch (path) {
       case EducationPath.primary:
-        return 'Shule ya Msingi';
+        return 'Shule ya Msingi (Darasa 1-7)';
       case EducationPath.secondary:
-        return 'Sekondari';
+        return 'Sekondari O-Level (Kidato 1-4)';
       case EducationPath.alevel:
-        return 'Kidato cha 5-6';
+        return 'Sekondari A-Level (Kidato 5-6)';
       case EducationPath.postSecondary:
-        return 'Chuo';
+        return 'Chuo cha Ufundi / Ualimu / Afya';
       case EducationPath.university:
         return 'Chuo Kikuu';
     }
@@ -71,8 +71,9 @@ class _EducationLevelStepState extends State<EducationLevelStep> {
     // Write chosen path.
     widget.state.educationPath = selected;
 
-    // Set the A-Level flag used by downstream branching.
-    widget.state.didAttendAlevel = selected == EducationPath.alevel;
+    // Set the A-Level flag: A-Level and University paths both imply A-Level attendance.
+    widget.state.didAttendAlevel =
+        selected == EducationPath.alevel || selected == EducationPath.university;
 
     // Clear downstream education data that no longer applies.
     _clearDownstream(selected);
@@ -80,14 +81,18 @@ class _EducationLevelStepState extends State<EducationLevelStep> {
     widget.onNext();
   }
 
-  /// Clears education sub-fields that are downstream of [selected].
+  /// Clears education sub-fields that are above [selected].
+  ///
+  /// Tanzania education cascade:
+  ///   Primary → O-Level → A-Level → University
+  ///                     → Post-Secondary (VETA/TTC/Health after O-Level)
   ///
   /// Rules:
   ///   primary        → clear secondary, alevel, postsecondary, university
   ///   secondary      → clear alevel, postsecondary, university
   ///   alevel         → clear postsecondary, university
-  ///   postSecondary  → clear alevel, university
-  ///   university     → clear alevel, postsecondary
+  ///   postSecondary  → clear alevel, university (post-sec branches after O-Level)
+  ///   university     → clear postsecondary (university implies O-Level + A-Level)
   void _clearDownstream(EducationPath selected) {
     switch (selected) {
       case EducationPath.primary:
@@ -106,7 +111,6 @@ class _EducationLevelStepState extends State<EducationLevelStep> {
         widget.state.alevelEducation = null;
         widget.state.universityEducation = null;
       case EducationPath.university:
-        widget.state.alevelEducation = null;
         widget.state.postsecondaryEducation = null;
     }
   }
@@ -144,15 +148,19 @@ class _EducationLevelStepState extends State<EducationLevelStep> {
             ),
             const SizedBox(height: 32),
 
-            // Education path chips (vertical)
-            TapChipSelector<EducationPath>(
-              options: EducationPath.values,
-              selectedOption: _selectedPath,
-              labelBuilder: _labelFor,
-              onSelected: _onPathSelected,
+            // Education path chips (vertical) — scrollable to avoid overflow
+            Expanded(
+              child: SingleChildScrollView(
+                child: TapChipSelector<EducationPath>(
+                  options: EducationPath.values,
+                  selectedOption: _selectedPath,
+                  labelBuilder: _labelFor,
+                  onSelected: _onPathSelected,
+                ),
+              ),
             ),
 
-            const Spacer(),
+            const SizedBox(height: 16),
 
             // Continue button
             _buildNextButton(),

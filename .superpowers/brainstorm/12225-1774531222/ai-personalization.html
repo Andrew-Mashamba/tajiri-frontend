@@ -1,0 +1,210 @@
+<h2>Section 2b: AI Personalization Layer</h2>
+<p class="subtitle">Enhancement to the Flywheel — AI ranks and arranges, never writes</p>
+
+<div style="padding: 1.25rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 12px; margin-bottom: 1.5rem;">
+  <h4 style="color: rgb(251,191,36); margin: 0 0 0.5rem 0;">The Rule: AI is the Curator, Never the Creator</h4>
+  <p style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin: 0;">Claude CLI on the backend observes, scores, and arranges. It never adds text to posts, never writes captions, never generates comments, never creates content. All text in TAJIRI is human-written. AI only decides <strong>what to show, in what order, to whom.</strong></p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Where AI Fits in the Flywheel</div>
+  <div class="mockup-body" style="padding: 1.5rem;">
+    <svg viewBox="0 0 600 200" style="max-width: 550px; width: 100%;">
+      <!-- Stage boxes -->
+      <rect x="0" y="70" width="100" height="60" rx="8" fill="rgba(139,92,246,0.2)" stroke="rgba(139,92,246,0.5)" stroke-width="1"/>
+      <text x="50" y="95" text-anchor="middle" fill="rgb(167,139,250)" font-size="10" font-weight="bold">CREATORS</text>
+      <text x="50" y="110" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">Post content</text>
+
+      <!-- AI Brain (center, larger) -->
+      <rect x="160" y="40" width="280" height="120" rx="12" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.6)" stroke-width="2"/>
+      <text x="300" y="65" text-anchor="middle" fill="rgb(251,191,36)" font-size="12" font-weight="bold">CLAUDE AI BRAIN (Backend)</text>
+
+      <text x="185" y="90" fill="rgba(255,255,255,0.6)" font-size="9">1. Study user behavior history</text>
+      <text x="185" y="107" fill="rgba(255,255,255,0.6)" font-size="9">2. Score every post per-user</text>
+      <text x="185" y="124" fill="rgba(255,255,255,0.6)" font-size="9">3. Detect trending velocity</text>
+      <text x="185" y="141" fill="rgba(255,255,255,0.6)" font-size="9">4. Group into gossip threads</text>
+
+      <rect x="500" y="70" width="100" height="60" rx="8" fill="rgba(59,130,246,0.2)" stroke="rgba(59,130,246,0.5)" stroke-width="1"/>
+      <text x="550" y="95" text-anchor="middle" fill="rgb(96,165,250)" font-size="10" font-weight="bold">VIEWERS</text>
+      <text x="550" y="110" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9">See personalized feed</text>
+
+      <!-- Arrows -->
+      <defs><marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="rgba(255,255,255,0.4)"/></marker></defs>
+      <line x1="100" y1="100" x2="155" y2="100" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="445" y1="100" x2="495" y2="100" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>
+
+      <!-- Feedback arrow -->
+      <path d="M 550 135 Q 550 180 300 180 Q 50 180 50 135" fill="none" stroke="rgba(16,185,129,0.4)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+      <text x="300" y="195" text-anchor="middle" fill="rgba(16,185,129,0.5)" font-size="9">Engagement signals feed back into AI learning</text>
+    </svg>
+  </div>
+</div>
+
+<!-- What AI Studies -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>What Claude Studies Per User</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+
+    <div style="padding: 1rem; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(167,139,250); font-size: 0.9rem;">Behavioral Signals</strong>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+        <li>Posts liked, saved, shared (explicit interest)</li>
+        <li>Dwell time per post (implicit interest)</li>
+        <li>Posts scrolled past quickly (disinterest)</li>
+        <li>Creators followed and unfollowed</li>
+        <li>Hashtags engaged with</li>
+        <li>Time of day activity patterns</li>
+        <li>Session depth patterns (leaves after 5 min vs 30 min)</li>
+      </ul>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.15); border-radius: 10px;">
+      <strong style="color: rgb(96,165,250); font-size: 0.9rem;">Content Signals</strong>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+        <li>Post type preference (video > image > text?)</li>
+        <li>Content topics (food, music, fashion, business)</li>
+        <li>Language preference (Swahili vs English posts)</li>
+        <li>Media length preference (short clips vs long videos)</li>
+        <li>Engagement type (lurker vs commenter vs sharer)</li>
+        <li>Geographic relevance (local vs national vs global)</li>
+        <li>Social graph overlap (friends-of-friends content)</li>
+      </ul>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.15); border-radius: 10px;">
+      <strong style="color: rgb(52,211,153); font-size: 0.9rem;">Gossip Affinity</strong>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+        <li>Which gossip threads they entered</li>
+        <li>How deep they went (read 3 posts vs all 40)</li>
+        <li>Which thread categories they prefer</li>
+        <li>Do they comment on drama or just watch?</li>
+        <li>Share patterns (share gossip to chat vs externally)</li>
+        <li>Thread completion rate</li>
+      </ul>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(236,72,153,0.08); border: 1px solid rgba(236,72,153,0.15); border-radius: 10px;">
+      <strong style="color: rgb(244,114,182); font-size: 0.9rem;">Commerce Signals</strong>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+        <li>Products browsed and saved</li>
+        <li>Price range preferences</li>
+        <li>Shop categories visited</li>
+        <li>Creator shops followed</li>
+        <li>Purchase history</li>
+        <li>Campaign donations (what causes they support)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- What AI Outputs -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>What Claude Outputs (Scores Only, No Text)</h3>
+
+  <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px; border-left: 3px solid rgba(245,158,11,0.6);">
+      <strong style="color: white;">Per-Post Relevance Score</strong>
+      <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">For each post in the candidate pool, Claude assigns a 0-100 relevance score for THIS specific user. Score combines: topic match, creator affinity, content type preference, recency, social graph proximity, trending velocity. Feed is sorted by this score.</p>
+      <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(245,158,11,0.1); border-radius: 6px; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+        Output: { post_id: 4521, relevance: 87, reason_code: "topic_match+trending+friend_shared" }
+      </div>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px; border-left: 3px solid rgba(59,130,246,0.6);">
+      <strong style="color: white;">Gossip Thread Grouping</strong>
+      <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Claude identifies clusters of related posts that form a "story" (conversation wave). Groups them into threads and assigns: thread_id, seed_post_id, related_post_ids[], category_tag, velocity_score. The AI generates a <strong>title_key</strong> (e.g., "trending_dar_food") that maps to a pre-written template — NOT freeform text.</p>
+      <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(59,130,246,0.1); border-radius: 6px; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+        Output: { thread_id: "t_891", posts: [4521, 4530, 4533, 4540], category: "entertainment", velocity: 92, title_key: "trending_bongo" }
+      </div>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px; border-left: 3px solid rgba(16,185,129,0.6);">
+      <strong style="color: white;">Digest Selection</strong>
+      <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">For morning/evening digests, Claude selects top 3-5 threads personalized per user. Returns ordered list of thread_ids with reason codes. Push notification text uses templates with slot-filling (e.g., "{count} threads trending in {user_city}") — AI picks the template and fills the slots, doesn't write prose.</p>
+      <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(16,185,129,0.1); border-radius: 6px; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+        Output: { user_id: 42, digest: ["t_891", "t_903", "t_887"], template: "morning_trending_city", slots: { count: 3, city: "Dar" } }
+      </div>
+    </div>
+
+    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 10px; border-left: 3px solid rgba(236,72,153,0.6);">
+      <strong style="color: white;">Creator Insights (For Creator Stats Panel)</strong>
+      <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.6);">Claude analyzes a creator's audience and content performance. Outputs: best_posting_time, audience_demographics (age/city distribution), content_type_performance (which format works best), suggested_category_tags. All structured data — no written advice or text suggestions.</p>
+      <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(236,72,153,0.1); border-radius: 6px; font-family: monospace; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+        Output: { creator_id: 15, best_time: "19:00", top_format: "short_video", audience_city: "Dar es Salaam", growth_trend: "up" }
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backend Architecture -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Backend Architecture: Claude CLI Integration</h3>
+
+  <div style="padding: 1.25rem; background: rgba(0,0,0,0.3); border-radius: 10px; margin-top: 0.75rem;">
+    <div style="display: grid; gap: 1rem;">
+
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="min-width: 28px; height: 28px; background: rgba(245,158,11,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(251,191,36); font-weight: bold; font-size: 0.8rem;">1</div>
+        <div>
+          <strong style="color: white; font-size: 0.9rem;">Event Collection (Real-time)</strong>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: rgba(255,255,255,0.5);">Every user action (view, like, scroll-past, dwell, share, save) is logged to a <code style="color: rgb(251,191,36);">user_events</code> table with timestamp, post_id, event_type, duration_ms. Lightweight — just INSERT, no processing.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="min-width: 28px; height: 28px; background: rgba(245,158,11,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(251,191,36); font-weight: bold; font-size: 0.8rem;">2</div>
+        <div>
+          <strong style="color: white; font-size: 0.9rem;">Profile Builder (Scheduled, every 15 min)</strong>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: rgba(255,255,255,0.5);">Laravel job calls Claude CLI with the user's recent events batch. Claude analyzes patterns and outputs a <code style="color: rgb(251,191,36);">user_interest_profile</code> JSON: topic weights, creator affinities, format preferences, activity patterns. Stored in Redis for fast access.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="min-width: 28px; height: 28px; background: rgba(245,158,11,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(251,191,36); font-weight: bold; font-size: 0.8rem;">3</div>
+        <div>
+          <strong style="color: white; font-size: 0.9rem;">Feed Ranking (On Request)</strong>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: rgba(255,255,255,0.5);">When user opens feed, backend fetches candidate posts (recent + trending + friends). Sends candidates + user_interest_profile to Claude CLI. Claude returns ranked post_ids with scores. Response cached for 5 min per user. Fallback: if Claude is slow/down, use simple chronological + trending_score sort.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="min-width: 28px; height: 28px; background: rgba(245,158,11,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgb(251,191,36); font-weight: bold; font-size: 0.8rem;">4</div>
+        <div>
+          <strong style="color: white; font-size: 0.9rem;">Thread Detection (Scheduled, every 5 min)</strong>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: rgba(255,255,255,0.5);">Claude CLI scans posts with rising engagement velocity. Groups related posts into threads. Assigns category tags and title_keys. Stores in <code style="color: rgb(251,191,36);">gossip_threads</code> table. Frontend fetches threads via existing trending endpoint — no new API needed.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+  <h4 style="margin: 0 0 0.5rem 0; color: rgba(255,255,255,0.8);">Hard Boundaries</h4>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+    <div style="padding: 0.75rem; background: rgba(16,185,129,0.1); border-radius: 8px;">
+      <div style="color: rgb(52,211,153); font-weight: bold; font-size: 0.85rem;">AI DOES</div>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+        <li>Rank posts per user</li>
+        <li>Group posts into threads</li>
+        <li>Select digest content</li>
+        <li>Pick notification templates</li>
+        <li>Score creator performance</li>
+        <li>Detect trending velocity</li>
+        <li>Analyze audience patterns</li>
+      </ul>
+    </div>
+    <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border-radius: 8px;">
+      <div style="color: rgb(248,113,113); font-weight: bold; font-size: 0.85rem;">AI NEVER</div>
+      <ul style="margin: 0.5rem 0 0; padding-left: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+        <li>Write post captions or text</li>
+        <li>Generate comments or replies</li>
+        <li>Create gossip thread titles (uses templates)</li>
+        <li>Write notification copy (uses templates)</li>
+        <li>Suggest what creators should say</li>
+        <li>Fabricate engagement metrics</li>
+        <li>Impersonate users in any way</li>
+      </ul>
+    </div>
+  </div>
+</div>

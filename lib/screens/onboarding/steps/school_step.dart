@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../config/api_config.dart';
 import '../../../models/registration_models.dart';
 import '../../../models/secondary_models.dart';
+import '../../../services/education_service.dart';
 import '../../../services/school_service.dart';
 import '../../../services/secondary_service.dart';
 import '../../../widgets/year_chip_selector.dart';
@@ -75,6 +76,7 @@ class _SchoolStepState extends State<SchoolStep> {
   late final SchoolService _primaryService;
   late final SecondarySchoolService _secondaryService;
   late final AlevelSchoolService _alevelService;
+  final PostsecondaryService _postsecondaryService = PostsecondaryService();
 
   // -------------------------------------------------------------------------
   // Search state
@@ -98,12 +100,18 @@ class _SchoolStepState extends State<SchoolStep> {
   List<AlevelCombination> _combinations = [];
   AlevelCombination? _selectedCombination;
 
+  // Postsecondary programme/course (free text)
+  final TextEditingController _programmeCtrl = TextEditingController();
+
   // -------------------------------------------------------------------------
   // Computed
   // -------------------------------------------------------------------------
+  bool get _isPostsecondary => widget.schoolType == 'postsecondary';
+
   bool get _isComplete {
     if (_selectedSchool == null || _graduationYear == null) return false;
     if (widget.showCombination) return _selectedCombination != null;
+    if (_isPostsecondary) return _programmeCtrl.text.trim().isNotEmpty;
     return true;
   }
 
@@ -126,6 +134,7 @@ class _SchoolStepState extends State<SchoolStep> {
   void dispose() {
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _programmeCtrl.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -173,6 +182,7 @@ class _SchoolStepState extends State<SchoolStep> {
         final e = widget.state.postsecondaryEducation;
         if (e?.schoolId != null) saved = _schoolItemFromEntry(e!);
         _graduationYear = e?.graduationYear;
+        if (e?.programmeName != null) _programmeCtrl.text = e!.programmeName!;
     }
 
     if (saved != null) {
@@ -240,7 +250,6 @@ class _SchoolStepState extends State<SchoolStep> {
                 ))
             .toList();
       case 'secondary':
-      case 'postsecondary':
         final list = await _secondaryService.searchSchools(query);
         return list
             .map((s) => _SchoolItem(
@@ -250,6 +259,17 @@ class _SchoolStepState extends State<SchoolStep> {
                   type: s.type,
                   region: s.region,
                   district: s.district,
+                ))
+            .toList();
+      case 'postsecondary':
+        final list = await _postsecondaryService.search(query);
+        return list
+            .map((s) => _SchoolItem(
+                  id: s.id,
+                  code: s.code,
+                  name: s.name,
+                  type: s.type,
+                  region: s.region,
                 ))
             .toList();
       case 'alevel':
@@ -361,6 +381,7 @@ class _SchoolStepState extends State<SchoolStep> {
           graduationYear: _graduationYear,
           regionName: school.region,
           districtName: school.district,
+          programmeName: _programmeCtrl.text.trim(),
         );
     }
 
@@ -406,10 +427,15 @@ class _SchoolStepState extends State<SchoolStep> {
                       const SizedBox(height: 10),
                       YearChipSelector(
                         defaultYear: widget.defaultGradYear,
-                        yearRange: widget.yearRange,
+                        startYear: 1950,
+                        endYear: 2030,
                         selectedYear: _graduationYear,
                         onYearSelected: (y) => setState(() => _graduationYear = y),
                       ),
+                      if (_isPostsecondary && _selectedSchool != null) ...[
+                        const SizedBox(height: 24),
+                        _buildProgrammeField(),
+                      ],
                       if (widget.showCombination && _selectedSchool != null) ...[
                         const SizedBox(height: 24),
                         _buildCombinationSection(),
@@ -622,6 +648,43 @@ class _SchoolStepState extends State<SchoolStep> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildProgrammeField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Programme / Kozi'),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _programmeCtrl,
+            style: const TextStyle(fontSize: 15, color: _primary),
+            decoration: const InputDecoration(
+              hintText: 'mfano: Electrical Installation, Ualimu Daraja A...',
+              hintStyle: TextStyle(color: Color(0xFFBBBBBB), fontSize: 14),
+              prefixIcon: Icon(Icons.school_rounded, color: _secondary, size: 20),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: InputBorder.none,
+            ),
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+      ],
     );
   }
 
