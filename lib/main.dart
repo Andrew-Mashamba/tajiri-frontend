@@ -44,6 +44,7 @@ import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'screens/sponsored/sponsored_posts_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/feed/tea_chat_screen.dart';
 import 'screens/biashara/biashara_home_screen.dart';
 import 'screens/biashara/create_ad_campaign_screen.dart';
 import 'screens/biashara/campaign_detail_screen.dart';
@@ -396,6 +397,9 @@ class _TajiriAppState extends State<TajiriApp> {
               }
             }
             break;
+
+          case 'tea':
+            return MaterialPageRoute(builder: (_) => const TeaChatScreen());
 
           case 'sponsored-posts':
             return MaterialPageRoute(
