@@ -1,7 +1,11 @@
 // lib/services/shop_database.dart
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+
+import '../models/shop_models.dart';
 
 class ShopDatabase {
   static ShopDatabase? _instance;
@@ -197,5 +201,213 @@ class ShopDatabase {
     await db.delete('shop_sync_state');
     await db.delete('shop_pending_mutations');
     _log('All shop data cleared');
+  }
+
+  // ─── Product CRUD ─────────────────────────────────────────────────────
+
+  /// Upsert a product from API response JSON
+  Future<void> upsertProduct(Product product) async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.insert('shop_products', {
+      'id': product.id,
+      'title': product.title,
+      'description': product.description,
+      'price': product.price,
+      'compare_at_price': product.compareAtPrice,
+      'currency': product.currency,
+      'category_id': product.categoryId,
+      'category_name': product.category?.name,
+      'seller_id': product.sellerId,
+      'seller_name': product.seller != null
+          ? '${product.seller!.firstName} ${product.seller!.lastName}'.trim()
+          : null,
+      'seller_rating': product.seller?.rating,
+      'condition': product.condition.value,
+      'type': product.type.value,
+      'status': product.status.value,
+      'rating': product.rating,
+      'review_count': product.reviewsCount,
+      'stock_quantity': product.stockQuantity,
+      'is_favorited': product.isFavorited ? 1 : 0,
+      'thumbnail_url': product.thumbnailPath,
+      'delivery_fee': product.deliveryFee,
+      'location_name': product.locationName,
+      'views_count': product.viewsCount,
+      'favorites_count': product.favoritesCount,
+      'orders_count': product.ordersCount,
+      'json_data': jsonEncode(product.toJson()),
+      'cached_at': now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Upsert a batch of products (from API page response)
+  Future<void> upsertProducts(List<Product> products) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final product in products) {
+      batch.insert('shop_products', {
+        'id': product.id,
+        'title': product.title,
+        'description': product.description,
+        'price': product.price,
+        'compare_at_price': product.compareAtPrice,
+        'currency': product.currency,
+        'category_id': product.categoryId,
+        'category_name': product.category?.name,
+        'seller_id': product.sellerId,
+        'seller_name': product.seller != null
+            ? '${product.seller!.firstName} ${product.seller!.lastName}'.trim()
+            : null,
+        'seller_rating': product.seller?.rating,
+        'condition': product.condition.value,
+        'type': product.type.value,
+        'status': product.status.value,
+        'rating': product.rating,
+        'review_count': product.reviewsCount,
+        'stock_quantity': product.stockQuantity,
+        'is_favorited': product.isFavorited ? 1 : 0,
+        'thumbnail_url': product.thumbnailPath,
+        'delivery_fee': product.deliveryFee,
+        'location_name': product.locationName,
+        'views_count': product.viewsCount,
+        'favorites_count': product.favoritesCount,
+        'orders_count': product.ordersCount,
+        'json_data': jsonEncode(product.toJson()),
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Query products with filters, sort, and pagination (all local)
+  Future<List<Product>> queryProducts({
+    int? categoryId,
+    String? condition,
+    String? type,
+    double? minPrice,
+    double? maxPrice,
+    double? minRating,
+    String sortBy = 'newest',
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final db = await database;
+    final where = <String>[];
+    final args = <dynamic>[];
+
+    if (categoryId != null) {
+      where.add('category_id = ?');
+      args.add(categoryId);
+    }
+    if (condition != null) {
+      where.add('condition = ?');
+      args.add(condition);
+    }
+    if (type != null) {
+      where.add('type = ?');
+      args.add(type);
+    }
+    if (minPrice != null) {
+      where.add('price >= ?');
+      args.add(minPrice);
+    }
+    if (maxPrice != null) {
+      where.add('price <= ?');
+      args.add(maxPrice);
+    }
+    if (minRating != null) {
+      where.add('rating >= ?');
+      args.add(minRating);
+    }
+
+    String orderBy;
+    switch (sortBy) {
+      case 'price_asc':
+        orderBy = 'price ASC';
+      case 'price_desc':
+        orderBy = 'price DESC';
+      case 'popular':
+        orderBy = 'orders_count DESC';
+      case 'rating':
+        orderBy = 'rating DESC';
+      default:
+        orderBy = 'cached_at DESC';
+    }
+
+    final rows = await db.query(
+      'shop_products',
+      where: where.isEmpty ? null : where.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: orderBy,
+      limit: limit,
+      offset: offset,
+    );
+
+    return rows.map((row) {
+      final jsonData = row['json_data'] as String;
+      return Product.fromJson(jsonDecode(jsonData) as Map<String, dynamic>);
+    }).toList();
+  }
+
+  /// Count products matching filters (for "X results" display)
+  Future<int> countProducts({int? categoryId, double? minPrice, double? maxPrice}) async {
+    final db = await database;
+    final where = <String>[];
+    final args = <dynamic>[];
+    if (categoryId != null) { where.add('category_id = ?'); args.add(categoryId); }
+    if (minPrice != null) { where.add('price >= ?'); args.add(minPrice); }
+    if (maxPrice != null) { where.add('price <= ?'); args.add(maxPrice); }
+
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as cnt FROM shop_products${where.isEmpty ? '' : ' WHERE ${where.join(' AND ')}'}',
+      args.isEmpty ? null : args,
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Full-text search products locally
+  Future<List<Product>> searchProducts(String query, {int limit = 20}) async {
+    if (query.trim().isEmpty) return [];
+    final db = await database;
+    // FTS5 prefix match: "sams" → "sams*"
+    final ftsQuery = query.trim().split(' ').map((w) => '$w*').join(' ');
+    final rows = await db.rawQuery('''
+      SELECT p.json_data FROM shop_products p
+      INNER JOIN shop_products_fts f ON p.id = f.rowid
+      WHERE shop_products_fts MATCH ?
+      ORDER BY rank
+      LIMIT ?
+    ''', [ftsQuery, limit]);
+
+    return rows.map((row) {
+      return Product.fromJson(jsonDecode(row['json_data'] as String) as Map<String, dynamic>);
+    }).toList();
+  }
+
+  /// Get recently viewed products
+  Future<List<Product>> getRecentlyViewed({int limit = 20}) async {
+    final db = await database;
+    final rows = await db.query(
+      'shop_products',
+      where: 'viewed_at IS NOT NULL',
+      orderBy: 'viewed_at DESC',
+      limit: limit,
+    );
+    return rows.map((row) {
+      return Product.fromJson(jsonDecode(row['json_data'] as String) as Map<String, dynamic>);
+    }).toList();
+  }
+
+  /// Mark a product as viewed
+  Future<void> markViewed(int productId) async {
+    final db = await database;
+    await db.update(
+      'shop_products',
+      {'viewed_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
   }
 }
