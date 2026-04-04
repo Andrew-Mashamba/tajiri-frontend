@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
@@ -179,55 +180,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _toggleFavorite() async {
     if (_product == null) return;
-    final result = await _shopService.toggleFavorite(
-      widget.currentUserId,
-      _product!.id,
-    );
-    if (!mounted) return;
-    if (result.success) {
+    final wasFavorited = _product!.isFavorited;
+
+    // Optimistic update
+    setState(() {
+      _product = _product!.copyWith(
+        isFavorited: !wasFavorited,
+        favoritesCount: _product!.favoritesCount + (wasFavorited ? -1 : 1),
+      );
+    });
+    HapticFeedback.lightImpact();
+
+    // API call in background
+    final result = await _shopService.toggleFavorite(widget.currentUserId, _product!.id);
+    if (!result.success && mounted) {
+      // Revert on failure
       setState(() {
-        _product = Product(
-          id: _product!.id,
-          sellerId: _product!.sellerId,
-          title: _product!.title,
-          description: _product!.description,
-          slug: _product!.slug,
-          type: _product!.type,
-          status: _product!.status,
-          price: _product!.price,
-          compareAtPrice: _product!.compareAtPrice,
-          currency: _product!.currency,
-          stockQuantity: _product!.stockQuantity,
-          images: _product!.images,
-          thumbnailPath: _product!.thumbnailPath,
-          categoryId: _product!.categoryId,
-          tags: _product!.tags,
-          condition: _product!.condition,
-          locationName: _product!.locationName,
-          latitude: _product!.latitude,
-          longitude: _product!.longitude,
-          allowPickup: _product!.allowPickup,
-          allowDelivery: _product!.allowDelivery,
-          allowShipping: _product!.allowShipping,
-          deliveryFee: _product!.deliveryFee,
-          deliveryNotes: _product!.deliveryNotes,
-          pickupAddress: _product!.pickupAddress,
-          downloadUrl: _product!.downloadUrl,
-          downloadLimit: _product!.downloadLimit,
-          durationMinutes: _product!.durationMinutes,
-          serviceLocation: _product!.serviceLocation,
-          viewsCount: _product!.viewsCount,
-          favoritesCount: _product!.favoritesCount,
-          ordersCount: _product!.ordersCount,
-          rating: _product!.rating,
-          reviewsCount: _product!.reviewsCount,
-          seller: _product!.seller,
-          category: _product!.category,
-          isFavorited: result.isFavorited,
-          createdAt: _product!.createdAt,
-          updatedAt: _product!.updatedAt,
+        _product = _product!.copyWith(
+          isFavorited: wasFavorited,
+          favoritesCount: _product!.favoritesCount + (wasFavorited ? 1 : -1),
         );
       });
+    }
+
+    // Sync SQLite wishlist
+    if (!wasFavorited) {
+      await ShopDatabase.instance.addToWishlist(_product!.id, _product!.price, jsonEncode(_product!.toJson()));
+    } else {
+      await ShopDatabase.instance.removeFromWishlist(_product!.id);
     }
   }
 
