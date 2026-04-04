@@ -10,6 +10,7 @@ import '../../services/live_update_service.dart';
 import '../../services/fcm_service.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../widgets/tajiri_bottom_nav_bar.dart';
+import '../../widgets/lazy_indexed_stack.dart';
 
 /// Story 71: Bottom Navigation — 5 tabs: Feed, Messages, People, Shop, Profile.
 /// Design: DOCS/DESIGN.md (colors, 48dp min touch targets). Navigation: DOCS/NAVIGATION.md.
@@ -100,17 +101,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: _background,
       body: SafeArea(
-        child: IndexedStack(
+        child: LazyIndexedStack(
           index: _currentIndex,
-          children: [
-            _screens[0],
-            _screens[1],
-            FriendsScreen(
+          builders: [
+            () => _screens[0],
+            () => _screens[1],
+            () => FriendsScreen(
               currentUserId: widget.currentUserId,
               isCurrentTab: _currentIndex == 2,
             ),
-            _screens[3],
-            _screens[4],
+            () => _screens[3],
+            () => _screens[4],
           ],
         ),
       ),
