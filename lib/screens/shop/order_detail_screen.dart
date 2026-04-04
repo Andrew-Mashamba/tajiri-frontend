@@ -4,6 +4,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
 import '../../widgets/cached_media_image.dart';
+import 'order_tracking_screen.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -920,6 +921,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           isDestructive: true,
         ));
       }
+    }
+
+    // Track Order button — always visible for active orders
+    if (order.status.isActive) {
+      actions.add(_buildFullButton(
+        label: 'Track Order',
+        icon: HeroIcons.mapPin,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OrderTrackingScreen(order: order),
+          ),
+        ),
+      ));
     }
 
     if (actions.isEmpty) return const SizedBox.shrink();
