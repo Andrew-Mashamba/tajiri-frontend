@@ -9387,4 +9387,28 @@ class HttpService {
     'Accept': 'application/json',
   };
 
+  /// Bridge login for TAJIRI users — auto-registers if needed.
+  static Future<Map<String, dynamic>?> tajiriBridgeLogin(String phone, int tajiriUserId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${_baseUrl}tajiri-bridge-login'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'tajiri_user_id': tajiriUserId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+
+      Logger().e('Bridge login failed: ${response.statusCode} ${response.body}');
+      return null;
+    } catch (e) {
+      Logger().e('Bridge login error: $e');
+      return null;
+    }
+  }
+
 }
