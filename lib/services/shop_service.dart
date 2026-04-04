@@ -261,6 +261,32 @@ class ShopService {
     }
   }
 
+  /// Get flash deals
+  Future<ProductListResult> getFlashDeals({int page = 1, int perPage = 20}) async {
+    try {
+      final url = '$_baseUrl/shop/flash-deals?page=$page&per_page=$perPage';
+      _logRequest('GET', url);
+      final response = await http.get(Uri.parse(url));
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      _logResponse(response.statusCode, data);
+      if (response.statusCode == 200 && data['success'] == true) {
+        final items = data['data'] is List
+            ? data['data'] as List
+            : (data['data']?['items'] as List?) ?? [];
+        final products = items
+            .map((j) => Product.fromJson(j as Map<String, dynamic>))
+            .toList();
+        return ProductListResult(success: true, products: products);
+      }
+      return ProductListResult(
+        success: false,
+        message: data['message']?.toString(),
+      );
+    } catch (e) {
+      return ProductListResult(success: false, message: 'Failed to load deals: $e');
+    }
+  }
+
   /// Get nearby products based on location
   Future<ProductListResult> getNearbyProducts({
     required double latitude,

@@ -13,6 +13,7 @@ import '../../widgets/shop/product_card.dart';
 import '../../widgets/shop/search_suggestions.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/native_ad_card.dart';
+import 'flash_deals_screen.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -516,6 +517,9 @@ class _ShopScreenState extends State<ShopScreen> {
               if (_featuredProducts.isNotEmpty || _featuredLoading)
                 SliverToBoxAdapter(child: _buildFeaturedBanner()),
 
+              // 3b. Flash deals banner
+              SliverToBoxAdapter(child: _buildFlashDealsBanner()),
+
               // 4. Sort bar
               SliverToBoxAdapter(child: _buildSortBar()),
 
@@ -997,6 +1001,44 @@ class _ShopScreenState extends State<ShopScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFlashDealsBanner() {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FlashDealsScreen(currentUserId: widget.currentUserId),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.flash_on, color: Color(0xFFFFB800), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Flash Deals',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Spacer(),
+            Text(
+              'View All →',
+              style: TextStyle(color: Color(0xFFFFB800), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
