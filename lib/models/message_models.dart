@@ -22,6 +22,11 @@ class Conversation {
   final int unreadCount;
   final bool isMuted;
   final bool isAdmin;
+  final int? disappearingTimer;
+  /// Bridge type if this conversation is linked to an external platform (e.g. 'matrix', 'rcs', 'sms', 'email').
+  final String? bridgeType;
+  /// External ID on the bridged platform.
+  final String? bridgeExternalId;
 
   Conversation({
     required this.id,
@@ -41,6 +46,9 @@ class Conversation {
     this.unreadCount = 0,
     this.isMuted = false,
     this.isAdmin = false,
+    this.disappearingTimer,
+    this.bridgeType,
+    this.bridgeExternalId,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
@@ -75,12 +83,50 @@ class Conversation {
       unreadCount: json['unread_count'] is int ? json['unread_count'] as int : (int.tryParse(json['unread_count']?.toString() ?? '0') ?? 0),
       isMuted: json['is_muted'] == true,
       isAdmin: json['is_admin'] == true,
+      disappearingTimer: json['disappearing_timer'] as int?,
+      bridgeType: json['bridge_type'] as String?,
+      bridgeExternalId: json['bridge_external_id'] as String?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type.value,
+      'group_id': groupId,
+      'name': name,
+      'avatar_path': avatarPath,
+      'created_by': createdBy,
+      'last_message_id': lastMessageId,
+      'last_message_at': lastMessageAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'last_message': lastMessage?.toJson(),
+      'participants': participants.map((p) => p.toJson()).toList(),
+      'display_name': displayName,
+      'display_photo': displayPhoto,
+      'unread_count': unreadCount,
+      'is_muted': isMuted,
+      'is_admin': isAdmin,
+      'disappearing_timer': disappearingTimer,
+      'bridge_type': bridgeType,
+      'bridge_external_id': bridgeExternalId,
+    };
   }
 
   bool get isPrivate => type == ConversationType.private;
   bool get isGroup => type == ConversationType.group;
   bool get hasUnread => unreadCount > 0;
+
+  bool get isBridged => bridgeType != null && bridgeType!.isNotEmpty;
+
+  bool get hasDisappearingMessages => disappearingTimer != null && disappearingTimer! > 0;
+  String get disappearingLabel {
+    if (disappearingTimer == null) return '';
+    if (disappearingTimer! <= 86400) return '24h';
+    if (disappearingTimer! <= 604800) return '7d';
+    return '90d';
+  }
 
   String get title => displayName ?? name ?? 'Mazungumzo';
 
@@ -154,6 +200,19 @@ class Message {
   final Message? replyTo;
   /// Reactions (emoji -> who reacted). From API or local state.
   final List<MessageReaction> reactions;
+  final MessageStatus status;
+  final DateTime? deliveredAt;
+  final bool isForwarded;
+  final DateTime? editedAt;
+  final bool isStarred;
+  final String? linkPreviewUrl;
+  final String? linkPreviewTitle;
+  final String? linkPreviewDescription;
+  final String? linkPreviewImage;
+  final String? linkPreviewDomain;
+  final DateTime? expiresAt;
+  final int? pollId;
+  final String? transcript;
 
   Message({
     required this.id,
@@ -171,6 +230,19 @@ class Message {
     this.sender,
     this.replyTo,
     this.reactions = const [],
+    this.status = MessageStatus.sent,
+    this.deliveredAt,
+    this.isForwarded = false,
+    this.editedAt,
+    this.isStarred = false,
+    this.linkPreviewUrl,
+    this.linkPreviewTitle,
+    this.linkPreviewDescription,
+    this.linkPreviewImage,
+    this.linkPreviewDomain,
+    this.expiresAt,
+    this.pollId,
+    this.transcript,
   });
 
   static int _intFrom(dynamic v) =>
@@ -216,6 +288,19 @@ class Message {
           ? Message.fromJson(Map<String, dynamic>.from(json['reply_to']))
           : null,
       reactions: reactions,
+      status: MessageStatus.fromString(json['status'] as String?),
+      deliveredAt: json['delivered_at'] != null ? DateTime.tryParse(json['delivered_at'].toString()) : null,
+      isForwarded: json['is_forwarded'] == true || json['is_forwarded'] == 1,
+      editedAt: json['edited_at'] != null ? DateTime.tryParse(json['edited_at'].toString()) : null,
+      isStarred: json['is_starred'] == true || json['is_starred'] == 1,
+      linkPreviewUrl: json['link_preview_url'] as String?,
+      linkPreviewTitle: json['link_preview_title'] as String?,
+      linkPreviewDescription: json['link_preview_description'] as String?,
+      linkPreviewImage: json['link_preview_image'] as String?,
+      linkPreviewDomain: json['link_preview_domain'] as String?,
+      expiresAt: json['expires_at'] != null ? DateTime.tryParse(json['expires_at'].toString()) : null,
+      pollId: json['poll_id'] is int ? json['poll_id'] as int : (json['poll_id'] != null ? int.tryParse(json['poll_id'].toString()) : null),
+      transcript: json['transcript']?.toString(),
     );
   }
 
@@ -244,6 +329,19 @@ class Message {
           : null,
       'reply_to': replyTo != null ? _messageToJsonShallow(replyTo!) : null,
       'reactions': reactions.map((r) => r.toJson()).toList(),
+      'status': status.name,
+      'delivered_at': deliveredAt?.toIso8601String(),
+      'is_forwarded': isForwarded,
+      'edited_at': editedAt?.toIso8601String(),
+      'is_starred': isStarred,
+      'link_preview_url': linkPreviewUrl,
+      'link_preview_title': linkPreviewTitle,
+      'link_preview_description': linkPreviewDescription,
+      'link_preview_image': linkPreviewImage,
+      'link_preview_domain': linkPreviewDomain,
+      'expires_at': expiresAt?.toIso8601String(),
+      'poll_id': pollId,
+      'transcript': transcript,
     };
   }
 
@@ -272,6 +370,19 @@ class Message {
           : null,
       'reply_to': null,
       'reactions': m.reactions.map((r) => r.toJson()).toList(),
+      'status': m.status.name,
+      'delivered_at': m.deliveredAt?.toIso8601String(),
+      'is_forwarded': m.isForwarded,
+      'edited_at': m.editedAt?.toIso8601String(),
+      'is_starred': m.isStarred,
+      'link_preview_url': m.linkPreviewUrl,
+      'link_preview_title': m.linkPreviewTitle,
+      'link_preview_description': m.linkPreviewDescription,
+      'link_preview_image': m.linkPreviewImage,
+      'link_preview_domain': m.linkPreviewDomain,
+      'expires_at': m.expiresAt?.toIso8601String(),
+      'poll_id': m.pollId,
+      'transcript': m.transcript,
     };
   }
 
@@ -291,6 +402,19 @@ class Message {
     PostUser? sender,
     Message? replyTo,
     List<MessageReaction>? reactions,
+    MessageStatus? status,
+    DateTime? deliveredAt,
+    bool? isForwarded,
+    DateTime? editedAt,
+    bool? isStarred,
+    String? linkPreviewUrl,
+    String? linkPreviewTitle,
+    String? linkPreviewDescription,
+    String? linkPreviewImage,
+    String? linkPreviewDomain,
+    DateTime? expiresAt,
+    int? pollId,
+    String? transcript,
   }) {
     return Message(
       id: id ?? this.id,
@@ -308,6 +432,19 @@ class Message {
       sender: sender ?? this.sender,
       replyTo: replyTo ?? this.replyTo,
       reactions: reactions ?? this.reactions,
+      status: status ?? this.status,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      isForwarded: isForwarded ?? this.isForwarded,
+      editedAt: editedAt ?? this.editedAt,
+      isStarred: isStarred ?? this.isStarred,
+      linkPreviewUrl: linkPreviewUrl ?? this.linkPreviewUrl,
+      linkPreviewTitle: linkPreviewTitle ?? this.linkPreviewTitle,
+      linkPreviewDescription: linkPreviewDescription ?? this.linkPreviewDescription,
+      linkPreviewImage: linkPreviewImage ?? this.linkPreviewImage,
+      linkPreviewDomain: linkPreviewDomain ?? this.linkPreviewDomain,
+      expiresAt: expiresAt ?? this.expiresAt,
+      pollId: pollId ?? this.pollId,
+      transcript: transcript ?? this.transcript,
     );
   }
 
@@ -318,6 +455,8 @@ class Message {
           ? mediaPath
           : '${ApiConfig.storageUrl}/$mediaPath')
       : null;
+
+  bool get hasLinkPreview => linkPreviewUrl != null && linkPreviewUrl!.isNotEmpty;
 
   bool isFromUser(int userId) => senderId == userId;
 
@@ -339,6 +478,10 @@ class Message {
         return 'Anwani';
       case MessageType.sharedPost:
         return 'Chapisho';
+      case MessageType.poll:
+        return 'Kura';
+      case MessageType.livePhoto:
+        return 'Live Photo';
     }
   }
 }
@@ -351,7 +494,9 @@ enum MessageType {
   document('document'),
   location('location'),
   contact('contact'),
-  sharedPost('shared_post');
+  sharedPost('shared_post'),
+  poll('poll'),
+  livePhoto('live_photo');
 
   final String value;
   const MessageType(this.value);
@@ -364,6 +509,24 @@ enum MessageType {
   }
 }
 
+enum MessageStatus {
+  pending,
+  sent,
+  delivered,
+  read,
+  failed;
+
+  factory MessageStatus.fromString(String? s) {
+    switch (s) {
+      case 'sent': return MessageStatus.sent;
+      case 'delivered': return MessageStatus.delivered;
+      case 'read': return MessageStatus.read;
+      case 'failed': return MessageStatus.failed;
+      default: return MessageStatus.pending;
+    }
+  }
+}
+
 class ConversationParticipant {
   final int id;
   final int conversationId;
@@ -373,6 +536,16 @@ class ConversationParticipant {
   final int unreadCount;
   final bool isMuted;
   final PostUser? user;
+  final bool isPinned;
+  final bool isArchived;
+  final DateTime? mutedUntil;
+  final bool isStarred;
+  /// Custom member tag (e.g., 'Moderator', 'VIP') set by admins.
+  final String? tag;
+  /// Per-chat custom notification settings.
+  final bool customTone;
+  final bool customVibrate;
+  final bool customPopup;
 
   ConversationParticipant({
     required this.id,
@@ -383,6 +556,14 @@ class ConversationParticipant {
     this.unreadCount = 0,
     this.isMuted = false,
     this.user,
+    this.isPinned = false,
+    this.isArchived = false,
+    this.mutedUntil,
+    this.isStarred = false,
+    this.tag,
+    this.customTone = false,
+    this.customVibrate = false,
+    this.customPopup = false,
   });
 
   static int _intFrom(dynamic v) =>
@@ -404,6 +585,16 @@ class ConversationParticipant {
         unreadCount: _intFrom(pivot['unread_count']),
         isMuted: pivot['is_muted'] == true,
         user: PostUser.fromJson(json),
+        isPinned: pivot['is_pinned'] == true || pivot['is_pinned'] == 1,
+        isArchived: pivot['is_archived'] == true || pivot['is_archived'] == 1,
+        mutedUntil: pivot['muted_until'] != null
+            ? DateTime.tryParse(pivot['muted_until'].toString())
+            : null,
+        isStarred: pivot['is_starred'] == true || pivot['is_starred'] == 1,
+        tag: pivot['tag'] as String?,
+        customTone: pivot['custom_tone'] == true || pivot['custom_tone'] == 1,
+        customVibrate: pivot['custom_vibrate'] == true || pivot['custom_vibrate'] == 1,
+        customPopup: pivot['custom_popup'] == true || pivot['custom_popup'] == 1,
       );
     }
     // Standard format: { id, conversation_id, user_id, user: { ... } }
@@ -420,6 +611,53 @@ class ConversationParticipant {
       user: json['user'] != null && json['user'] is Map
           ? PostUser.fromJson(Map<String, dynamic>.from(json['user']))
           : null,
+      isPinned: json['is_pinned'] == true || json['is_pinned'] == 1,
+      isArchived: json['is_archived'] == true || json['is_archived'] == 1,
+      mutedUntil: json['muted_until'] != null
+          ? DateTime.tryParse(json['muted_until'].toString())
+          : null,
+      isStarred: json['is_starred'] == true || json['is_starred'] == 1,
+      tag: json['tag'] as String?,
+      customTone: json['custom_tone'] == true || json['custom_tone'] == 1,
+      customVibrate: json['custom_vibrate'] == true || json['custom_vibrate'] == 1,
+      customPopup: json['custom_popup'] == true || json['custom_popup'] == 1,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'conversation_id': conversationId,
+      'user_id': userId,
+      'is_admin': isAdmin,
+      'last_read_at': lastReadAt?.toIso8601String(),
+      'unread_count': unreadCount,
+      'is_muted': isMuted,
+      'user': user?.toJson(),
+      'is_pinned': isPinned,
+      'is_archived': isArchived,
+      'muted_until': mutedUntil?.toIso8601String(),
+      'is_starred': isStarred,
+      'tag': tag,
+      'custom_tone': customTone,
+      'custom_vibrate': customVibrate,
+      'custom_popup': customPopup,
+    };
+  }
+}
+
+class MessageReceipt {
+  final int userId;
+  final PostUser? user;
+  final DateTime? deliveredAt;
+  final DateTime? readAt;
+
+  const MessageReceipt({required this.userId, this.user, this.deliveredAt, this.readAt});
+
+  factory MessageReceipt.fromJson(Map<String, dynamic> json) => MessageReceipt(
+    userId: json['user_id'] as int? ?? 0,
+    user: json['user'] != null ? PostUser.fromJson(json['user']) : null,
+    deliveredAt: json['delivered_at'] != null ? DateTime.tryParse(json['delivered_at'].toString()) : null,
+    readAt: json['read_at'] != null ? DateTime.tryParse(json['read_at'].toString()) : null,
+  );
 }

@@ -3,15 +3,45 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/profile_models.dart';
 import '../config/api_config.dart';
+import 'perf_logger.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
+class _CachedProfile {
+  final FullProfile profile;
+  final DateTime fetchedAt;
+  _CachedProfile(this.profile) : fetchedAt = DateTime.now();
+  bool get isExpired => DateTime.now().difference(fetchedAt) > ProfileService._cacheTtl;
+}
+
 class ProfileService {
+  // In-memory profile cache: 5-min TTL, max 50 entries
+  static final Map<int, _CachedProfile> _cache = {};
+  static const int _maxCacheSize = 50;
+  static const Duration _cacheTtl = Duration(minutes: 5);
+
   /// Get full profile for a user
   Future<ProfileResult> getProfile({
     required int userId,
     int? currentUserId,
   }) async {
+    // Check cache first
+    final cached = _cache[userId];
+    if (cached != null && !cached.isExpired) {
+      // Background refresh if stale (>2 min)
+      if (DateTime.now().difference(cached.fetchedAt) > const Duration(minutes: 2)) {
+        _refreshInBackground(userId, currentUserId);
+      }
+      PerfLogger.profileCacheHits++;
+      PerfLogger.log('profile_cache_hit', {'userId': userId});
+      return ProfileResult(success: true, profile: cached.profile);
+    }
+
+    return _fetchAndCache(userId, currentUserId);
+  }
+
+  Future<ProfileResult> _fetchAndCache(int userId, int? currentUserId) async {
+    PerfLogger.profileCacheMisses++;
     try {
       String url = '$_baseUrl/users/$userId';
       if (currentUserId != null) {
@@ -26,10 +56,16 @@ class ProfileService {
         final data = jsonDecode(response.body);
         print('[ProfileService] Response success: ${data['success']}');
         if (data['success'] == true) {
-          return ProfileResult(
-            success: true,
-            profile: FullProfile.fromJson(data['data']),
-          );
+          final profile = FullProfile.fromJson(data['data']);
+          // Store in cache
+          _cache[userId] = _CachedProfile(profile);
+          // LRU eviction
+          if (_cache.length > _maxCacheSize) {
+            final oldest = _cache.entries.reduce((a, b) =>
+                a.value.fetchedAt.isBefore(b.value.fetchedAt) ? a : b);
+            _cache.remove(oldest.key);
+          }
+          return ProfileResult(success: true, profile: profile);
         }
         return ProfileResult(success: false, message: data['message'] ?? 'Failed to load profile');
       }
@@ -37,8 +73,17 @@ class ProfileService {
       return ProfileResult(success: false, message: 'Profile not found');
     } catch (e) {
       print('[ProfileService] Error: $e');
+      // Return stale cache on network error
+      final stale = _cache[userId];
+      if (stale != null) {
+        return ProfileResult(success: true, profile: stale.profile);
+      }
       return ProfileResult(success: false, message: 'Error: $e');
     }
+  }
+
+  void _refreshInBackground(int userId, int? currentUserId) {
+    _fetchAndCache(userId, currentUserId);
   }
 
   /// Update profile photo

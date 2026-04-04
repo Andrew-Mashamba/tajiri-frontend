@@ -175,6 +175,37 @@ class GroupCallService {
     }
   }
 
+  /// Get the active speaker in a group call (Feature #26).
+  /// GET /api/calls/group/active-speaker?call_id=X&conversation_id=Y&user_id=Z
+  /// Returns the userId of the participant currently speaking, or null if silence.
+  Future<int?> getActiveSpeaker({
+    required String? callId,
+    required int conversationId,
+    required int userId,
+  }) async {
+    if (callId == null || callId.isEmpty) return null;
+    try {
+      final uri = Uri.parse('$_baseUrl/calls/group/active-speaker').replace(
+        queryParameters: {
+          'call_id': callId,
+          'conversation_id': conversationId.toString(),
+          'user_id': userId.toString(),
+        },
+      );
+      final response = await http.get(uri, headers: ApiConfig.headers);
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['success'] == true && data['active_speaker_id'] != null) {
+          final speakerId = data['active_speaker_id'];
+          return speakerId is int ? speakerId : (speakerId as num?)?.toInt();
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Update video enabled state. Optional backend: PATCH /api/calls/group/state
   Future<bool> setVideoEnabled({
     required String? callId,
@@ -193,6 +224,37 @@ class GroupCallService {
         }),
       );
       if (response.statusCode == 200) {
+        final data = response.body.isNotEmpty
+            ? (jsonDecode(response.body) as Map<String, dynamic>)
+            : <String, dynamic>{};
+        return data['success'] != false;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Invite a user to an active group call.
+  /// POST /api/calls/group/invite
+  Future<bool> inviteToGroupCall({
+    required String? callId,
+    required int conversationId,
+    required int inviterId,
+    required int inviteeId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/calls/group/invite'),
+        headers: ApiConfig.headers,
+        body: jsonEncode({
+          'call_id': callId,
+          'conversation_id': conversationId,
+          'inviter_id': inviterId,
+          'invitee_id': inviteeId,
+        }),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.body.isNotEmpty
             ? (jsonDecode(response.body) as Map<String, dynamic>)
             : <String, dynamic>{};

@@ -35,6 +35,10 @@ import '../../services/engagement_level_service.dart';
 import '../../services/event_tracking_service.dart';
 import '../../services/creator_service.dart';
 import '../../services/content_engine_service.dart';
+import '../../widgets/cached_media_image.dart';
+import '../../services/feed_cache_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/perf_logger.dart';
 import '../../models/flywheel_models.dart';
 import '../../widgets/posting_nudge_card.dart';
 import '../../models/ad_models.dart';
@@ -123,6 +127,10 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   bool _showed25Milestone = false;
   bool _showed50Milestone = false;
 
+  // Notification badge count
+  int _unreadNotificationCount = 0;
+  Timer? _notificationTimer;
+
   // Randomized teaser interval (5-7 posts)
   final _random = Random();
   late List<int> _teaserPositions;
@@ -130,6 +138,14 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 
   // Pre-built feed item list for interleaved content
   List<_FeedItem> _feedItems = [];
+
+  // Next-page prefetch for instant pagination
+  List<Post>? _prefetchedNextPage;
+  bool _isPrefetching = false;
+
+  // Stale-while-revalidate: show cached feed instantly, refresh in background
+  bool _hasNewPosts = false;
+  List<Post>? _pendingPosts;
 
   @override
   void initState() {
@@ -151,6 +167,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     _loadPostingNudge();
     // Initialize first scroll controller
     _scrollControllers[0] = ScrollController()..addListener(_onScroll);
+    _loadUnreadNotificationCount();
+    _notificationTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _loadUnreadNotificationCount(),
+    );
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
       if (!mounted) return;
       if (event is FeedUpdateEvent) {
@@ -164,6 +185,8 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    PerfLogger.printSummary();
+    _notificationTimer?.cancel();
     _liveUpdateSubscription?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
@@ -171,6 +194,13 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    final count = await NotificationService.getUnreadCount(widget.currentUserId);
+    if (mounted && count != _unreadNotificationCount) {
+      setState(() => _unreadNotificationCount = count);
+    }
   }
 
   void _onTabChanged() {
@@ -184,6 +214,8 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         _currentFeedType = newType;
         _currentPage = 1;
         _hasMore = true;
+        _prefetchedNextPage = null;
+        _isPrefetching = false;
       });
       // Only load if no cached posts for this feed type
       if (_posts.isEmpty) {
@@ -209,6 +241,18 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       _storiesLoading = false;
       _storyGroups = result.success ? result.groups : [];
     });
+
+    // Prefetch first 10 story thumbnails (user avatars shown in the stories row)
+    if (mounted && _storyGroups.isNotEmpty) {
+      final thumbnailUrls = _storyGroups
+          .take(10)
+          .map((g) => g.user.avatarUrl)
+          .where((url) => url.isNotEmpty)
+          .toList();
+      if (thumbnailUrls.isNotEmpty && mounted) {
+        ImagePreloader.precacheImages(context, thumbnailUrls);
+      }
+    }
   }
 
   Future<void> _loadEngagementLevel() async {
@@ -528,8 +572,16 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     if (!controller.hasClients) return;
 
     // Pagination trigger
-    if (controller.position.pixels >= controller.position.maxScrollExtent - 500) {
+    if (controller.position.pixels >= controller.position.maxScrollExtent - 1000) {
       _loadMore();
+    }
+
+    // Prefetch next page at 60% scroll depth
+    if (!_isPrefetching && _hasMore && _prefetchedNextPage == null) {
+      final scrollPercent = controller.position.pixels / controller.position.maxScrollExtent;
+      if (scrollPercent >= 0.6) {
+        _prefetchNextPage();
+      }
     }
 
     // Preload media for items coming into view
@@ -601,11 +653,29 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _loadFeed() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    final sw = PerfLogger.startTiming();
+    // Step 1: Load cached posts for instant display
+    final cachedPosts = await FeedCacheService.instance.getPosts(_currentFeedType);
+    if (cachedPosts.isNotEmpty && _posts.isEmpty) {
+      setState(() {
+        _isLoading = false;
+        _posts = cachedPosts;
+        _hasNewPosts = false;
+        _pendingPosts = null;
+      });
+      _buildFeedItems();
+      PerfLogger.feedCacheHits++;
+      PerfLogger.log('feed_cache_hit', {'posts': cachedPosts.length, 'feedType': _currentFeedType});
+    } else if (_posts.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+      PerfLogger.feedCacheMisses++;
+      PerfLogger.log('feed_cache_miss', {'feedType': _currentFeedType});
+    }
 
+    // Step 2: Fetch fresh data from API
     if (kDebugMode) debugPrint('[FeedScreen] _loadFeed called, feedType=$_currentFeedType, userId=${widget.currentUserId}');
     final v2FeedType = _currentFeedType == 'posts' ? 'for_you' : _currentFeedType;
     final engineResult = await ContentEngineService.feed(
@@ -614,21 +684,70 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       page: 1,
     );
     if (kDebugMode) debugPrint('[FeedScreen] ContentEngine returned ${engineResult.items.length} items');
-    setState(() {
-      _isLoading = false;
-      _posts = engineResult.items
-          .where((item) => item.post != null)
-          .map((item) => item.post!)
-          .toList();
-      _currentPage = 1;
-      _hasMore = engineResult.meta.hasMore;
-      if (kDebugMode) debugPrint('[FeedScreen] Parsed ${_posts.length} posts, hasMore=$_hasMore');
-      if (_posts.isEmpty && engineResult.items.isEmpty) {
-        _error = null; // Just empty, not an error
+
+    final freshPosts = engineResult.items
+        .where((item) => item.post != null)
+        .map((item) => item.post!)
+        .toList();
+
+    // Step 3: Cache the fresh posts
+    if (freshPosts.isNotEmpty) {
+      FeedCacheService.instance.savePosts(_currentFeedType, freshPosts);
+    }
+
+    // Step 4: Compare with displayed posts
+    if (_posts.isNotEmpty && freshPosts.isNotEmpty) {
+      final currentIds = _posts.take(5).map((p) => p.id).toSet();
+      final freshIds = freshPosts.take(5).map((p) => p.id).toSet();
+      if (!currentIds.containsAll(freshIds) || !freshIds.containsAll(currentIds)) {
+        // New content available — show pill instead of disrupting scroll
+        if (mounted) {
+          setState(() {
+            _hasNewPosts = true;
+            _pendingPosts = freshPosts;
+            _hasMore = engineResult.meta.hasMore;
+          });
+        }
+        PerfLogger.log('feed_new_posts_available', {'freshCount': freshPosts.length});
+        _loadFeedAds();
+        return;
       }
+    }
+
+    // No cached posts were shown, or same content — update directly
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _posts = freshPosts;
+        _currentPage = 1;
+        _hasMore = engineResult.meta.hasMore;
+        _hasNewPosts = false;
+        _pendingPosts = null;
+        if (kDebugMode) debugPrint('[FeedScreen] Parsed ${_posts.length} posts, hasMore=$_hasMore');
+        if (_posts.isEmpty && engineResult.items.isEmpty) {
+          _error = null;
+        }
+      });
+      _buildFeedItems();
+      _loadFeedAds();
+    }
+    PerfLogger.endTiming(sw, 'feed_load_total', {'feedType': _currentFeedType, 'posts': _posts.length});
+  }
+
+  void _showNewPosts() {
+    if (_pendingPosts == null) return;
+    setState(() {
+      _posts = _pendingPosts!;
+      _pendingPosts = null;
+      _hasNewPosts = false;
+      _currentPage = 1;
     });
     _buildFeedItems();
-    _loadFeedAds();
+    // Scroll to top
+    final controller = _scrollController;
+    if (controller.hasClients) {
+      controller.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
   }
 
   Future<void> _loadFeedAds() async {
@@ -648,6 +767,20 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   Future<void> _loadMore() async {
     if (_isLoadingMore || !_hasMore) return;
 
+    // Use prefetched data if available
+    if (_prefetchedNextPage != null) {
+      PerfLogger.prefetchHits++;
+      PerfLogger.log('prefetch_hit', {'posts': _prefetchedNextPage!.length});
+      setState(() {
+        _posts.addAll(_prefetchedNextPage!);
+        _currentPage++;
+        _prefetchedNextPage = null;
+      });
+      _buildFeedItems();
+      return;
+    }
+
+    PerfLogger.prefetchMisses++;
     setState(() => _isLoadingMore = true);
 
     final v2FeedType = _currentFeedType == 'posts' ? 'for_you' : _currentFeedType;
@@ -667,6 +800,30 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
       _hasMore = engineResult.meta.hasMore;
     });
     _buildFeedItems();
+  }
+
+  Future<void> _prefetchNextPage() async {
+    if (_isPrefetching || !_hasMore || _prefetchedNextPage != null) return;
+    _isPrefetching = true;
+
+    if (kDebugMode) debugPrint('[FeedScreen] Prefetching page ${_currentPage + 1}');
+    final v2FeedType = _currentFeedType == 'posts' ? 'for_you' : _currentFeedType;
+    final engineResult = await ContentEngineService.feed(
+      feedType: v2FeedType,
+      userId: widget.currentUserId,
+      page: _currentPage + 1,
+    );
+
+    final newPosts = engineResult.items
+        .where((item) => item.post != null)
+        .map((item) => item.post!)
+        .toList();
+
+    if (mounted) {
+      _prefetchedNextPage = newPosts;
+      _isPrefetching = false;
+      if (kDebugMode) debugPrint('[FeedScreen] Prefetched ${newPosts.length} posts');
+    }
   }
 
   Future<void> _onLike(Post post) async {
@@ -940,6 +1097,37 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     );
   }
 
+  Widget _buildNotificationBellAction(AppStrings? s) {
+    return IconButton(
+      onPressed: () async {
+        await Navigator.pushNamed(context, '/notifications');
+        // Refresh count after returning from notifications
+        _loadUnreadNotificationCount();
+      },
+      tooltip: s?.notifications ?? 'Notifications',
+      icon: Badge(
+        isLabelVisible: _unreadNotificationCount > 0,
+        label: Text(
+          _unreadNotificationCount > 99 ? '99+' : '$_unreadNotificationCount',
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: const Color(0xFFE53935),
+        child: HeroIcon(
+          HeroIcons.bell,
+          style: HeroIconStyle.outline,
+          size: TajiriAppBar.actionIconSize,
+          color: TajiriAppBar.primaryTextColor,
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -959,11 +1147,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
             tooltip: s?.search ?? 'Search',
             onPressed: () => Navigator.pushNamed(context, '/search'),
           ),
-          TajiriAppBar.action(
-            icon: HeroIcons.bell,
-            tooltip: s?.notifications ?? 'Notifications',
-            onPressed: () => Navigator.pushNamed(context, '/notifications'),
-          ),
+          _buildNotificationBellAction(s),
         ],
         bottom: _FeedTabBar(
           controller: _tabController,
@@ -1229,12 +1413,53 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
               onDismiss: () => setState(() => _nudgeDismissed = true),
               onCreatePost: () => Navigator.pushNamed(context, '/create-post'),
             ),
-          Expanded(child: refreshIndicator),
+          Expanded(child: _wrapWithNewPostsPill(refreshIndicator)),
         ],
       );
     }
 
-    return refreshIndicator;
+    return _wrapWithNewPostsPill(refreshIndicator);
+  }
+
+  Widget _wrapWithNewPostsPill(Widget child) {
+    return Stack(
+      children: [
+        child,
+        if (_hasNewPosts)
+          Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: _showNewPosts,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text('New posts', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   void _openFullScreenPostViewer(Post post) {

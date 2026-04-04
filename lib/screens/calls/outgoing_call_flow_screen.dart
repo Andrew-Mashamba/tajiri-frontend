@@ -1,5 +1,5 @@
 // Video & Audio Calls — Outgoing call flow (docs/video-audio-calls, 1.F.10)
-// Create call → subscribe WS → init PC → offer → send → wait for answer/ICE → show ActiveCallScreen.
+// Create call → subscribe WS → init PC → wait for CallAccepted → create offer → send → wait for answer/ICE → show ActiveCallScreen.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -39,28 +39,46 @@ class OutgoingCallFlowScreen extends StatefulWidget {
   State<OutgoingCallFlowScreen> createState() => _OutgoingCallFlowScreenState();
 }
 
-class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
+class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
   final CallState _callState = CallState();
   final CallSignalingService _signaling = CallSignalingService();
   final CallChannelService _channel = CallChannelService();
   final CallWebRTCService _webrtc = CallWebRTCService();
 
   StreamSubscription? _answerSub;
+  StreamSubscription? _acceptedSub;
   StreamSubscription? _iceSub;
   StreamSubscription? _rejectedSub;
   StreamSubscription? _endedSub;
   StreamSubscription? _iceCandidateSub;
+  StreamSubscription? _remoteStreamSub;
+  StreamSubscription? _connectionStateSub;
+  StreamSubscription? _iceConnectionStateSub;
+  Timer? _noAnswerTimer;
   bool _disposed = false;
+  bool _navigatedToActive = false;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     _startCall();
   }
 
   Future<void> _startCall() async {
     final token = widget.authToken;
     final userId = widget.currentUserId;
+
+    debugPrint('[CallFlow][Outgoing] START ${widget.type} call to ${widget.calleeName} (${widget.calleeId})');
 
     // Request permissions before creating call (spec 1.F.10)
     final mic = await Permission.microphone.request();
@@ -126,23 +144,47 @@ class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
       }
     }
 
-    // 2. Subscribe to channel (optional; if Reverb not configured we continue with REST polling for answer)
+    debugPrint('[CallFlow][Outgoing] callId=$callId, iceServers=${iceServers.length}');
+    if (_disposed) return;
+
+    // Subscribe to channel
     final wsSubscribed = await _channel.subscribe(
       callId: callId,
       authToken: token,
+      userId: userId,
     );
+    if (_disposed) return;
 
     if (wsSubscribed) {
       _answerSub = _channel.onSignalingAnswer.listen((e) {
         if (e.callId != callId) return;
+        if (e.fromUserId == userId) return; // ignore own echo
         _onRemoteAnswer(e.sdp);
       });
-      _channel.onCallAccepted.listen((e) {
+      _acceptedSub = _channel.onCallAccepted.listen((e) async {
         if (e.callId != callId) return;
-        if (e.sdpAnswer != null) _onRemoteAnswer(e.sdpAnswer);
+        _noAnswerTimer?.cancel();
+        _callState.setConnecting();
+        if (e.sdpAnswer != null) {
+          _onRemoteAnswer(e.sdpAnswer);
+        } else {
+          debugPrint('[CallFlow][Outgoing] CallAccepted — creating offer');
+          final offer = await _webrtc.createOffer();
+          if (_disposed) return;
+          if (offer != null) {
+            await _signaling.sendSignaling(
+              callId: callId,
+              type: 'offer',
+              sdp: offer,
+              authToken: token,
+              userId: userId,
+            );
+          }
+        }
       });
       _iceSub = _channel.onSignalingIceCandidate.listen((e) {
         if (e.callId != callId) return;
+        if (e.fromUserId == userId) return;
         _onRemoteIce(e.candidate);
       });
       _rejectedSub = _channel.onCallRejected.listen((e) {
@@ -160,28 +202,38 @@ class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
           Navigator.of(context).pop();
         }
       });
+    } else {
+      debugPrint('[CallFlow][Outgoing] ✗ WebSocket failed — REST only');
     }
 
-    // 3. Init peer connection + getUserMedia
-    await _webrtc.initPeerConnection(iceServers);
-    await _webrtc.getUserMedia(video: widget.type == 'video');
+    // Init peer connection + getUserMedia
+    try {
+      await _webrtc.initPeerConnection(iceServers);
+    } catch (e) {
+      if (!_disposed && mounted) {
+        _callState.setError('Failed to create peer connection: $e');
+        await _popAfterDelay();
+      }
+      return;
+    }
+
+    try {
+      await _webrtc.getUserMedia(video: widget.type == 'video');
+    } catch (e) {
+      if (!_disposed && mounted) {
+        _callState.setError('Failed to get media: $e');
+        await _popAfterDelay();
+      }
+      return;
+    }
+
+    if (_disposed) return;
     await _webrtc.addLocalStreamToPeerConnection();
+    if (_disposed) return;
 
     _callState.setLocalStream(_webrtc.localStream);
 
-    // 4. Create offer and send
-    final offer = await _webrtc.createOffer();
-    if (offer != null) {
-      await _signaling.sendSignaling(
-        callId: callId,
-        type: 'offer',
-        sdp: offer,
-        authToken: token,
-        userId: userId,
-      );
-    }
-
-    // 5. Send ICE candidates via signaling
+    // Set up listeners; ICE candidates fire after offer is created in onCallAccepted.
     _iceCandidateSub = _webrtc.onIceCandidate.listen((candidate) {
       _signaling.sendSignaling(
         callId: callId,
@@ -192,33 +244,58 @@ class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
       );
     });
 
-    // 6. Listen for connection state to show active screen
-    _webrtc.onConnectionState.listen((state) {
+    _remoteStreamSub = _webrtc.onRemoteStream.listen((stream) {
+      _callState.setRemoteStream(stream);
+    });
+
+    _connectionStateSub = _webrtc.onConnectionState.listen((state) {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected && !_disposed && mounted) {
+        debugPrint('[CallFlow][Outgoing] CONNECTED');
+        _noAnswerTimer?.cancel();
         _callState.setConnected();
         _navigateToActiveCall();
       }
     });
-    _webrtc.onIceConnectionState.listen((state) {
+    _iceConnectionStateSub = _webrtc.onIceConnectionState.listen((state) {
       if (state == RTCIceConnectionState.RTCIceConnectionStateConnected && !_disposed && mounted) {
+        _noAnswerTimer?.cancel();
         _callState.setConnected();
         _navigateToActiveCall();
       }
     });
+
+    // No-answer timeout (45 seconds)
+    _noAnswerTimer = Timer(const Duration(seconds: 45), () {
+      if (!_disposed && mounted && _callState.status != CallStatus.connected) {
+        _callState.setNoAnswer();
+        _endCall();
+      }
+    });
+
+    debugPrint('[CallFlow][Outgoing] Setup complete — waiting for answer');
   }
 
   void _onRemoteAnswer(Map<String, dynamic>? sdp) async {
     if (sdp == null) return;
-    await _webrtc.setRemoteAnswer(sdp);
+    try {
+      await _webrtc.setRemoteAnswer(sdp);
+    } catch (e) {
+      debugPrint('[CallFlow][Outgoing] ✗ setRemoteAnswer: $e');
+    }
   }
 
   void _onRemoteIce(Map<String, dynamic>? candidate) async {
     if (candidate == null) return;
-    await _webrtc.addIceCandidate(candidate);
+    try {
+      await _webrtc.addIceCandidate(candidate);
+    } catch (e) {
+      debugPrint('[CallFlow][Outgoing] ✗ addIceCandidate: $e');
+    }
   }
 
   void _navigateToActiveCall() {
-    if (_disposed || !mounted) return;
+    if (_navigatedToActive || _disposed || !mounted) return;
+    _navigatedToActive = true;
     final callId = _callState.callId;
     if (callId == null) return;
     Navigator.of(context).pushReplacement(
@@ -237,21 +314,32 @@ class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
   }
 
   Future<void> _endCall() async {
+    if (_disposed) return; // Already handled by WS listener
     final callId = _callState.callId;
+    debugPrint('[CallFlow][Outgoing] _endCall callId=$callId');
+    // Cancel WS listeners BEFORE the API call to prevent double-pop race
+    _endedSub?.cancel();
+    _rejectedSub?.cancel();
     if (callId != null) {
       await _signaling.endCall(callId: callId, authToken: widget.authToken, userId: widget.currentUserId);
     }
+    if (_disposed) return; // Guard against disposal during await
     _cleanup();
     if (mounted) Navigator.of(context).pop();
   }
 
   void _cleanup() {
     _disposed = true;
+    _noAnswerTimer?.cancel();
     _answerSub?.cancel();
+    _acceptedSub?.cancel();
     _iceSub?.cancel();
     _rejectedSub?.cancel();
     _endedSub?.cancel();
     _iceCandidateSub?.cancel();
+    _remoteStreamSub?.cancel();
+    _connectionStateSub?.cancel();
+    _iceConnectionStateSub?.cancel();
     _webrtc.dispose();
     _channel.disconnect();
     _callState.reset();
@@ -264,56 +352,169 @@ class _OutgoingCallFlowScreenState extends State<OutgoingCallFlowScreen> {
 
   @override
   void dispose() {
-    if (!_disposed) _cleanup();
+    if (!_disposed) {
+      if (_navigatedToActive) {
+        // Resources are handed off to ActiveCallScreen — only cancel our subscriptions.
+        _disposed = true;
+        _noAnswerTimer?.cancel();
+        _answerSub?.cancel();
+        _acceptedSub?.cancel();
+        _iceSub?.cancel();
+        _rejectedSub?.cancel();
+        _endedSub?.cancel();
+        _iceCandidateSub?.cancel();
+        _remoteStreamSub?.cancel();
+        _connectionStateSub?.cancel();
+        _iceConnectionStateSub?.cancel();
+      } else {
+        _cleanup();
+      }
+    }
+    _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = _callState.remoteUser?.displayName ?? widget.calleeName;
-    final avatarUrl = _callState.remoteUser?.avatarUrl ?? widget.calleeAvatarUrl;
-    final status = _callState.status;
+    return ListenableBuilder(
+      listenable: _callState,
+      builder: (context, _) {
+        final name = _callState.remoteUser?.displayName ?? widget.calleeName;
+        final avatarUrl = _callState.remoteUser?.avatarUrl ?? widget.calleeAvatarUrl;
+        final status = _callState.status;
 
-    String statusText = 'Calling…';
-    if (status == CallStatus.rejected) {
-      statusText = 'Declined';
-    } else if (status == CallStatus.connecting) {
-      statusText = 'Connecting…';
-    } else if (status == CallStatus.connected) {
-      statusText = 'Connected';
-    } else if (status == CallStatus.error) {
-      statusText = _callState.errorMessage ?? 'Error';
-    }
+        String statusText = 'Calling…';
+        if (status == CallStatus.rejected) {
+          statusText = 'Declined';
+        } else if (status == CallStatus.noAnswer) {
+          statusText = 'No answer';
+        } else if (status == CallStatus.connecting) {
+          statusText = 'Connecting…';
+        } else if (status == CallStatus.connected) {
+          statusText = 'Connected';
+        } else if (status == CallStatus.error) {
+          statusText = _callState.errorMessage ?? 'Error';
+        }
 
-    return Scaffold(
-      backgroundColor: Colors.grey.shade900,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            UserAvatar(photoUrl: avatarUrl, name: name, radius: 60),
-            const SizedBox(height: 24),
-            Text(
-              name,
-              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+        final bool isCalling = status == CallStatus.ringing ||
+            status == CallStatus.idle ||
+            status == CallStatus.pending;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF1A1A1A),
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Top bar with back arrow and label
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: IconButton(
+                          onPressed: _endCall,
+                          icon: const Icon(
+                            Icons.arrow_back_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Outgoing Call',
+                        style: TextStyle(
+                          color: Color(0xFF999999),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                // Avatar with pulse animation during calling state
+                ScaleTransition(
+                  scale: isCalling ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+                  child: UserAvatar(photoUrl: avatarUrl, name: name, radius: 60),
+                ),
+                const SizedBox(height: 24),
+                // Callee name
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Status pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    statusText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // End call button
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 48),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: Material(
+                          color: const Color(0xFF2A2A2A),
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: _endCall,
+                            child: Icon(
+                              Icons.call_end_rounded,
+                              color: Colors.red.shade400,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'End Call',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              statusText,
-              style: const TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 48),
-              child: FloatingActionButton.large(
-                backgroundColor: Colors.red,
-                onPressed: _endCall,
-                child: const Icon(Icons.call_end, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

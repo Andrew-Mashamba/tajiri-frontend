@@ -1,6 +1,7 @@
 // Story 60: Group Call — Home → Messages → Group chat → Group call
 // Design: DOCS/DESIGN.md — #FAFAFA, 48dp min touch targets, SafeArea
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/message_models.dart';
 import '../../models/friend_models.dart';
@@ -44,10 +45,21 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _isVideoOn = true;
   bool _isLeaving = false;
 
+  // Feature #26: Speaker spotlight — track active speaker
+  int? _activeSpeakerId;
+  Timer? _speakerDetectionTimer;
+
   @override
   void initState() {
     super.initState();
     _joinCall();
+    _startSpeakerDetection();
+  }
+
+  @override
+  void dispose() {
+    _speakerDetectionTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _joinCall() async {
@@ -121,6 +133,29 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return list;
   }
 
+  // ── Feature #26: Speaker spotlight — detect active speaker ──────────
+  void _startSpeakerDetection() {
+    _speakerDetectionTimer?.cancel();
+    _speakerDetectionTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      // Poll the GroupCallService for the current active speaker.
+      // The service checks audio levels or recent audio activity and
+      // returns the userId of the loudest participant (null if silence).
+      if (_callId == null || _participants.length < 2) return;
+      try {
+        final speakerId = await _callService.getActiveSpeaker(
+          callId: _callId,
+          conversationId: widget.conversationId,
+          userId: widget.currentUserId,
+        );
+        if (mounted && speakerId != _activeSpeakerId) {
+          setState(() => _activeSpeakerId = speakerId);
+        }
+      } catch (_) {
+        // Speaker detection unavailable — keep previous state
+      }
+    });
+  }
+
   Future<void> _leaveCall() async {
     if (_isLeaving) return;
     setState(() => _isLeaving = true);
@@ -136,26 +171,38 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   Future<void> _toggleMute() async {
     final next = !_isMuted;
-    await _callService.setMuted(
+    final success = await _callService.setMuted(
       callId: _callId,
       userId: widget.currentUserId,
       muted: next,
     );
     if (!mounted) return;
-    setState(() => _isMuted = next);
-    _updateLocalParticipantState(muted: next);
+    if (success) {
+      setState(() => _isMuted = next);
+      _updateLocalParticipantState(muted: next);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Imeshindwa kubadilisha hali ya sauti')),
+      );
+    }
   }
 
   Future<void> _toggleVideo() async {
     final next = !_isVideoOn;
-    await _callService.setVideoEnabled(
+    final success = await _callService.setVideoEnabled(
       callId: _callId,
       userId: widget.currentUserId,
       videoEnabled: next,
     );
     if (!mounted) return;
-    setState(() => _isVideoOn = next);
-    _updateLocalParticipantState(videoEnabled: next);
+    if (success) {
+      setState(() => _isVideoOn = next);
+      _updateLocalParticipantState(videoEnabled: next);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Imeshindwa kubadilisha hali ya video')),
+      );
+    }
   }
 
   void _updateLocalParticipantState({bool? muted, bool? videoEnabled}) {
@@ -263,14 +310,20 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             spacing: spacing,
             runSpacing: spacing,
             alignment: WrapAlignment.center,
-            children: _participants.map((p) => _ParticipantTile(
-              size: itemSize,
-              displayName: p.displayName ?? 'Mtumiaji',
-              avatarUrl: p.avatarUrl,
-              isMuted: p.isMuted,
-              videoEnabled: p.videoEnabled,
-              isLocal: p.isLocal,
-            )).toList(),
+            children: _participants.map((p) {
+              final isSpeaking = _activeSpeakerId != null && p.userId == _activeSpeakerId;
+              // Active speaker gets 1.3x tile size for spotlight effect
+              final tileSize = isSpeaking ? (itemSize * 1.3).clamp(100.0, 220.0) : itemSize;
+              return _ParticipantTile(
+                size: tileSize,
+                displayName: p.displayName ?? 'Mtumiaji',
+                avatarUrl: p.avatarUrl,
+                isMuted: p.isMuted,
+                videoEnabled: p.videoEnabled,
+                isLocal: p.isLocal,
+                isSpeaking: isSpeaking,
+              );
+            }).toList(),
           ),
         );
       },
@@ -316,10 +369,24 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                             return ListTile(
                               leading: UserAvatar(photoUrl: u.profilePhotoUrl, name: u.fullName, radius: 24),
                               title: Text(u.fullName),
-                              onTap: () {
+                              onTap: () async {
+                                final messenger = ScaffoldMessenger.of(context);
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Invitation sent to ${u.fullName}')),
+                                final success = await _callService.inviteToGroupCall(
+                                  callId: _callId,
+                                  conversationId: widget.conversationId,
+                                  inviterId: widget.currentUserId,
+                                  inviteeId: u.id,
+                                );
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      success
+                                          ? 'Mwaliko umetumwa kwa ${u.fullName}'
+                                          : 'Imeshindwa kumwalika ${u.fullName}',
+                                    ),
+                                  ),
                                 );
                               },
                             );
@@ -341,7 +408,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -385,6 +452,7 @@ class _ParticipantTile extends StatelessWidget {
   final bool isMuted;
   final bool videoEnabled;
   final bool isLocal;
+  final bool isSpeaking;
 
   const _ParticipantTile({
     required this.size,
@@ -393,6 +461,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.isMuted,
     required this.videoEnabled,
     required this.isLocal,
+    this.isSpeaking = false,
   });
 
   @override
@@ -405,18 +474,29 @@ class _ParticipantTile extends StatelessWidget {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
                 width: size,
                 height: size,
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0E0E0),
                   borderRadius: BorderRadius.circular(12),
+                  border: isSpeaking
+                      ? Border.all(color: Colors.green, width: 3)
+                      : null,
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
+                    if (isSpeaking)
+                      BoxShadow(
+                        color: Colors.green.withValues(alpha: 0.4),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      )
+                    else
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -462,6 +542,27 @@ class _ParticipantTile extends StatelessWidget {
                     ),
                   ),
                 ),
+              // Speaker spotlight label (Feature #26)
+              if (isSpeaking)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Speaking',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -504,7 +605,7 @@ class _ControlButton extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Material(
-          color: onPressed == null ? _kIconBg.withOpacity(0.4) : bgColor,
+          color: onPressed == null ? _kIconBg.withValues(alpha: 0.4) : bgColor,
           borderRadius: BorderRadius.circular(24),
           child: InkWell(
             onTap: onPressed,

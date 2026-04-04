@@ -43,8 +43,9 @@ class RTMPStreamingService: NSObject {
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
 
-    // Setup streaming method channel
     let controller = window?.rootViewController as! FlutterViewController
+
+    // Setup streaming method channel
     let streamingChannel = FlutterMethodChannel(
       name: "tz.co.zima.tajiri/streaming",
       binaryMessenger: controller.binaryMessenger

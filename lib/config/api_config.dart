@@ -25,21 +25,23 @@ class ApiConfig {
   /// Set explicitly if Reverb runs on a different host/port.
   static String? reverbWsUrl;
 
+  /// Reverb WebSocket port (external). Nginx proxies 6001 → internal 6002.
+  static const int reverbPort = 6001;
+
   /// Resolved WebSocket URL for Reverb. Uses [reverbWsUrl] if set; otherwise builds from [baseUrl].
   static String? get reverbWsUrlResolved {
     if (reverbWsUrl != null && reverbWsUrl!.isNotEmpty) return reverbWsUrl;
     try {
       final uri = Uri.parse(baseUrl);
       final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
-      final port = uri.port != 80 && uri.port != 443 ? ':${uri.port}' : '';
-      return '$scheme://${uri.host}$port/app/$reverbAppKey';
+      return '$scheme://${uri.host}:$reverbPort/app/$reverbAppKey';
     } catch (_) {
       return null;
     }
   }
 
-  /// Reverb app key (used in connection path). Default for Laravel Reverb.
-  static String get reverbAppKey => 'reverb-key';
+  /// Reverb app key (used in connection path). Must match backend REVERB_APP_KEY.
+  static String get reverbAppKey => 'tajiri-reverb-key-2026';
 
   /// Base URL for broadcasting auth (private channel subscription). Derived from baseUrl if not set.
   static String get broadcastAuthBaseUrl {

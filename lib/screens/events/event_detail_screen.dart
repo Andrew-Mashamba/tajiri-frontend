@@ -191,7 +191,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ? Image.network(event.coverPhotoUrl!, fit: BoxFit.cover)
                     : Container(
                         color: const Color(0xFF999999),
-                        child: Icon(Icons.event, size: 80, color: Colors.white.withOpacity(0.8)),
+                        child: Icon(Icons.event, size: 80, color: Colors.white.withValues(alpha: 0.8)),
                       ),
               ),
             ),
@@ -380,7 +380,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -439,7 +439,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
@@ -484,7 +484,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(16),

@@ -13,6 +13,7 @@ class PrivacySettings {
   final String aboutVisibility;
   final String statusVisibility;
   final String whoCanResendStatus;
+  final String whoCanAddToGroups;
 
   const PrivacySettings({
     this.profileVisibility = 'everyone',
@@ -25,6 +26,7 @@ class PrivacySettings {
     this.aboutVisibility = 'everyone',
     this.statusVisibility = 'everyone',
     this.whoCanResendStatus = 'everyone',
+    this.whoCanAddToGroups = 'everyone',
   });
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) {
@@ -39,6 +41,7 @@ class PrivacySettings {
       aboutVisibility: json['about_visibility'] as String? ?? 'everyone',
       statusVisibility: json['status_visibility'] as String? ?? 'everyone',
       whoCanResendStatus: json['who_can_resend_status'] as String? ?? 'everyone',
+      whoCanAddToGroups: json['who_can_add_to_groups'] as String? ?? 'everyone',
     );
   }
 
@@ -53,6 +56,7 @@ class PrivacySettings {
         'about_visibility': aboutVisibility,
         'status_visibility': statusVisibility,
         'who_can_resend_status': whoCanResendStatus,
+        'who_can_add_to_groups': whoCanAddToGroups,
       };
 
   PrivacySettings copyWith({
@@ -66,6 +70,7 @@ class PrivacySettings {
     String? aboutVisibility,
     String? statusVisibility,
     String? whoCanResendStatus,
+    String? whoCanAddToGroups,
   }) {
     return PrivacySettings(
       profileVisibility: profileVisibility ?? this.profileVisibility,
@@ -78,6 +83,7 @@ class PrivacySettings {
       aboutVisibility: aboutVisibility ?? this.aboutVisibility,
       statusVisibility: statusVisibility ?? this.statusVisibility,
       whoCanResendStatus: whoCanResendStatus ?? this.whoCanResendStatus,
+      whoCanAddToGroups: whoCanAddToGroups ?? this.whoCanAddToGroups,
     );
   }
 }
@@ -133,6 +139,20 @@ String privacyLastSeenLabel(String value) {
       return 'Marafiki tu';
     case 'nobody':
       return 'Usionyeshe';
+    default:
+      return 'Kila mtu';
+  }
+}
+
+/// Labels for who can add to groups
+String privacyWhoCanAddToGroupsLabel(String value) {
+  switch (value) {
+    case 'everyone':
+      return 'Kila mtu';
+    case 'friends':
+      return 'Marafiki tu';
+    case 'nobody':
+      return 'Hakuna mtu';
     default:
       return 'Kila mtu';
   }

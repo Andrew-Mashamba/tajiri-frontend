@@ -1,5 +1,12 @@
 import '../config/api_config.dart';
 
+int _parseInt(dynamic v, [int fallback = 0]) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
 class Call {
   final int id;
   final String callId;
@@ -33,17 +40,17 @@ class Call {
 
   factory Call.fromJson(Map<String, dynamic> json) {
     return Call(
-      id: json['id'],
+      id: _parseInt(json['id']),
       callId: json['call_id'] ?? '',
-      callerId: json['caller_id'],
-      calleeId: json['callee_id'],
+      callerId: _parseInt(json['caller_id']),
+      calleeId: _parseInt(json['callee_id']),
       type: json['type'] ?? 'voice',
       status: json['status'] ?? 'pending',
-      startedAt: json['started_at'] != null ? DateTime.parse(json['started_at']) : null,
-      answeredAt: json['answered_at'] != null ? DateTime.parse(json['answered_at']) : null,
-      endedAt: json['ended_at'] != null ? DateTime.parse(json['ended_at']) : null,
-      duration: json['duration'],
-      endReason: json['end_reason'],
+      startedAt: json['started_at'] != null ? DateTime.tryParse(json['started_at'].toString()) : null,
+      answeredAt: json['answered_at'] != null ? DateTime.tryParse(json['answered_at'].toString()) : null,
+      endedAt: json['ended_at'] != null ? DateTime.tryParse(json['ended_at'].toString()) : null,
+      duration: json['duration'] != null ? _parseInt(json['duration']) : null,
+      endReason: json['end_reason']?.toString(),
       caller: json['caller'] != null ? CallUser.fromJson(json['caller']) : null,
       callee: json['callee'] != null ? CallUser.fromJson(json['callee']) : null,
     );
@@ -78,7 +85,7 @@ class CallUser {
 
   factory CallUser.fromJson(Map<String, dynamic> json) {
     return CallUser(
-      id: json['id'],
+      id: _parseInt(json['id']),
       firstName: json['first_name'] ?? '',
       lastName: json['last_name'] ?? '',
       username: json['username'],
@@ -121,14 +128,14 @@ class CallLog {
 
   factory CallLog.fromJson(Map<String, dynamic> json) {
     return CallLog(
-      id: json['id'],
-      userId: json['user_id'],
-      otherUserId: json['other_user_id'],
+      id: _parseInt(json['id']),
+      userId: _parseInt(json['user_id']),
+      otherUserId: json['other_user_id'] != null ? _parseInt(json['other_user_id']) : null,
       type: json['type'] ?? 'voice',
       direction: json['direction'] ?? 'outgoing',
       status: json['status'] ?? 'missed',
-      duration: json['duration'],
-      callTime: DateTime.parse(json['call_time']),
+      duration: json['duration'] != null ? _parseInt(json['duration']) : null,
+      callTime: DateTime.tryParse(json['call_time']?.toString() ?? '') ?? DateTime.now(),
       otherUser: json['other_user'] != null ? CallUser.fromJson(json['other_user']) : null,
       callId: json['call_id']?.toString(),
     );
@@ -175,15 +182,15 @@ class GroupCall {
 
   factory GroupCall.fromJson(Map<String, dynamic> json) {
     return GroupCall(
-      id: json['id'],
+      id: _parseInt(json['id']),
       callId: json['call_id'] ?? '',
-      conversationId: json['conversation_id'],
-      initiatedBy: json['initiated_by'],
+      conversationId: _parseInt(json['conversation_id']),
+      initiatedBy: _parseInt(json['initiated_by']),
       type: json['type'] ?? 'voice',
       status: json['status'] ?? 'active',
-      startedAt: DateTime.parse(json['started_at']),
-      endedAt: json['ended_at'] != null ? DateTime.parse(json['ended_at']) : null,
-      maxParticipants: json['max_participants'] ?? 0,
+      startedAt: DateTime.tryParse(json['started_at']?.toString() ?? '') ?? DateTime.now(),
+      endedAt: json['ended_at'] != null ? DateTime.tryParse(json['ended_at'].toString()) : null,
+      maxParticipants: _parseInt(json['max_participants']),
       participants: json['participants'] != null
           ? (json['participants'] as List).map((p) => GroupCallParticipant.fromJson(p)).toList()
           : null,
@@ -218,12 +225,12 @@ class GroupCallParticipant {
 
   factory GroupCallParticipant.fromJson(Map<String, dynamic> json) {
     return GroupCallParticipant(
-      id: json['id'],
-      groupCallId: json['group_call_id'],
-      userId: json['user_id'],
+      id: _parseInt(json['id']),
+      groupCallId: _parseInt(json['group_call_id']),
+      userId: _parseInt(json['user_id']),
       status: json['status'] ?? 'invited',
-      joinedAt: json['joined_at'] != null ? DateTime.parse(json['joined_at']) : null,
-      leftAt: json['left_at'] != null ? DateTime.parse(json['left_at']) : null,
+      joinedAt: json['joined_at'] != null ? DateTime.tryParse(json['joined_at'].toString()) : null,
+      leftAt: json['left_at'] != null ? DateTime.tryParse(json['left_at'].toString()) : null,
       isMuted: json['is_muted'] ?? false,
       isVideoOff: json['is_video_off'] ?? false,
       user: json['user'] != null ? CallUser.fromJson(json['user']) : null,

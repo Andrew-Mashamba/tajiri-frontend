@@ -13,6 +13,10 @@ import 'profile_tabs_settings_screen.dart';
 import 'username_settings_screen.dart';
 import 'about_screen.dart';
 import 'privacy_settings_screen.dart';
+import 'two_factor_screen.dart';
+import 'account_protection_screen.dart';
+import 'notification_settings_screen.dart';
+import 'chat_bridges_screen.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
@@ -36,7 +40,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _cardBackground = Color(0xFFFFFFFF);
   static const _iconBackground = Color(0xFF1A1A1A);
 
-  bool _notificationsEnabled = true;
   bool _isLoadingTheme = true;
   bool _darkMode = false;
   bool _isSwahili = true;
@@ -163,13 +166,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               _buildSectionHeader(s.notifications),
-              _buildSwitchTile(
-                icon: Icons.notifications,
-                title: s.pushNotifications,
-                subtitle: s.pushNotificationsSubtitle,
-                value: _notificationsEnabled,
-                onChanged: (value) {
-                  setState(() => _notificationsEnabled = value);
+              _buildSettingsTile(
+                icon: Icons.notifications_outlined,
+                title: 'Arifa',
+                subtitle: 'Dhibiti arifa za ujumbe, simu, na zaidi',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationSettingsScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
                 },
               ),
 
@@ -192,8 +201,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: s.security,
                 subtitle: s.securitySubtitle,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Mipangilio ya usalama - Inakuja hivi karibuni')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TwoFactorScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.shield_outlined,
+                title: 'Account Protection',
+                subtitle: 'Login alerts & active sessions',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AccountProtectionScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.hub_rounded,
+                title: 'Madaraja ya mazungumzo',
+                subtitle: 'Matrix, RCS, SMS, Barua pepe',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatBridgesScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
                   );
                 },
               ),

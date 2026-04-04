@@ -16,7 +16,7 @@
 # See docs/ASSISTANT_ENDPOINT_SKILL.md and docs/BACKEND_ASSISTANT_PROTOCOL.md.
 
 set -e
-ENDPOINT="${ASSISTANT_ENDPOINT:-https://zima-uat.site:8003/api/ai/ask}"
+ENDPOINT="${ASSISTANT_ENDPOINT:-https://tajiri.zimasystems.com/api/ai/ask}"
 CURL_TIMEOUT=600
 TYPE=""
 CONTEXT=""

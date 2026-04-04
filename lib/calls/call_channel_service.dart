@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/api_config.dart';
@@ -14,6 +15,14 @@ class CallChannelService {
   String? _socketId;
   String? _currentCallId;
   bool _subscribed = false;
+
+  // Reconnection state
+  Timer? _reconnectTimer;
+  Timer? _pingTimer;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
+  String? _lastAuthToken;
+  int? _lastUserId;
 
   final StreamController<CallIncomingEvent> _callIncomingController =
       StreamController<CallIncomingEvent>.broadcast();
@@ -62,9 +71,13 @@ class CallChannelService {
     required String callId,
     String? wsUrl,
     String? authToken,
+    int? userId,
   }) async {
+    _lastAuthToken = authToken;
+    _lastUserId = userId;
     wsUrl ??= ApiConfig.reverbWsUrl ?? ApiConfig.reverbWsUrlResolved;
     if (wsUrl == null || wsUrl.isEmpty) {
+      debugPrint('[CallFlow][WS] ✗ No WebSocket URL');
       return false;
     }
 
@@ -95,7 +108,7 @@ class CallChannelService {
               _socketId = data['socket_id'] as String?;
             }
             if (_socketId != null) {
-              final auth = await _authChannel('private-call.$callId', authToken);
+              final auth = await _authChannel('private-call.$callId', authToken, userId);
               if (auth != null && auth.isNotEmpty && _channel != null) {
                 _channel!.sink.add(jsonEncode({
                   'event': 'pusher:subscribe',
@@ -104,30 +117,45 @@ class CallChannelService {
                     'auth': auth,
                   },
                 }));
+              } else {
+                debugPrint('[CallFlow][WS] ✗ Channel auth failed — cannot subscribe');
+                if (!subscriptionCompleter.isCompleted) subscriptionCompleter.complete(false);
               }
             }
             return;
           }
           if (event == 'pusher_internal:subscription_succeeded') {
+            debugPrint('[CallFlow][WS] ✓ Subscribed to private-call.$callId');
             _subscribed = true;
+            _reconnectAttempts = 0;
+            _startPingTimer();
             if (!subscriptionCompleter.isCompleted) {
               subscriptionCompleter.complete(true);
             }
             return;
           }
+          if (event == 'pusher:error') {
+            debugPrint('[CallFlow][WS] ✗ Pusher error: ${decoded['data']}');
+          }
           _handleMessage(msg);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[CallFlow][WS] ✗ Message parse error: $e');
+        }
       }, onError: (e) {
+        debugPrint('[CallFlow][WS] ✗ WebSocket error: $e');
         _connectionController.add(false);
         if (!subscriptionCompleter.isCompleted) {
           subscriptionCompleter.complete(false);
         }
+        _scheduleReconnect();
       }, onDone: () {
+        debugPrint('[CallFlow][WS] WebSocket closed (onDone)');
         _connectionController.add(false);
         _subscribed = false;
         if (!subscriptionCompleter.isCompleted) {
           subscriptionCompleter.complete(false);
         }
+        _scheduleReconnect();
       }, cancelOnError: false);
 
       _connectionController.add(true);
@@ -135,19 +163,21 @@ class CallChannelService {
       return subscriptionCompleter.future.timeout(
         const Duration(seconds: 10),
         onTimeout: () {
+          debugPrint('[CallFlow][WS] ✗ Subscription timeout (10s)');
           if (!subscriptionCompleter.isCompleted) subscriptionCompleter.complete(false);
           return false;
         },
       );
     } catch (e) {
+      debugPrint('[CallFlow][WS] ✗ WebSocket connect FAILED: $e');
       await disconnect();
       return false;
     }
   }
 
-  Future<String?> _authChannel(String channelName, String? authToken) async {
+  Future<String?> _authChannel(String channelName, String? authToken, int? userId) async {
     if (_socketId == null) return null;
-    final url = '${ApiConfig.broadcastAuthBaseUrl}/broadcasting/auth';
+    final url = '${ApiConfig.baseUrl}/broadcasting/auth';
     try {
       final headers = <String, String>{
         'Content-Type': 'application/json',
@@ -156,23 +186,48 @@ class CallChannelService {
       if (authToken != null && authToken.isNotEmpty) {
         headers['Authorization'] = 'Bearer $authToken';
       }
+      final body = <String, dynamic>{
+        'socket_id': _socketId,
+        'channel_name': channelName,
+      };
+      if (userId != null) body['user_id'] = userId;
       final response = await http.post(
         Uri.parse(url),
         headers: headers,
-        body: jsonEncode({
-          'socket_id': _socketId,
-          'channel_name': channelName,
-        }),
+        body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map && data['auth'] != null) {
           return data['auth'] as String;
         }
+        debugPrint('[CallFlow][WS] ✗ _authChannel: 200 but no auth in body');
+      } else {
+        debugPrint('[CallFlow][WS] ✗ _authChannel: HTTP ${response.statusCode}');
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[CallFlow][WS] ✗ _authChannel exception: $e');
+    }
     return null;
   }
+
+  /// Map backend dot-notation event names to PascalCase.
+  static const _eventNameMap = <String, String>{
+    'call.incoming': 'CallIncoming',
+    'call.accepted': 'CallAccepted',
+    'call.rejected': 'CallRejected',
+    'call.ended': 'CallEnded',
+    'signaling.offer': 'SignalingOffer',
+    'signaling.answer': 'SignalingAnswer',
+    'signaling.ice_candidate': 'SignalingIceCandidate',
+    'call.reaction': 'CallReaction',
+    'raise.hand': 'RaiseHand',
+    'participant.added': 'ParticipantAdded',
+    'call_state_changed': 'CallStateChanged',
+  };
+
+  static String _normalizeEventName(String event) =>
+      _eventNameMap[event] ?? event;
 
   void _handleMessage(dynamic message) {
     try {
@@ -184,6 +239,7 @@ class CallChannelService {
         return;
       }
       if (event.startsWith('pusher:') || event.startsWith('pusher_internal:')) {
+        debugPrint('[CallFlow][WS] Internal event: $event');
         return;
       }
 
@@ -194,7 +250,11 @@ class CallChannelService {
       }
       final payload = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
 
-      switch (event) {
+      // Normalize event names: backend uses dot-notation (e.g. 'call.incoming'),
+      // map to PascalCase for backward compatibility.
+      final normalizedEvent = _normalizeEventName(event);
+
+      switch (normalizedEvent) {
         case 'CallIncoming':
           _callIncomingController.add(CallIncomingEvent(
             callId: payload['call_id']?.toString() ?? '',
@@ -244,7 +304,7 @@ class CallChannelService {
           _signalingOfferController.add(SignalingOfferEvent(
             callId: payload['call_id']?.toString() ?? '',
             fromUserId: payload['from_user_id'] as int? ?? 0,
-            sdp: sdp is Map ? Map<String, dynamic>.from(sdp as Map<String, dynamic>) : null,
+            sdp: sdp is Map ? Map<String, dynamic>.from(sdp) : null,
           ));
           break;
         case 'SignalingAnswer':
@@ -252,7 +312,7 @@ class CallChannelService {
           _signalingAnswerController.add(SignalingAnswerEvent(
             callId: payload['call_id']?.toString() ?? '',
             fromUserId: payload['from_user_id'] as int? ?? 0,
-            sdp: sdp is Map ? Map<String, dynamic>.from(sdp as Map<String, dynamic>) : null,
+            sdp: sdp is Map ? Map<String, dynamic>.from(sdp) : null,
           ));
           break;
         case 'SignalingIceCandidate':
@@ -297,7 +357,43 @@ class CallChannelService {
     } catch (_) {}
   }
 
+  void _scheduleReconnect() {
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint('[CallFlow][WS] ✗ Max reconnect attempts ($_maxReconnectAttempts) reached — giving up');
+      return;
+    }
+    if (_currentCallId == null) {
+      debugPrint('[CallFlow][WS] No active callId — skipping reconnect');
+      return;
+    }
+    final delay = Duration(seconds: 2 * (_reconnectAttempts + 1));
+    _reconnectAttempts++;
+    debugPrint('[CallFlow][WS] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s');
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_currentCallId != null) {
+        debugPrint('[CallFlow][WS] Reconnecting...');
+        subscribe(
+          callId: _currentCallId!,
+          authToken: _lastAuthToken,
+          userId: _lastUserId,
+        );
+      }
+    });
+  }
+
+  void _startPingTimer() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_channel != null) {
+        _channel!.sink.add(jsonEncode({'event': 'pusher:ping', 'data': {}}));
+      }
+    });
+  }
+
   Future<void> disconnect() async {
+    _reconnectTimer?.cancel();
+    _pingTimer?.cancel();
     await _subscription?.cancel();
     _channel?.sink.close();
     _channel = null;
@@ -305,6 +401,7 @@ class CallChannelService {
     _socketId = null;
     _currentCallId = null;
     _subscribed = false;
+    _reconnectAttempts = 0;
     _connectionController.add(false);
   }
 

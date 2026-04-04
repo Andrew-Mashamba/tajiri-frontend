@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../models/people_search_models.dart';
 import '../../services/friend_service.dart';
 import '../../services/message_service.dart';
 import '../../services/people_search_service.dart';
+import '../../services/people_cache_service.dart';
+import '../../services/perf_logger.dart';
+import '../../services/event_tracking_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../widgets/user_avatar.dart';
 import '../../l10n/app_strings_scope.dart';
 
@@ -59,6 +64,7 @@ class PeopleSearchTab extends StatefulWidget {
 class _PeopleSearchTabState extends State<PeopleSearchTab> {
   final PeopleSearchService _searchService = PeopleSearchService();
   final TextEditingController _queryController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   Timer? _debounce;
 
   List<PersonSearchResult> _results = [];
@@ -70,6 +76,19 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
   int _total = 0;
 
   bool _initialSearchDone = false;
+
+  // Performance: prefetch next page
+  List<PersonSearchResult>? _prefetchedNextPage;
+  bool _isPrefetching = false;
+
+  // Performance: in-memory page cache (Task 5.2)
+  Map<int, List<PersonSearchResult>> _pageCache = {};
+
+  // Performance: local filtering for search-as-you-type (Task 5.4)
+  String _previousQuery = '';
+  List<PersonSearchResult>? _lastFullResults;
+  // Performance: stale-while-revalidate for discovery
+  bool _showingCached = false;
 
   String? _gender; // null = All
   List<String> _selectedRelevances = []; // Relevance: None by default
@@ -86,6 +105,21 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
   bool _hasInterests = false;
   bool _profileComplete = false;
   bool _friendsOfFriendsOnly = false;
+
+  // Quick-chip filters (Task 4.2)
+  final Set<String> _activeChips = {};
+
+  // User profile data for quick-chips
+  String? _userDistrict;
+  int? _userAge;
+  bool _userDataLoaded = false;
+
+  // Scroll depth tracking (Task 4.6)
+  
+  int _lastTrackedDepth = 0;
+
+  // Shuffle flag for pull-to-refresh (Task 4.5)
+  bool _shuffleOnRefresh = false;
 
   bool get _hasActiveFilters =>
       _onlineOnly ||
@@ -130,31 +164,153 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
   void initState() {
     super.initState();
     _queryController.addListener(_onQueryChanged);
+    _scrollController.addListener(_onScroll);
+    _loadUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Only run discovery when this tab is actually visible (avoids running while user is on Feed).
       if (widget.isCurrentTab && !_initialSearchDone) {
         _initialSearchDone = true;
         _page = 1;
-        _performSearch(forceInitial: true);
+        _loadDiscoveryWithCache();
       }
     });
+  }
+
+  /// Load current user's district and age for quick-chip filters.
+  Future<void> _loadUserData() async {
+    if (_userDataLoaded) return;
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final user = storage.getUser();
+      if (user != null) {
+        _userDistrict = user.location?.districtName;
+        final dob = user.dateOfBirth;
+        if (dob != null) {
+          final now = DateTime.now();
+          int age = now.year - dob.year;
+          if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+            age--;
+          }
+          _userAge = age;
+        }
+      }
+      _userDataLoaded = true;
+
+      // Load persisted active chips from Hive (Gap 3)
+      final saved = storage.getString('people_active_chips');
+      if (saved != null && mounted) {
+        try {
+          final list = (jsonDecode(saved) as List).cast<String>();
+          if (list.isNotEmpty) {
+            setState(() {
+              _activeChips.addAll(list);
+              // Re-apply chip filters to state
+              _onlineOnly = _activeChips.contains('online');
+              _hasPhotoOnly = _activeChips.contains('has_photo');
+              _student = _activeChips.contains('student');
+              if (_activeChips.contains('nearby') && _userDistrict != null) {
+                _locationFilter = _userDistrict!;
+              }
+              if (_activeChips.contains('my_age') && _userAge != null) {
+                _ageMin = _userAge! - 3;
+                _ageMax = _userAge! + 3;
+              }
+            });
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   @override
   void didUpdateWidget(PeopleSearchTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Run discovery when user navigates to People (tab becomes visible).
     if (widget.isCurrentTab && !oldWidget.isCurrentTab && !_initialSearchDone) {
       _initialSearchDone = true;
       _page = 1;
-      _performSearch(forceInitial: true);
+      _loadDiscoveryWithCache();
+    }
+  }
+
+  /// Stale-while-revalidate: show cached discovery instantly, refresh in background.
+  Future<void> _loadDiscoveryWithCache() async {
+    final sw = PerfLogger.startTiming();
+
+    // 1. Try cache first
+    final cached = await PeopleCacheService.instance.getDiscovery();
+    if (cached != null && cached.isNotEmpty && mounted) {
+      PerfLogger.log('people_cache_hit', {'count': cached.length});
+      setState(() {
+        _results = cached;
+        _showingCached = true;
+        _loading = false;
+      });
+      // Prefetch avatars for visible results
+      _prefetchAvatars(cached);
+    } else {
+      PerfLogger.log('people_cache_miss');
+    }
+
+    // 2. Fetch fresh data in background
+    _performSearch(forceInitial: true).then((_) {
+      PerfLogger.endTiming(sw, 'people_load_total', {'count': _results.length});
+    });
+  }
+
+  /// Prefetch avatar images for first N people results with size constraints.
+  void _prefetchAvatars(List<PersonSearchResult> people) {
+    final urls = people
+        .take(10)
+        .map((p) => p.profilePhotoUrl)
+        .whereType<String>()
+        .toList();
+    if (urls.isEmpty) return;
+    for (final url in urls) {
+      if (url.isNotEmpty) {
+        final image = ResizeImage(
+          NetworkImage(url),
+          width: 150,
+          height: 150,
+        );
+        precacheImage(image, context).then((_) {
+          PerfLogger.log('avatar_preload_hit', {'url': url});
+        }).catchError((_) {
+          PerfLogger.log('avatar_preload_miss', {'url': url});
+        });
+      }
+    }
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // Prefetch at 60% scroll depth
+    if (pos.pixels > pos.maxScrollExtent * 0.6) {
+      _maybePrefetchNextPage();
+    }
+    // Track scroll depth every 10 profiles (Task 4.6)
+    if (_results.isNotEmpty && pos.maxScrollExtent > 0) {
+      final approxVisible = (pos.pixels / (pos.maxScrollExtent / _results.length)).round().clamp(0, _results.length);
+      if (approxVisible >= _lastTrackedDepth + 10) {
+        _lastTrackedDepth = (approxVisible ~/ 10) * 10;
+        EventTrackingService.getInstance().then((t) {
+          t.trackEvent(
+            eventType: 'discovery_scroll_depth',
+            metadata: {
+              'source': 'discovery',
+              'depth': _lastTrackedDepth,
+            },
+          );
+        });
+      }
     }
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _queryController.removeListener(_onQueryChanged);
     _queryController.dispose();
     super.dispose();
@@ -162,9 +318,38 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
 
   void _onQueryChanged() {
     _debounce?.cancel();
+    final currentQuery = _queryController.text.trim().toLowerCase();
+
+    // Task 5.4: If new query extends the previous query, filter locally for instant feedback
+    if (currentQuery.length >= 2 &&
+        _previousQuery.isNotEmpty &&
+        currentQuery.startsWith(_previousQuery) &&
+        _lastFullResults != null &&
+        _lastFullResults!.isNotEmpty) {
+      final filtered = _lastFullResults!.where((p) {
+        final name = p.fullName.toLowerCase();
+        final username = (p.username ?? '').toLowerCase();
+        final employer = (p.employer ?? '').toLowerCase();
+        final location = (p.locationString ?? '').toLowerCase();
+        return name.contains(currentQuery) ||
+            username.contains(currentQuery) ||
+            employer.contains(currentQuery) ||
+            location.contains(currentQuery);
+      }).toList();
+      setState(() {
+        _results = filtered;
+      });
+      PerfLogger.log('people_local_filter', {
+        'query': currentQuery,
+        'from': _lastFullResults!.length,
+        'to': filtered.length,
+      });
+    }
+
     _debounce = Timer(_debounceDuration, () {
       if (_canSearch) {
         _page = 1;
+        _pageCache = {};
         _performSearch();
       } else {
         setState(() {
@@ -172,6 +357,8 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
           _error = null;
           _lastPage = 1;
           _total = 0;
+          _lastFullResults = null;
+          _previousQuery = '';
         });
       }
     });
@@ -179,9 +366,28 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
 
   Future<void> _performSearch({bool forceInitial = false}) async {
     if (!forceInitial && !_canSearch) return;
+
+    // Task 5.2: Check in-memory page cache before fetching
+    if (_page > 1 && _pageCache.containsKey(_page)) {
+      PerfLogger.log('people_page_cache_hit', {'page': _page});
+      setState(() {
+        _results = [..._results, ..._pageCache[_page]!];
+        _loadingMore = false;
+      });
+      return;
+    }
+
     if (_page == 1) setState(() => _loading = true);
     if (_page > 1) setState(() => _loadingMore = true);
     _error = null;
+
+    // Track search queries (not discovery)
+    final queryText = _queryController.text.trim();
+    if (queryText.length >= 2 && _page == 1) {
+      EventTrackingService.getInstance().then((t) {
+        t.trackSearch(queryText, 0);
+      });
+    }
 
     final sortOnly = _selectedRelevances
         .where((s) => !_relevanceFilterKeys.contains(s))
@@ -202,6 +408,7 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
       ageMin: _ageMin,
       ageMax: _ageMax,
       student: _student ? true : null,
+      hasBusiness: _activeChips.contains('has_business') ? true : null,
       relationshipStatus: _relationshipStatus,
       sector: _sectorFilter.isEmpty ? null : _sectorFilter,
       hasInterests: _hasInterests ? true : null,
@@ -211,25 +418,44 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
       possibleBusinessConnection: _selectedRelevances.contains('possible_business_connection') ? true : null,
       possibleEmployer: _selectedRelevances.contains('possible_employer') ? true : null,
       sortValues: sortValues,
+      shuffle: _shuffleOnRefresh ? true : null,
     );
 
+    // Reset shuffle flag after use
+    _shuffleOnRefresh = false;
     if (!mounted) return;
     setState(() {
       _loading = false;
       _loadingMore = false;
+      _showingCached = false;
       if (result.success && result.response != null) {
         final r = result.response!;
+        // Task 5.2: Store page results in cache
+        _pageCache[r.currentPage] = r.people;
         if (_page == 1) {
           _results = r.people;
+          // Task 5.4: Store full results for local filtering
+          _lastFullResults = List.from(r.people);
+          _previousQuery = queryText.toLowerCase();
+          // Cache discovery results (page 1, no query, no filters)
+          if (forceInitial || (!_canSearch && r.people.isNotEmpty)) {
+            PeopleCacheService.instance.saveDiscovery(r.people);
+          }
+          // Prefetch avatars for fresh results
+          _prefetchAvatars(r.people);
         } else {
           _results = [..._results, ...r.people];
+          // Task 5.4: Extend full results for broader local filtering
+          _lastFullResults = List.from(_results);
         }
         _lastPage = r.lastPage;
         _total = r.total;
         _error = null;
+        // Reset prefetch for new result set
+        _prefetchedNextPage = null;
       } else {
         _error = result.message ?? 'Something went wrong. Tap to retry.';
-        if (_page == 1) _results = [];
+        if (_page == 1 && !_showingCached) _results = [];
       }
     });
   }
@@ -264,6 +490,9 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
       if (profileComplete != null) _profileComplete = profileComplete;
       if (friendsOfFriendsOnly != null) _friendsOfFriendsOnly = friendsOfFriendsOnly;
       _page = 1;
+      _pageCache = {};
+      _lastFullResults = null;
+      _previousQuery = '';
     });
     if (_canSearch) _performSearch();
   }
@@ -275,16 +504,210 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
     });
   }
 
+  /// Toggle a quick-chip filter and re-search (Task 4.2).
+  void _toggleChip(String chip) {
+    setState(() {
+      if (_activeChips.contains(chip)) {
+        _activeChips.remove(chip);
+      } else {
+        _activeChips.add(chip);
+      }
+      // Apply chip filters to state
+      _onlineOnly = _activeChips.contains('online');
+      _hasPhotoOnly = _activeChips.contains('has_photo');
+      _student = _activeChips.contains('student');
+
+      if (_activeChips.contains('nearby') && _userDistrict != null) {
+        _locationFilter = _userDistrict!;
+      } else if (!_activeChips.contains('nearby')) {
+        _locationFilter = '';
+      }
+
+      if (_activeChips.contains('my_age') && _userAge != null) {
+        _ageMin = _userAge! - 3;
+        _ageMax = _userAge! + 3;
+      } else if (!_activeChips.contains('my_age')) {
+        _ageMin = null;
+        _ageMax = null;
+      }
+
+      // has_business chip
+      // Note: hasBusiness is passed directly in _performSearch
+    });
+    // Persist active chips to Hive (Gap 3)
+    _saveActiveChips();
+    _page = 1;
+    _performSearch();
+  }
+
+  /// Persist active chip selections to Hive for session continuity.
+  void _saveActiveChips() {
+    LocalStorageService.getInstance().then((storage) {
+      storage.setString('people_active_chips', jsonEncode(_activeChips.toList()));
+    }).catchError((_) {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildSearchBar(),
+        _buildQuickChips(),
         _buildFilterRow(),
         Expanded(child: _buildBody()),
       ],
     );
+  }
+
+  /// Discovery mode indicator + quick filter chips (Task 4.1, 4.2).
+  Widget _buildQuickChips() {
+    final query = _queryController.text.trim();
+    final isDiscovery = query.length < 2;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Discovery mode indicator (Task 4.1)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: isDiscovery
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'People you might like',
+                      style: TextStyle(
+                        color: _kPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Based on your location, interests, and connections',
+                      style: TextStyle(
+                        color: _kSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  'Search results for \'$query\'',
+                  style: TextStyle(
+                    color: _kPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+        ),
+        // Quick filter chips (Task 4.2)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Row(
+            children: [
+              // "Clear filters" pill — only visible when filters are active (Gap 6)
+              if (_activeChips.isNotEmpty || _hasActiveFilters) ...[
+                _buildClearFiltersChip(),
+                const SizedBox(width: 6),
+              ],
+              _buildChip('Nearby', 'nearby', enabled: _userDistrict != null),
+              const SizedBox(width: 6),
+              _buildChip('My Age', 'my_age', enabled: _userAge != null),
+              const SizedBox(width: 6),
+              _buildChip('Online', 'online'),
+              const SizedBox(width: 6),
+              _buildChip('With Photo', 'has_photo'),
+              const SizedBox(width: 6),
+              _buildChip('Students', 'student'),
+              const SizedBox(width: 6),
+              _buildChip('Business', 'has_business'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChip(String label, String key, {bool enabled = true}) {
+    final isActive = _activeChips.contains(key);
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isActive ? Colors.white : _kPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      selected: isActive,
+      showCheckmark: false,
+      onSelected: enabled ? (_) => _toggleChip(key) : null,
+      backgroundColor: Colors.white,
+      selectedColor: _kPrimary,
+      side: BorderSide(
+        color: isActive ? _kPrimary : const Color(0xFFE0E0E0),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  /// "Clear filters" pill that appears when any chip or advanced filter is active.
+  Widget _buildClearFiltersChip() {
+    return ActionChip(
+      avatar: const Icon(Icons.close_rounded, size: 13, color: Colors.white),
+      label: const Text(
+        'Clear all',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      onPressed: _clearAllFilters,
+      labelPadding: const EdgeInsets.only(left: 2, right: 4),
+      backgroundColor: _kPrimary,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  /// Reset all quick-chip and advanced filters, persist, and re-search.
+  void _clearAllFilters() {
+    setState(() {
+      _activeChips.clear();
+      _onlineOnly = false;
+      _hasPhotoOnly = false;
+      _student = false;
+      _locationFilter = '';
+      _ageMin = null;
+      _ageMax = null;
+      _schoolFilter = '';
+      _employerFilter = '';
+      _sectorFilter = '';
+      _relationshipStatus = null;
+      _hasInterests = false;
+      _profileComplete = false;
+      _friendsOfFriendsOnly = false;
+    });
+    _saveActiveChips();
+    _page = 1;
+    _pageCache = {};
+    _performSearch();
   }
 
   Widget _buildSearchBar() {
@@ -325,7 +748,7 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
             value: _gender,
             onChanged: (v) => setState(() {
               _gender = v;
-              if (_canSearch) { _page = 1; _performSearch(); }
+              if (_canSearch) { _page = 1; _pageCache = {}; _performSearch(); }
             }),
           ),
           const SizedBox(width: 8),
@@ -333,7 +756,7 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
             selected: _selectedRelevances,
             onChanged: (list) => setState(() {
               _selectedRelevances = list;
-              if (_canSearch) { _page = 1; _performSearch(); }
+              if (_canSearch) { _page = 1; _pageCache = {}; _performSearch(); }
             }),
           ),
           const SizedBox(width: 4),
@@ -343,7 +766,7 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
             onChanged: (min, max) => setState(() {
               _ageMin = min;
               _ageMax = max;
-              if (_canSearch) { _page = 1; _performSearch(); }
+              if (_canSearch) { _page = 1; _pageCache = {}; _performSearch(); }
             }),
           ),
           IconButton(
@@ -510,12 +933,76 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
   void _loadMore() {
     if (_loadingMore || _page >= _lastPage) return;
     _page++;
+
+    // Use prefetched page if available
+    if (_prefetchedNextPage != null && _prefetchedNextPage!.isNotEmpty) {
+      PerfLogger.prefetchHits++;
+      PerfLogger.log('people_prefetch_hit', {'page': _page});
+      setState(() {
+        _results = [..._results, ..._prefetchedNextPage!];
+        _prefetchedNextPage = null;
+      });
+      return;
+    }
+
+    PerfLogger.prefetchMisses++;
     _performSearch();
+  }
+
+  /// Prefetch next page in background when user scrolls past 60%.
+  void _maybePrefetchNextPage() {
+    if (_isPrefetching || _prefetchedNextPage != null) return;
+    if (_page >= _lastPage) return;
+    _isPrefetching = true;
+
+    final nextPage = _page + 1;
+    final sortOnly = _selectedRelevances
+        .where((s) => !_relevanceFilterKeys.contains(s))
+        .toList();
+    final sortValues = sortOnly.isEmpty ? ['relevance'] : sortOnly;
+
+    _searchService.search(
+      userId: widget.userId,
+      query: _queryController.text.trim().isEmpty ? null : _queryController.text.trim(),
+      page: nextPage,
+      perPage: 20,
+      sort: sortValues.first,
+      gender: _gender,
+      online: _onlineOnly ? true : null,
+      location: _locationFilter.isEmpty ? null : _locationFilter,
+      employer: _employerFilter.isEmpty ? null : _employerFilter,
+      school: _schoolFilter.isEmpty ? null : _schoolFilter,
+      hasPhoto: _hasPhotoOnly ? true : null,
+      ageMin: _ageMin,
+      ageMax: _ageMax,
+      student: _student ? true : null,
+      relationshipStatus: _relationshipStatus,
+      sector: _sectorFilter.isEmpty ? null : _sectorFilter,
+      hasInterests: _hasInterests ? true : null,
+      profileComplete: _profileComplete ? true : null,
+      friendsOfFriendsOnly: _friendsOfFriendsOnly ? true : null,
+      verified: _selectedRelevances.contains('verified') ? true : null,
+      possibleBusinessConnection: _selectedRelevances.contains('possible_business_connection') ? true : null,
+      possibleEmployer: _selectedRelevances.contains('possible_employer') ? true : null,
+      sortValues: sortValues,
+    ).then((result) {
+      _isPrefetching = false;
+      if (result.success && result.response != null && result.response!.people.isNotEmpty) {
+        _prefetchedNextPage = result.response!.people;
+        PerfLogger.log('people_prefetch_ready', {'page': nextPage, 'count': _prefetchedNextPage!.length});
+      }
+    });
   }
 
   /// Pull-to-refresh keeps current query and all filters; only resets page to 1 and refetches.
   Future<void> _onRefresh() async {
     _page = 1;
+    _prefetchedNextPage = null;
+    _pageCache = {};
+    _lastFullResults = null;
+    _previousQuery = '';
+    _shuffleOnRefresh = true;
+    _lastTrackedDepth = 0;
     await _performSearch();
   }
 
@@ -574,6 +1061,7 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
             color: _kPrimary,
             strokeWidth: 2.5,
             child: ListView.builder(
+              controller: _scrollController,
               physics: AlwaysScrollableScrollPhysics(
                 parent: Theme.of(context).platform == TargetPlatform.iOS
                     ? BouncingScrollPhysics()
@@ -600,16 +1088,51 @@ class _PeopleSearchTabState extends State<PeopleSearchTab> {
                   return const SizedBox.shrink();
                 }
                 final person = _results[index];
-                return RepaintBoundary(
-                  key: ValueKey(person.id),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _PersonCard(
-                      person: person,
-                      currentUserId: widget.userId,
-                      friendService: widget.friendService,
-                      messageService: widget.messageService,
-                      onStatusChanged: (updated) => _updatePersonInList(person.id, updated),
+                return Dismissible(
+                  key: ValueKey('dismiss_${person.id}'),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 24),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDE8E8),
+                      borderRadius: BorderRadius.circular(_kCardRadius),
+                    ),
+                    child: const Text(
+                      'Not interested',
+                      style: TextStyle(
+                        color: Color(0xFF991B1B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  onDismissed: (_) {
+                    // Track not_interested event (Task 4.4)
+                    EventTrackingService.getInstance().then((t) {
+                      t.trackEvent(
+                        eventType: 'not_interested',
+                        creatorId: person.id,
+                        metadata: {'target_user_id': person.id, 'source': 'discovery_swipe'},
+                      );
+                    });
+                    setState(() {
+                      _results.removeAt(index);
+                    });
+                  },
+                  child: RepaintBoundary(
+                    key: ValueKey(person.id),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _PersonCard(
+                        person: person,
+                        currentUserId: widget.userId,
+                        friendService: widget.friendService,
+                        messageService: widget.messageService,
+                        onStatusChanged: (updated) => _updatePersonInList(person.id, updated),
+                        userDistrict: _userDistrict,
+                      ),
                     ),
                   ),
                 );
@@ -1095,6 +1618,22 @@ class _FiltersSheetState extends State<_FiltersSheet> {
     _sector = TextEditingController(text: widget.sector);
   }
 
+  void _resetAll() {
+    setState(() {
+      _onlineOnly = false;
+      _hasPhotoOnly = false;
+      _student = false;
+      _hasInterests = false;
+      _profileComplete = false;
+      _friendsOfFriendsOnly = false;
+      _relationshipStatus = null;
+      _location.clear();
+      _school.clear();
+      _employer.clear();
+      _sector.clear();
+    });
+  }
+
   @override
   void dispose() {
     _location.dispose();
@@ -1116,11 +1655,15 @@ class _FiltersSheetState extends State<_FiltersSheet> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Text('More Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _resetAll,
+                    child: Text('Reset', style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
+                  ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
@@ -1133,22 +1676,6 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                 controller: scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  SwitchListTile(
-                    title: const Text('Online now'),
-                    value: _onlineOnly,
-                    onChanged: (v) => setState(() => _onlineOnly = v),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Has profile photo'),
-                    value: _hasPhotoOnly,
-                    onChanged: (v) => setState(() => _hasPhotoOnly = v),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Student'),
-                    subtitle: const Text('Student (e.g. has education, no employer)'),
-                    value: _student,
-                    onChanged: (v) => setState(() => _student = v),
-                  ),
                   SwitchListTile(
                     title: const Text('Has interests'),
                     subtitle: const Text('At least one interest set'),
@@ -1342,6 +1869,7 @@ class _PersonCard extends StatelessWidget {
   final FriendService friendService;
   final MessageService messageService;
   final void Function(PersonSearchResult) onStatusChanged;
+  final String? userDistrict;
 
   const _PersonCard({
     required this.person,
@@ -1349,6 +1877,7 @@ class _PersonCard extends StatelessWidget {
     required this.friendService,
     required this.messageService,
     required this.onStatusChanged,
+    this.userDistrict,
   });
 
   IconData _iconForInCommon(String text) {
@@ -1360,6 +1889,41 @@ class _PersonCard extends StatelessWidget {
     return Icons.tag;
   }
 
+
+  /// Count shared interests from inCommon list (Task 4.3).
+  int get _sharedInterestsCount {
+    return person.inCommon.where((t) => t.toLowerCase().contains('interest')).length;
+  }
+
+  /// Location tag: "Same area" if same district, district name otherwise (Task 4.3).
+  String? get _locationTag {
+    if (person.districtName == null || person.districtName!.isEmpty) return null;
+    if (userDistrict != null && person.districtName == userDistrict) {
+      return 'Same area';
+    }
+    return person.districtName;
+  }
+
+  /// Small badge chip for mutual friends, shared interests, location (Task 4.3).
+  Widget _badgeChip(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: _kSecondary),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: TextStyle(
+            color: _kSecondary.withValues(alpha: 0.9),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final isSelf = person.id == currentUserId;
@@ -1367,7 +1931,12 @@ class _PersonCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, '/profile/${person.id}'),
+        onTap: () {
+          EventTrackingService.getInstance().then((t) {
+            t.trackEvent(eventType: 'profile_viewed', creatorId: person.id);
+          });
+          Navigator.pushNamed(context, '/profile/${person.id}');
+        },
         borderRadius: BorderRadius.circular(_kCardRadius),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1519,17 +2088,29 @@ class _PersonCard extends StatelessWidget {
                         }).toList(),
                       ),
                     ],
-                    if (person.mutualFriendsCount > 0) ...[
+                    // Enhanced badges row (Task 4.3)
+                    if (person.mutualFriendsCount > 0 || person.inCommon.isNotEmpty || _locationTag != null) ...[
                       const SizedBox(height: 6),
-                      Text(
-                        '${person.mutualFriendsCount} mutual friend${person.mutualFriendsCount == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          color: _kSecondary.withValues(alpha: 0.9),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (person.mutualFriendsCount > 0)
+                            _badgeChip(
+                              Icons.people_outline,
+                              '${person.mutualFriendsCount} mutual friend${person.mutualFriendsCount == 1 ? '' : 's'}',
+                            ),
+                          if (_sharedInterestsCount > 0)
+                            _badgeChip(
+                              Icons.favorite_border,
+                              '$_sharedInterestsCount shared interest${_sharedInterestsCount == 1 ? '' : 's'}',
+                            ),
+                          if (_locationTag != null)
+                            _badgeChip(
+                              Icons.location_on_outlined,
+                              _locationTag!,
+                            ),
+                        ],
                       ),
                     ],
                   ],
@@ -1578,6 +2159,9 @@ class _FriendshipActionState extends State<_FriendshipAction> {
     final ok = await widget.friendService.sendFriendRequest(widget.currentUserId, widget.person.id);
     if (!mounted) return;
     if (ok) {
+      EventTrackingService.getInstance().then((t) {
+        t.trackEvent(eventType: 'follow', creatorId: widget.person.id);
+      });
       widget.onStatusChanged(widget.person.copyWith(friendshipStatus: 'pending_sent'));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppStringsScope.of(context)?.friendRequestSent ?? 'Friend request sent')),
@@ -1589,6 +2173,9 @@ class _FriendshipActionState extends State<_FriendshipAction> {
     final ok = await widget.friendService.cancelFriendRequest(widget.currentUserId, widget.person.id);
     if (!mounted) return;
     if (ok) {
+      EventTrackingService.getInstance().then((t) {
+        t.trackEvent(eventType: 'unfollow', creatorId: widget.person.id);
+      });
       widget.onStatusChanged(widget.person.copyWith(friendshipStatus: 'none'));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Request cancelled')),
@@ -1600,6 +2187,9 @@ class _FriendshipActionState extends State<_FriendshipAction> {
     final ok = await widget.friendService.acceptFriendRequest(widget.currentUserId, widget.person.id);
     if (!mounted) return;
     if (ok) {
+      EventTrackingService.getInstance().then((t) {
+        t.trackEvent(eventType: 'follow', creatorId: widget.person.id, metadata: {'action': 'accept'});
+      });
       widget.onStatusChanged(widget.person.copyWith(friendshipStatus: 'friends'));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppStringsScope.of(context)?.nowFriends ?? 'Now friends!')),
@@ -1611,6 +2201,9 @@ class _FriendshipActionState extends State<_FriendshipAction> {
     final ok = await widget.friendService.declineFriendRequest(widget.currentUserId, widget.person.id);
     if (!mounted) return;
     if (ok) {
+      EventTrackingService.getInstance().then((t) {
+        t.trackEvent(eventType: 'unfollow', creatorId: widget.person.id, metadata: {'action': 'decline'});
+      });
       widget.onStatusChanged(widget.person.copyWith(friendshipStatus: 'none'));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Request declined')),
@@ -1619,6 +2212,9 @@ class _FriendshipActionState extends State<_FriendshipAction> {
   }
 
   Future<void> _openChat() async {
+    EventTrackingService.getInstance().then((t) {
+      t.trackEvent(eventType: 'message_sent', creatorId: widget.person.id, metadata: {'source': 'people_tab'});
+    });
     final result = await widget.messageService.getPrivateConversation(
       widget.currentUserId,
       widget.person.id,

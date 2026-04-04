@@ -24,6 +24,25 @@ class EventTrackingService with WidgetsBindingObserver {
   static const int _maxBatchSize = 100;
   static const int _maxEventAgeHours = 24;
 
+  /// Event types accepted by the backend's validation rules.
+  static const Set<String> _allowedEventTypes = {
+    'view', 'like', 'share', 'save', 'scroll_past', 'dwell', 'comment',
+    'follow', 'unfollow', 'depth_milestone', 'thread_view',
+    'thread_read_progress', 'shop_view', 'shop_search', 'product_view',
+    'add_to_cart', 'purchase',
+    'not_interested', 'tea_card_tapped', 'tea_card_skipped',
+    'tea_question_asked', 'tea_action_confirmed', 'tea_action_rejected',
+    'message_sent', 'profile_viewed', 'search', 'track_played',
+    'hashtag_viewed',
+  };
+
+  /// Map frontend-specific event types to backend-allowed types.
+  static const Map<String, String> _eventTypeMapping = {
+    'view_glance': 'view',
+    'view_partial': 'view',
+    'view_deep': 'dwell',
+  };
+
   static EventTrackingService? _instance;
 
   final List<UserEvent> _buffer = [];
@@ -32,6 +51,7 @@ class EventTrackingService with WidgetsBindingObserver {
   Box? _offlineBox;
   bool _isInitialized = false;
   bool _isFlushing = false;
+  int _consecutiveFailures = 0;
   final bool _isTestMode;
 
   EventTrackingService._() : _isTestMode = false {
@@ -136,6 +156,11 @@ class EventTrackingService with WidgetsBindingObserver {
   /// Flush buffered events to the backend.
   Future<void> flush() async {
     if (_isFlushing || _buffer.isEmpty) return;
+    // Back off after repeated failures (e.g. backend down)
+    if (_consecutiveFailures >= 5) {
+      if (kDebugMode) debugPrint('[EventTracking] Paused after $_consecutiveFailures consecutive failures');
+      return;
+    }
     _isFlushing = true;
 
     try {
@@ -149,9 +174,23 @@ class EventTrackingService with WidgetsBindingObserver {
         return;
       }
 
-      final success = await _postEvents(events, token);
-      if (!success) {
+      final userId = storage.getUser()?.userId;
+      if (userId == null) {
         _queueOffline(events);
+        return;
+      }
+
+      final result = await _postEvents(events, token, userId);
+      if (result == _PostResult.success) {
+        _consecutiveFailures = 0;
+      } else if (result == _PostResult.networkError) {
+        // No response at all — queue for retry when connectivity returns
+        _consecutiveFailures++;
+        _queueOffline(events);
+      } else {
+        // 422 (validation) or 500 (server) — drop events, retrying won't help
+        _consecutiveFailures++;
+        if (kDebugMode) debugPrint('[EventTracking] Dropped ${events.length} events (${result.name})');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[EventTracking] Flush error: $e');
@@ -160,8 +199,28 @@ class EventTrackingService with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> _postEvents(List<UserEvent> events, String token) async {
-    if (_isTestMode) return true;
+  /// Reset failure counter (call after successful login or network recovery).
+  void resetBackoff() {
+    _consecutiveFailures = 0;
+  }
+
+  Future<_PostResult> _postEvents(List<UserEvent> events, String token, int userId) async {
+    if (_isTestMode) return _PostResult.success;
+
+    // Map and filter events to backend-allowed types
+    final mappedEvents = <Map<String, dynamic>>[];
+    for (final e in events) {
+      final mapped = _mapEventType(e.eventType);
+      if (mapped == null) continue; // Skip unsupported event types
+      final json = e.toJson();
+      json['event_type'] = mapped;
+      mappedEvents.add(json);
+    }
+
+    if (mappedEvents.isEmpty) {
+      if (kDebugMode) debugPrint('[EventTracking] All ${events.length} events filtered (unsupported types)');
+      return _PostResult.success;
+    }
 
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/events');
@@ -169,17 +228,31 @@ class EventTrackingService with WidgetsBindingObserver {
         url,
         headers: ApiConfig.authHeaders(token),
         body: jsonEncode({
-          'events': events.map((e) => e.toJson()).toList(),
+          'user_id': userId,
+          'events': mappedEvents,
         }),
       );
       if (kDebugMode) {
-        debugPrint('[EventTracking] Flushed ${events.length} events — ${response.statusCode}');
+        debugPrint('[EventTracking] Flushed ${mappedEvents.length} events — ${response.statusCode}');
       }
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return _PostResult.success;
+      }
+      if (response.statusCode == 422) {
+        if (kDebugMode) debugPrint('[EventTracking] 422 body: ${response.body}');
+        return _PostResult.validationError;
+      }
+      return _PostResult.serverError;
     } catch (e) {
       if (kDebugMode) debugPrint('[EventTracking] POST failed: $e');
-      return false;
+      return _PostResult.networkError;
     }
+  }
+
+  /// Map a frontend event type to backend-allowed type. Returns null if unsupported.
+  static String? _mapEventType(String type) {
+    if (_allowedEventTypes.contains(type)) return type;
+    return _eventTypeMapping[type];
   }
 
   void _queueOffline(List<UserEvent> events) {
@@ -196,6 +269,7 @@ class EventTrackingService with WidgetsBindingObserver {
     if (_offlineBox == null || _offlineBox!.isEmpty) return;
     final cutoff = DateTime.now().subtract(const Duration(hours: _maxEventAgeHours));
     int restored = 0;
+    int dropped = 0;
 
     for (int i = 0; i < _offlineBox!.length; i++) {
       try {
@@ -203,26 +277,33 @@ class EventTrackingService with WidgetsBindingObserver {
         if (jsonStr == null) continue;
         final json = jsonDecode(jsonStr) as Map<String, dynamic>;
         final ts = DateTime.tryParse(json['timestamp']?.toString() ?? '');
-        if (ts != null && ts.isAfter(cutoff)) {
-          _buffer.add(UserEvent(
-            eventType: json['event_type'] as String? ?? 'unknown',
-            postId: json['post_id'] as int?,
-            creatorId: json['creator_id'] as int?,
-            timestamp: ts,
-            durationMs: (json['duration_ms'] as int?) ?? 0,
-            sessionId: json['session_id'] as String? ?? _sessionId,
-            metadata: json['metadata'] as Map<String, dynamic>?,
-          ));
-          restored++;
+        if (ts == null || ts.isBefore(cutoff)) continue;
+
+        final eventType = json['event_type'] as String? ?? 'unknown';
+        // Skip events with types the backend won't accept
+        if (_mapEventType(eventType) == null) {
+          dropped++;
+          continue;
         }
+
+        _buffer.add(UserEvent(
+          eventType: eventType,
+          postId: json['post_id'] as int?,
+          creatorId: json['creator_id'] as int?,
+          timestamp: ts,
+          durationMs: (json['duration_ms'] as int?) ?? 0,
+          sessionId: json['session_id'] as String? ?? _sessionId,
+          metadata: json['metadata'] as Map<String, dynamic>?,
+        ));
+        restored++;
       } catch (e) {
         if (kDebugMode) debugPrint('[EventTracking] Restore error at $i: $e');
       }
     }
 
     _offlineBox!.clear();
-    if (kDebugMode && restored > 0) {
-      debugPrint('[EventTracking] Restored $restored offline events');
+    if (kDebugMode && (restored > 0 || dropped > 0)) {
+      debugPrint('[EventTracking] Restored $restored offline events (dropped $dropped unsupported)');
     }
   }
 
@@ -322,3 +403,5 @@ class EventTrackingService with WidgetsBindingObserver {
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
   }
 }
+
+enum _PostResult { success, validationError, serverError, networkError }

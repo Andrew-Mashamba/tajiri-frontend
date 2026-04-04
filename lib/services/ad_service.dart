@@ -4,9 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/ad_models.dart';
 import '../config/api_config.dart';
+import 'local_storage_service.dart';
 
 void _log(String message) {
-  debugPrint('[AdService] $message');
+  if (kDebugMode) debugPrint('[AdService] $message');
 }
 
 /// Service for the Tajiri ad system — serving, recording events, campaign CRUD,
@@ -25,10 +26,17 @@ class AdService {
     int count,
   ) async {
     try {
-      final uri = Uri.parse('$_baseUrl/ads/serve').replace(queryParameters: {
+      // Resolve user_id — backend requires it
+      final storage = await LocalStorageService.getInstance();
+      final userId = storage.getUser()?.userId;
+
+      final params = <String, String>{
         'placement': placement,
         'count': count.toString(),
-      });
+      };
+      if (userId != null) params['user_id'] = userId.toString();
+
+      final uri = Uri.parse('$_baseUrl/ads/serve').replace(queryParameters: params);
       final response = await http.get(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
@@ -43,7 +51,9 @@ class AdService {
               .toList();
         }
       }
-      _log('getServedAds failed: ${response.statusCode}');
+      if (response.statusCode != 404) {
+        _log('getServedAds failed: ${response.statusCode}');
+      }
       return [];
     } catch (e) {
       _log('getServedAds error: $e');

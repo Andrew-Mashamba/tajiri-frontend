@@ -30,7 +30,7 @@ class UserAvatar extends StatelessWidget {
     } else {
       avatar = CircleAvatar(
         radius: radius,
-        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
         child: Text(
           initials,
           style: TextStyle(

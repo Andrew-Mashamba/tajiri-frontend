@@ -6,10 +6,15 @@ import '../config/api_config.dart';
 String get _baseUrl => ApiConfig.baseUrl;
 
 class UserService {
-  /// Register a new user profile on the server
+  /// Register a new user profile on the server.
+  /// POST /register accepts only bio fields. Education/employer/location
+  /// data is saved via a follow-up PUT /users/phone/{phone} with flat keys.
   Future<UserRegistrationResult> register(RegistrationState profile) async {
     try {
       late final http.Response response;
+
+      // Use flat JSON for the API (backend expects flat column names, not nested objects)
+      final flatData = profile.toFlatJson();
 
       if (profile.profilePhotoPath != null) {
         // Multipart request when photo is provided
@@ -18,10 +23,13 @@ class UserService {
           Uri.parse('$_baseUrl/users/register'),
         );
 
-        final jsonData = profile.toJson();
-        jsonData.forEach((key, value) {
+        flatData.forEach((key, value) {
           if (value != null && key != 'profile_photo_path' && key != 'face_bbox') {
-            request.fields[key] = value is String ? value : jsonEncode(value);
+            if (value is List) {
+              request.fields[key] = jsonEncode(value);
+            } else {
+              request.fields[key] = value.toString();
+            }
           }
         });
 
@@ -40,7 +48,7 @@ class UserService {
         response = await http.post(
           Uri.parse('$_baseUrl/users/register'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(profile.toJson()),
+          body: jsonEncode(flatData),
         );
       }
 
@@ -57,6 +65,7 @@ class UserService {
         final refreshToken = data['refresh_token'] as String?;
         final accessExpiresIn = data['access_expires_in'] as int?;
         final refreshExpiresIn = data['refresh_expires_in'] as int?;
+
         return UserRegistrationResult(
           success: true,
           userId: userId,

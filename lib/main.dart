@@ -50,6 +50,9 @@ import 'screens/biashara/biashara_home_screen.dart';
 import 'screens/biashara/create_ad_campaign_screen.dart';
 import 'screens/biashara/campaign_detail_screen.dart';
 import 'screens/biashara/deposit_ad_balance_screen.dart';
+import 'screens/audio_rooms/audio_rooms_discovery_screen.dart';
+import 'screens/audio_rooms/audio_room_screen.dart';
+// AudioRoom model used via route arguments only; service called by screen imports.
 import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
 import 'services/local_storage_service.dart';
 import 'services/theme_notifier.dart';
@@ -57,6 +60,8 @@ import 'services/language_notifier.dart';
 import 'services/fcm_service.dart';
 import 'services/event_tracking_service.dart';
 import 'services/ad_service.dart';
+import 'services/background_sync_service.dart';
+import 'services/message_database.dart';
 import 'l10n/app_strings.dart';
 import 'l10n/app_strings_scope.dart';
 
@@ -85,6 +90,16 @@ void main() async {
   }
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Ensure LocalStorageService is ready before background tasks use it
+  await LocalStorageService.getInstance();
+
+  // Ensure message SQLite database is created before app renders
+  await MessageDatabase.instance.database;
+
+  // Fire-and-forget: refresh feed cache if stale (>15 min)
+  BackgroundSyncService.instance.initialize().ignore();
+
   runApp(const TajiriApp());
 }
 
@@ -207,9 +222,12 @@ class _TajiriAppState extends State<TajiriApp> {
               locale: locale,
               home: const SplashScreen(),
               builder: (context, child) {
-                return AppStringsScope(
-                  strings: AppStrings(LanguageNotifier.instance.value),
-                  child: child ?? const SizedBox.shrink(),
+                return GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: AppStringsScope(
+                    strings: AppStrings(LanguageNotifier.instance.value),
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 );
               },
               onGenerateRoute: (settings) {
@@ -862,6 +880,43 @@ class _TajiriAppState extends State<TajiriApp> {
             return MaterialPageRoute(
               builder: (_) => const BiasharaHomeScreen(),
             );
+
+          case 'audio-rooms':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return AudioRoomsDiscoveryScreen(
+                      currentUserId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'audio-room':
+            if (pathSegments.length > 1) {
+              final roomId = int.tryParse(pathSegments[1]) ?? 0;
+              if (roomId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+                      return AudioRoomScreen(
+                        roomId: roomId,
+                        currentUserId: snapshot.data!,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            break;
 
           case 'login':
             return MaterialPageRoute(

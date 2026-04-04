@@ -3,6 +3,7 @@
 // Use with Bearer token when backend supports it; optional userId for legacy.
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
@@ -38,9 +39,10 @@ class CallSignalingService {
         body: jsonEncode(body),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 201) {
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         final iceServers = _parseIceServers(data['ice_servers']);
         return CreateCallResponse(
           success: true,
@@ -55,7 +57,7 @@ class CallSignalingService {
       }
       return CreateCallResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to create call',
+        message: raw['message']?.toString() ?? 'Failed to create call',
       );
     } catch (e) {
       return CreateCallResponse(success: false, message: 'Error: $e');
@@ -88,9 +90,11 @@ class CallSignalingService {
         body: body.isEmpty ? null : jsonEncode(body),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200) {
+        // Backend wraps in { success, data: { ... } }
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         final iceServers = _parseIceServers(data['ice_servers']);
         return AcceptCallResponse(
           success: true,
@@ -104,7 +108,7 @@ class CallSignalingService {
       }
       return AcceptCallResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to accept call',
+        message: raw['message']?.toString() ?? 'Failed to accept call',
       );
     } catch (e) {
       return AcceptCallResponse(success: false, message: 'Error: $e');
@@ -134,9 +138,10 @@ class CallSignalingService {
         body: body,
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200) {
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         return RejectCallResponse(
           success: true,
           callId: data['call_id']?.toString() ?? callId,
@@ -145,7 +150,7 @@ class CallSignalingService {
       }
       return RejectCallResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to reject call',
+        message: raw['message']?.toString() ?? 'Failed to reject call',
       );
     } catch (e) {
       return RejectCallResponse(success: false, message: 'Error: $e');
@@ -175,9 +180,10 @@ class CallSignalingService {
         body: body,
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200) {
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         return EndCallResponse(
           success: true,
           callId: data['call_id']?.toString() ?? callId,
@@ -190,7 +196,7 @@ class CallSignalingService {
       }
       return EndCallResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to end call',
+        message: raw['message']?.toString() ?? 'Failed to end call',
       );
     } catch (e) {
       return EndCallResponse(success: false, message: 'Error: $e');
@@ -226,8 +232,13 @@ class CallSignalingService {
         body: jsonEncode(body),
       );
 
-      return response.statusCode == 200 || response.statusCode == 202;
-    } catch (_) {
+      final ok = response.statusCode == 200 || response.statusCode == 202;
+      if (!ok) {
+        debugPrint('[CallFlow][API] signaling $type → ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
+      }
+      return ok;
+    } catch (e) {
+      debugPrint('[CallFlow][API] sendSignaling exception: $e');
       return false;
     }
   }
@@ -247,9 +258,11 @@ class CallSignalingService {
       }
 
       final response = await http.get(Uri.parse(url), headers: headers);
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200) {
+        // Unwrap { success, data: { ice_servers, ttl_seconds } } envelope
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         final iceServers = _parseIceServers(data['ice_servers']);
         return TurnCredentialsResponse(
           success: true,
@@ -257,11 +270,13 @@ class CallSignalingService {
           ttlSeconds: data['ttl_seconds'] as int?,
         );
       }
+      debugPrint('[CallFlow][API] ✗ TURN credentials failed: ${raw['message']}');
       return TurnCredentialsResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to get TURN credentials',
+        message: raw['message']?.toString() ?? 'Failed to get TURN credentials',
       );
     } catch (e) {
+      debugPrint('[CallFlow][API] ✗ getTurnCredentials exception: $e');
       return TurnCredentialsResponse(success: false, message: 'Error: $e');
     }
   }
@@ -335,8 +350,9 @@ class CallSignalingService {
         headers: headers,
         body: jsonEncode(body),
       );
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
       if (response.statusCode == 201) {
+        final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
         final iceServers = _parseIceServers(data['ice_servers']);
         return CreateCallResponse(
           success: true,
@@ -351,7 +367,7 @@ class CallSignalingService {
       }
       return CreateCallResponse(
         success: false,
-        message: data['message']?.toString() ?? 'Failed to create group call',
+        message: raw['message']?.toString() ?? 'Failed to create group call',
       );
     } catch (e) {
       return CreateCallResponse(success: false, message: 'Error: $e');
@@ -545,133 +561,7 @@ class CallSignalingService {
     }
   }
 
-  /// Scheduled calls: create. POST /api/scheduled-calls.
-  Future<ScheduledCallResponse> createScheduledCall({
-    required DateTime scheduledAt,
-    required String type,
-    required List<int> inviteeIds,
-    String? title,
-    String? authToken,
-    int? userId,
-  }) async {
-    try {
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      if (authToken != null && authToken.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $authToken';
-      }
-      final body = <String, dynamic>{
-        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
-        'type': type,
-        'invitee_ids': inviteeIds,
-      };
-      if (title != null && title.isNotEmpty) body['title'] = title;
-      if (userId != null) body['user_id'] = userId;
-      final response = await http.post(
-        Uri.parse('$_baseUrl/scheduled-calls'),
-        headers: headers,
-        body: jsonEncode(body),
-      );
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
-      if (response.statusCode == 201) {
-        return ScheduledCallResponse(
-          success: true,
-          id: data['id']?.toString(),
-          scheduledAt: data['scheduled_at'] != null ? DateTime.tryParse(data['scheduled_at'].toString()) : null,
-          type: data['type']?.toString(),
-          title: data['title']?.toString(),
-          invitees: data['invitees'] is List ? List<Map<String, dynamic>>.from((data['invitees'] as List).map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{})) : null,
-        );
-      }
-      return ScheduledCallResponse(success: false, message: data['message']?.toString());
-    } catch (e) {
-      return ScheduledCallResponse(success: false, message: 'Error: $e');
-    }
-  }
 
-  /// Scheduled calls: list. GET /api/scheduled-calls.
-  Future<ScheduledCallListResponse> getScheduledCalls({
-    int page = 1,
-    int perPage = 20,
-    String scope = 'upcoming',
-    String? authToken,
-    int? userId,
-  }) async {
-    try {
-      var url = '$_baseUrl/scheduled-calls?page=$page&per_page=$perPage&scope=$scope';
-      if (userId != null) url += '&user_id=$userId';
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (authToken != null && authToken.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $authToken';
-      }
-      final response = await http.get(Uri.parse(url), headers: headers);
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
-      if (response.statusCode == 200 && data['data'] != null) {
-        final list = (data['data'] as List)
-            .map((e) => ScheduledCallItem.fromJson(e as Map<String, dynamic>))
-            .toList();
-        return ScheduledCallListResponse(success: true, data: list);
-      }
-      return ScheduledCallListResponse(success: false, message: data['message']?.toString());
-    } catch (e) {
-      return ScheduledCallListResponse(success: false, message: 'Error: $e');
-    }
-  }
-
-  /// Scheduled calls: delete. DELETE /api/scheduled-calls/{id}.
-  Future<bool> deleteScheduledCall(String id, {String? authToken, int? userId}) async {
-    try {
-      var url = '$_baseUrl/scheduled-calls/$id';
-      if (userId != null) url += '?user_id=$userId';
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (authToken != null && authToken.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $authToken';
-      }
-      final response = await http.delete(Uri.parse(url), headers: headers);
-      return response.statusCode == 200 || response.statusCode == 204;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Scheduled calls: start (create real call). POST /api/scheduled-calls/{id}/start.
-  Future<CreateCallResponse> startScheduledCall(String scheduledCallId, {
-    String? authToken,
-    int? userId,
-  }) async {
-    try {
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      if (authToken != null && authToken.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $authToken';
-      }
-      final body = userId != null ? jsonEncode({'user_id': userId}) : null;
-      final response = await http.post(
-        Uri.parse('$_baseUrl/scheduled-calls/$scheduledCallId/start'),
-        headers: headers,
-        body: body,
-      );
-      final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
-      if (response.statusCode == 201) {
-        final iceServers = _parseIceServers(data['ice_servers']);
-        return CreateCallResponse(
-          success: true,
-          callId: data['call_id']?.toString(),
-          status: data['status']?.toString(),
-          type: data['type']?.toString(),
-          iceServers: iceServers,
-          createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
-        );
-      }
-      return CreateCallResponse(success: false, message: data['message']?.toString());
-    } catch (e) {
-      return CreateCallResponse(success: false, message: 'Error: $e');
-    }
-  }
 
   static List<Map<String, dynamic>> _parseIceServers(dynamic raw) {
     if (raw == null) return [];
@@ -867,69 +757,3 @@ class MissedCallVoiceResponse {
   });
 }
 
-class ScheduledCallResponse {
-  final bool success;
-  final String? id;
-  final DateTime? scheduledAt;
-  final String? type;
-  final String? title;
-  final List<Map<String, dynamic>>? invitees;
-  final String? message;
-
-  ScheduledCallResponse({
-    required this.success,
-    this.id,
-    this.scheduledAt,
-    this.type,
-    this.title,
-    this.invitees,
-    this.message,
-  });
-}
-
-class ScheduledCallItem {
-  final String id;
-  final DateTime? scheduledAt;
-  final String type;
-  final String? title;
-  final Map<String, dynamic>? creator;
-  final List<Map<String, dynamic>>? invitees;
-  final bool isCreator;
-  final String? startedCallId;
-
-  ScheduledCallItem({
-    required this.id,
-    this.scheduledAt,
-    required this.type,
-    this.title,
-    this.creator,
-    this.invitees,
-    this.isCreator = false,
-    this.startedCallId,
-  });
-
-  factory ScheduledCallItem.fromJson(Map<String, dynamic> json) {
-    return ScheduledCallItem(
-      id: json['id']?.toString() ?? '',
-      scheduledAt: json['scheduled_at'] != null ? DateTime.tryParse(json['scheduled_at'].toString()) : null,
-      type: json['type']?.toString() ?? 'voice',
-      title: json['title']?.toString(),
-      creator: json['creator'] is Map ? Map<String, dynamic>.from(json['creator'] as Map) : null,
-      invitees: json['invitees'] is List ? (json['invitees'] as List).map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList() : null,
-      isCreator: json['is_creator'] == true,
-      startedCallId: json['started_call_id']?.toString(),
-    );
-  }
-}
-
-class ScheduledCallListResponse {
-  final bool success;
-  final List<ScheduledCallItem> data;
-  final String? message;
-
-  ScheduledCallListResponse({
-    required this.success,
-    this.data = const [],
-    this.message,
-  });
-}

@@ -49,6 +49,11 @@ post_install do |installer|
       # Force iOS 16.0 deployment target for all pods
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
 
+      # Suppress quoted-include-in-framework-header error (Xcode 26 strictness)
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Wno-quoted-include-in-framework-header'
+
       # Enable permission_handler permissions
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',

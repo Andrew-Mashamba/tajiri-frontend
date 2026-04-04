@@ -2,15 +2,15 @@
 // Design: DOCS/DESIGN.md — #FAFAFA background, #1A1A1A primary, 48dp min touch targets.
 // Uses CallSignalingService.getCallLog (GET /api/calls) when authToken is provided; else CallService.getCallHistory.
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../models/call_models.dart';
 import '../../services/call_service.dart';
 import '../../services/call_signaling_service.dart';
+import '../../services/message_database.dart';
 import '../../widgets/user_avatar.dart';
-import '../calls/call_history_screen.dart' show OutgoingCallScreen;
 import '../calls/outgoing_call_flow_screen.dart';
 import '../calls/missed_call_voice_screen.dart';
-import '../calls/scheduled_calls_screen.dart';
 
 class CallHistoryScreen extends StatefulWidget {
   final int currentUserId;
@@ -43,6 +43,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      setState(() {});
+    });
     _loadCallHistory();
   }
 
@@ -59,40 +63,138 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       _error = null;
     });
 
-    if (widget.authToken != null && widget.authToken!.isNotEmpty) {
-      final resp = await _signalingService.getCallLog(
-        page: 1,
-        perPage: 50,
-        authToken: widget.authToken,
-        userId: widget.currentUserId,
-      );
+    // 1. Load cached call history from SQLite for instant display
+    try {
+      final cachedRows = await MessageDatabase.instance.getCallHistory();
+      if (cachedRows.isNotEmpty && mounted) {
+        final cached = cachedRows.map(_rowToCallLog).toList();
+        setState(() {
+          _allCalls = cached;
+          _missedCalls = cached.where((c) => c.wasMissed).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      // SQLite read failed — continue to API
+    }
+
+    // 2. Fetch from API in background and update cache
+    try {
+      List<CallLog> apiFetched = [];
+
+      if (widget.authToken != null && widget.authToken!.isNotEmpty) {
+        final resp = await _signalingService.getCallLog(
+          page: 1,
+          perPage: 50,
+          authToken: widget.authToken,
+          userId: widget.currentUserId,
+        );
+        if (!mounted) return;
+        if (resp.success) {
+          apiFetched = resp.data.map((e) => _callLogFromEntry(e, widget.currentUserId)).toList();
+        } else if (_allCalls.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _error = resp.message;
+          });
+          return;
+        }
+      } else {
+        final allResult = await _callService.getCallHistory(
+          userId: widget.currentUserId,
+          perPage: 50,
+        );
+        if (!mounted) return;
+        if (allResult.success) {
+          apiFetched = allResult.logs;
+        } else if (_allCalls.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _error = allResult.message;
+          });
+          return;
+        }
+      }
+
+      // 3. Cache API results to SQLite
+      if (apiFetched.isNotEmpty) {
+        final rows = apiFetched.map(_callLogToRow).toList();
+        MessageDatabase.instance.upsertCallLogs(rows);
+      }
+
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        if (resp.success) {
-          _allCalls = resp.data.map((e) => _callLogFromEntry(e, widget.currentUserId)).toList();
-          _missedCalls = _allCalls.where((c) => c.wasMissed).toList();
-        } else {
-          _error = resp.message;
+        if (apiFetched.isNotEmpty) {
+          _allCalls = apiFetched;
+          _missedCalls = apiFetched.where((c) => c.wasMissed).toList();
         }
       });
-      return;
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        if (_allCalls.isEmpty) {
+          _error = 'Imeshindwa kupakia historia ya simu: $e';
+        }
+      });
     }
+  }
 
-    final allResult = await _callService.getCallHistory(
-      userId: widget.currentUserId,
-      perPage: 50,
-    );
+  Map<String, dynamic> _callLogToRow(CallLog log) => {
+    'id': log.id,
+    'user_id': log.userId,
+    'other_user_id': log.otherUserId,
+    'call_id': log.callId,
+    'type': log.type,
+    'direction': log.direction,
+    'status': log.status,
+    'duration': log.duration,
+    'call_time': log.callTime.toIso8601String(),
+    'other_user_json': log.otherUser != null ? jsonEncode({
+      'id': log.otherUser!.id,
+      'first_name': log.otherUser!.firstName,
+      'last_name': log.otherUser!.lastName,
+      'username': log.otherUser!.username,
+      'profile_photo_path': log.otherUser!.profilePhotoPath,
+    }) : null,
+    'json_data': jsonEncode({
+      'id': log.id,
+      'user_id': log.userId,
+      'other_user_id': log.otherUserId,
+      'call_id': log.callId,
+      'type': log.type,
+      'direction': log.direction,
+      'status': log.status,
+      'duration': log.duration,
+      'call_time': log.callTime.toIso8601String(),
+      'other_user': log.otherUser != null ? {
+        'id': log.otherUser!.id,
+        'first_name': log.otherUser!.firstName,
+        'last_name': log.otherUser!.lastName,
+        'username': log.otherUser!.username,
+        'profile_photo_path': log.otherUser!.profilePhotoPath,
+      } : null,
+    }),
+  };
 
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      if (allResult.success) {
-        _allCalls = allResult.logs;
-        _missedCalls = allResult.logs.where((c) => c.wasMissed).toList();
-      } else {
-        _error = allResult.message;
-      }
+  CallLog _rowToCallLog(Map<String, dynamic> row) {
+    if (row['json_data'] != null) {
+      try {
+        final json = jsonDecode(row['json_data'] as String) as Map<String, dynamic>;
+        return CallLog.fromJson(json);
+      } catch (_) {}
+    }
+    return CallLog.fromJson({
+      'id': row['id'],
+      'user_id': row['user_id'],
+      'other_user_id': row['other_user_id'],
+      'call_id': row['call_id'],
+      'type': row['type'],
+      'direction': row['direction'],
+      'status': row['status'],
+      'duration': row['duration'],
+      'call_time': row['call_time'],
     });
   }
 
@@ -130,44 +232,39 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _background,
         foregroundColor: _primaryText,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: const Text(
           'Simu',
-          style: TextStyle(color: _primaryText, fontSize: 18),
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        actions: [
-          if (widget.authToken != null && widget.authToken!.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.schedule),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ScheduledCallsScreen(
-                      currentUserId: widget.currentUserId,
-                      authToken: widget.authToken,
-                    ),
-                  ),
-                );
-              },
+        actions: const [],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Row(
+              children: [
+                _buildTabPill(0, 'Zote'),
+                const SizedBox(width: 8),
+                _buildTabPill(1, 'Zilizokosa'),
+              ],
             ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: _primaryText,
-          unselectedLabelColor: _secondaryText,
-          indicatorColor: _iconBg,
-          tabs: const [
-            Tab(text: 'Zote'),
-            Tab(text: 'Zilizokosa'),
-          ],
+          ),
         ),
       ),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(
+                color: _primaryText,
+                strokeWidth: 2,
+              ))
             : _error != null
                 ? _buildErrorState()
                 : TabBarView(
@@ -185,7 +282,39 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           heroTag: 'calls_fab',
           onPressed: _showDialer,
           backgroundColor: _iconBg,
-          child: const Icon(Icons.call, color: Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.call_rounded, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabPill(int index, String label) {
+    final isSelected = _tabController.index == index;
+    return GestureDetector(
+      onTap: () {
+        _tabController.animateTo(index);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? _iconBg
+              : _iconBg.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : _primaryText,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
@@ -198,19 +327,48 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: _accent),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: _iconBg.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                size: 32,
+                color: _accent,
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               _error!,
               textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: _secondaryText, fontSize: 14),
             ),
             const SizedBox(height: 24),
             SizedBox(
               height: 48,
-              child: TextButton(
+              child: ElevatedButton(
                 onPressed: _loadCallHistory,
-                child: const Text('Jaribu tena'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _iconBg,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                ),
+                child: const Text(
+                  'Jaribu tena',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ),
           ],
@@ -225,11 +383,27 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.call, size: 64, color: _accent),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: _iconBg.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.call_rounded,
+                size: 32,
+                color: _accent,
+              ),
+            ),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Hakuna simu',
-              style: TextStyle(color: _secondaryText, fontSize: 14),
+              style: TextStyle(
+                color: _accent,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -238,7 +412,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
     return RefreshIndicator(
       onRefresh: _loadCallHistory,
+      color: _primaryText,
       child: ListView.builder(
+        padding: const EdgeInsets.only(top: 8, bottom: 80),
         itemCount: calls.length,
         itemBuilder: (context, index) {
           final call = calls[index];
@@ -256,105 +432,162 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   void _showCallOptions(CallLog call) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: UserAvatar(
-                photoUrl: call.otherUser?.avatarUrl,
-                name: call.otherUser?.displayName,
-                radius: 24,
-              ),
-              title: Text(
-                call.otherUser?.displayName ?? 'Mtumiaji',
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                style: const TextStyle(color: _primaryText),
-              ),
-              subtitle: Text(
-                _formatCallTime(call.callTime),
-                style: const TextStyle(color: _secondaryText, fontSize: 12),
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: Container(
-                width: 48,
-                height: 48,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFFAFAFA),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              // Handle bar
+              Container(
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: _iconBg,
-                  borderRadius: BorderRadius.circular(12),
+                  color: _iconBg.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: const Icon(Icons.call, color: Colors.white, size: 24),
               ),
-              title: const Text('Piga simu ya sauti'),
-              onTap: () {
-                Navigator.pop(context);
-                if (call.otherUserId != null) {
-                  _initiateCall(
-                    call.otherUserId!,
-                    'voice',
-                    calleeName: call.otherUser?.displayName,
-                    calleeAvatarUrl: call.otherUser?.avatarUrl,
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _iconBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.videocam, color: Colors.white, size: 24),
-              ),
-              title: const Text('Piga simu ya video'),
-              onTap: () {
-                Navigator.pop(context);
-                if (call.otherUserId != null) {
-                  _initiateCall(
-                    call.otherUserId!,
-                    'video',
-                    calleeName: call.otherUser?.displayName,
-                    calleeAvatarUrl: call.otherUser?.avatarUrl,
-                  );
-                }
-              },
-            ),
-            if (call.wasMissed && call.callId != null && call.callId!.isNotEmpty) ...[
-              const Divider(height: 1),
-              ListTile(
-                leading: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade700,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.mic, color: Colors.white, size: 24),
-                ),
-                title: const Text('Leave voice message'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MissedCallVoiceScreen(
-                        callId: call.callId!,
-                        currentUserId: widget.currentUserId,
-                        authToken: widget.authToken,
-                        otherUserName: call.otherUser?.displayName,
+              const SizedBox(height: 16),
+              // User info header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    UserAvatar(
+                      photoUrl: call.otherUser?.avatarUrl,
+                      name: call.otherUser?.displayName,
+                      radius: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            call.otherUser?.displayName ?? 'Mtumiaji',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: _primaryText,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatCallTime(call.callTime),
+                            style: const TextStyle(color: _secondaryText, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
-                  );
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Divider(height: 1, color: _iconBg.withValues(alpha: 0.08)),
+              // Voice call option
+              _buildSheetOption(
+                icon: Icons.call_rounded,
+                label: 'Piga simu ya sauti',
+                onTap: () {
+                  Navigator.pop(context);
+                  if (call.otherUserId != null) {
+                    _initiateCall(
+                      call.otherUserId!,
+                      'voice',
+                      calleeName: call.otherUser?.displayName,
+                      calleeAvatarUrl: call.otherUser?.avatarUrl,
+                    );
+                  }
                 },
               ),
+              // Video call option
+              _buildSheetOption(
+                icon: Icons.videocam_rounded,
+                label: 'Piga simu ya video',
+                onTap: () {
+                  Navigator.pop(context);
+                  if (call.otherUserId != null) {
+                    _initiateCall(
+                      call.otherUserId!,
+                      'video',
+                      calleeName: call.otherUser?.displayName,
+                      calleeAvatarUrl: call.otherUser?.avatarUrl,
+                    );
+                  }
+                },
+              ),
+              // Voice message option (missed calls only)
+              if (call.wasMissed && call.callId != null && call.callId!.isNotEmpty) ...[
+                Divider(height: 1, color: _iconBg.withValues(alpha: 0.08)),
+                _buildSheetOption(
+                  icon: Icons.mic_rounded,
+                  label: 'Acha ujumbe wa sauti',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MissedCallVoiceScreen(
+                          callId: call.callId!,
+                          currentUserId: widget.currentUserId,
+                          authToken: widget.authToken,
+                          otherUserName: call.otherUser?.displayName,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
             ],
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _iconBg.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: _primaryText, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: _primaryText,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -372,59 +605,27 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   }
 
   Future<void> _initiateCall(int calleeId, String type, {String? calleeName, String? calleeAvatarUrl}) async {
-    if (widget.authToken != null && widget.authToken!.isNotEmpty) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OutgoingCallFlowScreen(
-              currentUserId: widget.currentUserId,
-              authToken: widget.authToken,
-              calleeId: calleeId,
-              calleeName: calleeName ?? 'User',
-              calleeAvatarUrl: calleeAvatarUrl,
-              type: type,
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    final result = await _callService.initiateCall(
-      userId: widget.currentUserId,
-      calleeId: calleeId,
-      type: type,
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OutgoingCallFlowScreen(
+          currentUserId: widget.currentUserId,
+          authToken: widget.authToken,
+          calleeId: calleeId,
+          calleeName: calleeName ?? 'User',
+          calleeAvatarUrl: calleeAvatarUrl,
+          type: type,
+        ),
+      ),
     );
-
-    if (result.success && result.call != null) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OutgoingCallScreen(
-              currentUserId: widget.currentUserId,
-              call: result.call!,
-            ),
-          ),
-        );
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message ?? 'Imeshindwa kupiga simu'),
-          ),
-        );
-      }
-    }
   }
 
   void _showDialer() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       builder: (context) => _DialerSheet(
         onCall: (userId, type) {
           Navigator.pop(context);
@@ -465,72 +666,104 @@ class _CallLogTile extends StatelessWidget {
 
   static const Color _primaryText = Color(0xFF1A1A1A);
   static const Color _secondaryText = Color(0xFF666666);
-  static const Color _iconBg = Color(0xFF1A1A1A);
+  static const Color _missedRed = Color(0xFFB00020);
 
   @override
   Widget build(BuildContext context) {
-    final missedColor = callLog.wasMissed ? const Color(0xFFB00020) : _secondaryText;
+    final missedColor = callLog.wasMissed ? _missedRed : _secondaryText;
 
-    return ListTile(
+    return GestureDetector(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      minLeadingWidth: 56,
-      leading: UserAvatar(
-        photoUrl: callLog.otherUser?.avatarUrl,
-        name: callLog.otherUser?.displayName,
-        radius: 24,
-      ),
-      title: Text(
-        callLog.otherUser?.displayName ?? 'Mtumiaji',
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-        style: TextStyle(
-          color: callLog.wasMissed ? const Color(0xFFB00020) : _primaryText,
-          fontSize: 15,
-        ),
-      ),
-      subtitle: Row(
-        children: [
-          Icon(
-            callLog.isIncoming ? Icons.call_received : Icons.call_made,
-            size: 14,
-            color: missedColor,
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            callLog.type == 'video' ? Icons.videocam : Icons.call,
-            size: 14,
-            color: _secondaryText,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            _formatTime(callLog.callTime),
-            style: const TextStyle(color: _secondaryText, fontSize: 13),
-          ),
-          if (callLog.wasAnswered && callLog.duration != null) ...[
-            const SizedBox(width: 8),
-            Text(
-              callLog.durationFormatted,
-              style: const TextStyle(color: _secondaryText, fontSize: 13),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
             ),
           ],
-        ],
-      ),
-      trailing: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onCall,
-          borderRadius: BorderRadius.circular(24),
-          child: Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            child: Icon(
-              callLog.type == 'video' ? Icons.videocam : Icons.call,
-              color: _iconBg,
-              size: 24,
+        ),
+        child: Row(
+          children: [
+            UserAvatar(
+              photoUrl: callLog.otherUser?.avatarUrl,
+              name: callLog.otherUser?.displayName,
+              radius: 24,
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    callLog.otherUser?.displayName ?? 'Mtumiaji',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: callLog.wasMissed ? _missedRed : _primaryText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        callLog.isIncoming
+                            ? Icons.call_received_rounded
+                            : Icons.call_made_rounded,
+                        size: 14,
+                        color: missedColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        callLog.type == 'video'
+                            ? Icons.videocam_rounded
+                            : Icons.call_rounded,
+                        size: 14,
+                        color: _secondaryText,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatTime(callLog.callTime),
+                        style: const TextStyle(color: _secondaryText, fontSize: 13),
+                      ),
+                      if (callLog.wasAnswered && callLog.duration != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          callLog.durationFormatted,
+                          style: const TextStyle(color: _secondaryText, fontSize: 13),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onCall,
+                  child: Icon(
+                    callLog.type == 'video'
+                        ? Icons.videocam_rounded
+                        : Icons.call_rounded,
+                    color: _primaryText,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -569,59 +802,104 @@ class _DialerSheetState extends State<_DialerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'ID ya Mtumiaji',
-                border: OutlineInputBorder(),
-                hintText: 'Ingiza ID ya mtumiaji',
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _primaryText.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, color: _primaryText),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _DialerActionButton(
-                  icon: Icons.call,
-                  label: 'Sauti',
-                  onPressed: () {
-                    final userId = int.tryParse(_controller.text);
-                    if (userId != null) {
-                      widget.onCall(userId, 'voice');
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ingiza ID ya mtumiaji')),
-                      );
-                    }
-                  },
+              const SizedBox(height: 24),
+              TextField(
+                controller: _controller,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'Ingiza ID ya mtumiaji',
+                  hintStyle: TextStyle(
+                    color: _primaryText.withValues(alpha: 0.4),
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: _primaryText.withValues(alpha: 0.04),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                 ),
-                _DialerActionButton(
-                  icon: Icons.videocam,
-                  label: 'Video',
-                  onPressed: () {
-                    final userId = int.tryParse(_controller.text);
-                    if (userId != null) {
-                      widget.onCall(userId, 'video');
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ingiza ID ya mtumiaji')),
-                      );
-                    }
-                  },
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  color: _primaryText,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-          ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _DialerActionButton(
+                    icon: Icons.call_rounded,
+                    label: 'Sauti',
+                    onPressed: () {
+                      final userId = int.tryParse(_controller.text);
+                      if (userId != null) {
+                        widget.onCall(userId, 'voice');
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingiza ID ya mtumiaji')),
+                        );
+                      }
+                    },
+                  ),
+                  _DialerActionButton(
+                    icon: Icons.videocam_rounded,
+                    label: 'Video',
+                    onPressed: () {
+                      final userId = int.tryParse(_controller.text);
+                      if (userId != null) {
+                        widget.onCall(userId, 'video');
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingiza ID ya mtumiaji')),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
@@ -660,7 +938,14 @@ class _DialerActionButton extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: _iconBg,
+          ),
+        ),
       ],
     );
   }

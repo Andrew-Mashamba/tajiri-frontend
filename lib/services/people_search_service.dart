@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/people_search_models.dart';
 import '../config/api_config.dart';
+import 'etag_cache_service.dart';
+import 'perf_logger.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -63,6 +66,7 @@ class PeopleSearchService {
     bool? possibleBusinessConnection,
     bool? possibleEmployer,
     List<String>? sortValues,
+    bool? shuffle,
   }) async {
     try {
       // Multiple sort/relevance: send comma-separated (e.g. sort=single_first,same_area_first)
@@ -96,29 +100,68 @@ class PeopleSearchService {
       if (verified == true) params['verified'] = '1';
       if (possibleBusinessConnection == true) params['possible_business_connection'] = '1';
       if (possibleEmployer == true) params['possible_employer'] = '1';
+      if (shuffle == true) params['shuffle'] = '1';
 
       final uri = Uri.parse('$_baseUrl/people/search').replace(queryParameters: params);
-      final response = await http.get(uri);
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final urlString = uri.toString();
 
-      if (response.statusCode == 200 && body['success'] == true) {
-        final meta = body['meta'] as Map<String, dynamic>? ?? {};
-        final list = (body['data'] as List<dynamic>?)
-            ?.map((e) => PersonSearchResult.fromJson(e as Map<String, dynamic>))
-            .toList() ?? [];
-        return PeopleSearchResult.success(PeopleSearchResponse(
-          people: list,
-          currentPage: meta['current_page'] as int? ?? 1,
-          lastPage: meta['last_page'] as int? ?? 1,
-          total: meta['total'] as int? ?? 0,
-          perPage: meta['per_page'] as int? ?? 20,
-        ));
+      // ETag conditional request
+      final headers = <String, String>{};
+      try {
+        final cachedEtag = await ETagCacheService.instance.getETag(urlString);
+        if (cachedEtag != null) headers['If-None-Match'] = cachedEtag;
+      } catch (_) {}
+
+      final response = await http.get(uri, headers: headers.isNotEmpty ? headers : null)
+          .timeout(const Duration(seconds: 10));
+
+      // 304 Not Modified — use cached body
+      if (response.statusCode == 304) {
+        try {
+          final cachedBody = await ETagCacheService.instance.getCachedBody(urlString);
+          if (cachedBody != null) {
+            final body = jsonDecode(cachedBody) as Map<String, dynamic>;
+            if (body['success'] == true) {
+              PerfLogger.etagHits++;
+              PerfLogger.log('people_etag_304', {'url': urlString});
+              return _parseResponse(body);
+            }
+          }
+        } catch (_) {}
       }
 
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Store ETag if present
+        final etag = response.headers['etag'];
+        if (etag != null) {
+          ETagCacheService.instance.store(urlString, etag, response.body);
+          PerfLogger.etagMisses++;
+        }
+
+        if (body['success'] == true) return _parseResponse(body);
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
       final message = body['message'] as String? ?? 'Search failed';
       return PeopleSearchResult.failure(message, response.statusCode);
     } catch (e) {
       return PeopleSearchResult.failure('Error: $e');
     }
+  }
+
+  PeopleSearchResult _parseResponse(Map<String, dynamic> body) {
+    final meta = body['meta'] as Map<String, dynamic>? ?? {};
+    final list = (body['data'] as List<dynamic>?)
+        ?.map((e) => PersonSearchResult.fromJson(e as Map<String, dynamic>))
+        .toList() ?? [];
+    return PeopleSearchResult.success(PeopleSearchResponse(
+      people: list,
+      currentPage: meta['current_page'] as int? ?? 1,
+      lastPage: meta['last_page'] as int? ?? 1,
+      total: meta['total'] as int? ?? 0,
+      perPage: meta['per_page'] as int? ?? 20,
+    ));
   }
 }

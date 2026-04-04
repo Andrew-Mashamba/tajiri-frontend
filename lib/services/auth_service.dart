@@ -10,6 +10,11 @@ import '../models/registration_models.dart';
 import '../services/local_storage_service.dart';
 import '../services/fcm_service.dart';
 import '../services/live_update_service.dart';
+import '../services/tea_warmup_service.dart';
+import '../services/feed_cache_service.dart';
+import 'message_database.dart';
+import '../services/conversation_cache_service.dart';
+import '../services/people_cache_service.dart';
 import '../screens/login/login_screen.dart';
 
 class AuthService {
@@ -448,6 +453,21 @@ class AuthService {
   Future<void> _performLocalLogout(BuildContext context) async {
     try {
       LiveUpdateService.instance.stop();
+    } catch (_) {}
+    try {
+      TeaWarmupService.instance.reset();
+    } catch (_) {}
+    try {
+      await FeedCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await ConversationCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await PeopleCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await MessageDatabase.instance.clearAll();
     } catch (_) {}
     await _clearTokens();
     try {

@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import '../models/shop_models.dart';
 import '../config/api_config.dart';
 import 'shop_database.dart';
+import 'perf_logger.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -100,6 +101,11 @@ String _handleServerError(Map<String, dynamic> data, int statusCode) {
 
 class ShopService {
   final ShopDatabase _db = ShopDatabase.instance;
+
+  // Category cache — categories rarely change, 1-hour TTL
+  static List<ProductCategory>? _categoriesCache;
+  static DateTime? _categoriesFetchedAt;
+  static const Duration _categoriesTtl = Duration(hours: 1);
 
   // ============================================================================
   // PRODUCT DISCOVERY
@@ -336,6 +342,14 @@ class ShopService {
 
   /// Get all categories
   Future<CategoryListResult> getCategories({bool includeChildren = true}) async {
+    // Return cached categories if fresh
+    if (_categoriesCache != null && _categoriesFetchedAt != null &&
+        DateTime.now().difference(_categoriesFetchedAt!) < _categoriesTtl) {
+      PerfLogger.categoryCacheHits++;
+      PerfLogger.log('category_cache_hit');
+      return CategoryListResult(success: true, categories: _categoriesCache!);
+    }
+
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/shop/categories?include_children=$includeChildren'),
@@ -347,6 +361,10 @@ class ShopService {
           final categories = (data['data'] as List)
               .map((c) => ProductCategory.fromJson(c))
               .toList();
+          _categoriesCache = categories;
+          _categoriesFetchedAt = DateTime.now();
+          PerfLogger.categoryCacheMisses++;
+          PerfLogger.log('category_cache_miss', {'count': categories.length});
           return CategoryListResult(success: true, categories: categories);
         }
       }

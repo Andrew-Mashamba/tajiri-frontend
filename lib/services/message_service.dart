@@ -213,9 +213,15 @@ class MessageService {
     String? content,
     String messageType = 'text',
     File? media,
+    File? videoMedia,
     int? replyToId,
     int? forwardMessageId,
     void Function(double progress)? onProgress,
+    String? linkPreviewUrl,
+    String? linkPreviewTitle,
+    String? linkPreviewDescription,
+    String? linkPreviewImage,
+    String? linkPreviewDomain,
   }) async {
     try {
       if (media != null) {
@@ -235,6 +241,7 @@ class MessageService {
             content: content,
             messageType: messageType,
             media: media,
+            videoMedia: videoMedia,
             replyToId: replyToId,
             forwardMessageId: forwardMessageId,
             onProgress: onProgress,
@@ -252,6 +259,9 @@ class MessageService {
         if (replyToId != null) request.fields['reply_to_id'] = replyToId.toString();
         if (forwardMessageId != null) request.fields['forward_message_id'] = forwardMessageId.toString();
         request.files.add(await http.MultipartFile.fromPath('media', media.path));
+        if (videoMedia != null && videoMedia.existsSync()) {
+          request.files.add(await http.MultipartFile.fromPath('video_media', videoMedia.path));
+        }
 
         final streamedResponse = await request.send();
         final response = await http.Response.fromStream(streamedResponse);
@@ -279,6 +289,11 @@ class MessageService {
             'message_type': messageType,
             if (replyToId != null) 'reply_to_id': replyToId,
             if (forwardMessageId != null) 'forward_message_id': forwardMessageId,
+            if (linkPreviewUrl != null) 'link_preview_url': linkPreviewUrl,
+            if (linkPreviewTitle != null) 'link_preview_title': linkPreviewTitle,
+            if (linkPreviewDescription != null) 'link_preview_description': linkPreviewDescription,
+            if (linkPreviewImage != null) 'link_preview_image': linkPreviewImage,
+            if (linkPreviewDomain != null) 'link_preview_domain': linkPreviewDomain,
           }),
         );
 
@@ -309,6 +324,7 @@ class MessageService {
     String? content,
     required String messageType,
     required File media,
+    File? videoMedia,
     int? replyToId,
     int? forwardMessageId,
     void Function(double progress)? onProgress,
@@ -326,6 +342,12 @@ class MessageService {
         'media',
         await MultipartFile.fromFile(media.path, filename: media.path.split(Platform.pathSeparator).last),
       ));
+      if (videoMedia != null && videoMedia.existsSync()) {
+        formData.files.add(MapEntry(
+          'video_media',
+          await MultipartFile.fromFile(videoMedia.path, filename: videoMedia.path.split(Platform.pathSeparator).last),
+        ));
+      }
 
       final response = await dio.post(
         '/conversations/$conversationId/messages',
@@ -627,6 +649,131 @@ class MessageService {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Mark a specific message as delivered
+  static Future<bool> markDelivered(int conversationId, int messageId, int userId) async {
+    try {
+      final url = '$_baseUrl/conversations/$conversationId/messages/$messageId/delivered';
+      final resp = await http.post(Uri.parse(url), headers: ApiConfig.headers,
+          body: jsonEncode({'user_id': userId}));
+      return resp.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// Search messages across conversations or within a specific conversation
+  /// Search messages across conversations or within a specific conversation.
+  /// [messageType] optional: 'media', 'links', 'text' to filter message content type.
+  static Future<MessageListResult> searchMessages({
+    required int userId,
+    required String query,
+    int? conversationId,
+    String? messageType,
+  }) async {
+    try {
+      var url = '$_baseUrl/conversations/search-messages?user_id=$userId&q=${Uri.encodeComponent(query)}';
+      if (conversationId != null) url += '&conversation_id=$conversationId';
+      if (messageType != null && messageType.isNotEmpty) url += '&type=$messageType';
+      final resp = await http.get(Uri.parse(url), headers: ApiConfig.headers);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final messages = (data['messages'] as List? ?? [])
+            .map((m) => Message.fromJson(m)).toList();
+        return MessageListResult(success: true, messages: messages);
+      }
+      return MessageListResult(success: false, messages: [], message: 'Search failed');
+    } catch (e) {
+      return MessageListResult(success: false, messages: [], message: e.toString());
+    }
+  }
+
+  /// Update conversation settings (pin, archive, mute, star, custom notifications) for a user
+  static Future<bool> updateConversationSettings({
+    required int conversationId,
+    required int userId,
+    bool? isPinned,
+    bool? isArchived,
+    String? mutedUntil,
+    bool? isStarred,
+    bool? customTone,
+    bool? customVibrate,
+    bool? customPopup,
+  }) async {
+    try {
+      final body = <String, dynamic>{'user_id': userId};
+      if (isPinned != null) body['is_pinned'] = isPinned;
+      if (isArchived != null) body['is_archived'] = isArchived;
+      body['muted_until'] = mutedUntil;
+      if (isStarred != null) body['is_starred'] = isStarred;
+      if (customTone != null) body['custom_tone'] = customTone;
+      if (customVibrate != null) body['custom_vibrate'] = customVibrate;
+      if (customPopup != null) body['custom_popup'] = customPopup;
+      final resp = await http.patch(
+        Uri.parse('$_baseUrl/conversations/$conversationId/settings'),
+        headers: ApiConfig.headers,
+        body: jsonEncode(body),
+      );
+      return resp.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// Toggle star on a message
+  static Future<bool> toggleStar(int conversationId, int messageId, int userId) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$_baseUrl/conversations/$conversationId/messages/$messageId/star'),
+        headers: ApiConfig.headers,
+        body: jsonEncode({'user_id': userId}),
+      );
+      return resp.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// Get starred messages for a user
+  static Future<MessageListResult> getStarredMessages(int userId, {int page = 1}) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$_baseUrl/messages/starred?user_id=$userId&page=$page'),
+        headers: ApiConfig.headers,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final messages = (data['messages'] is Map ? (data['messages']['data'] as List? ?? []) : (data['messages'] as List? ?? []))
+            .map((m) => Message.fromJson(m)).toList();
+        return MessageListResult(success: true, messages: messages);
+      }
+      return MessageListResult(success: false, messages: [], message: 'Failed');
+    } catch (e) {
+      return MessageListResult(success: false, messages: [], message: e.toString());
+    }
+  }
+
+  /// Set disappearing messages timer for a conversation
+  static Future<bool> setDisappearingTimer(int conversationId, int userId, int? timerSeconds) async {
+    try {
+      final resp = await http.patch(
+        Uri.parse('$_baseUrl/conversations/$conversationId/disappearing'),
+        headers: ApiConfig.headers,
+        body: jsonEncode({'user_id': userId, 'timer': timerSeconds}),
+      );
+      return resp.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// Get delivery/read receipts for a message
+  static Future<List<MessageReceipt>> getMessageReceipts(int conversationId, int messageId, int userId) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$_baseUrl/conversations/$conversationId/messages/$messageId/receipts?user_id=$userId'),
+        headers: ApiConfig.headers,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return (data['receipts'] as List? ?? [])
+            .map((r) => MessageReceipt.fromJson(r)).toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   /// Remove reaction from a message.

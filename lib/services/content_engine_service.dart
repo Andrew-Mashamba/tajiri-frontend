@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/content_engine_models.dart';
 import 'local_storage_service.dart';
+import 'etag_cache_service.dart';
+import 'perf_logger.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -27,10 +29,44 @@ class ContentEngineService {
         'per_page': perPage.toString(),
       });
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token))
+      // ETag conditional request support
+      final urlString = uri.toString();
+      final headers = Map<String, String>.from(ApiConfig.authHeaders(token));
+      try {
+        final cachedEtag = await ETagCacheService.instance.getETag(urlString);
+        if (cachedEtag != null) {
+          headers['If-None-Match'] = cachedEtag;
+        }
+      } catch (_) {}
+
+      final response = await http.get(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
 
+      // 304 Not Modified — use cached body
+      if (response.statusCode == 304) {
+        try {
+          final cachedBody = await ETagCacheService.instance.getCachedBody(urlString);
+          if (cachedBody != null) {
+            final data = json.decode(cachedBody) as Map<String, dynamic>;
+            if (data['success'] == true) {
+              PerfLogger.etagHits++;
+              PerfLogger.log('etag_304', {'url': urlString});
+              return ContentEngineResult.fromJson(data);
+            }
+          }
+        } catch (_) {}
+        // If cached body missing/corrupt, fall through to empty result
+      }
+
       if (response.statusCode == 200) {
+        // Store ETag if present
+        final etag = response.headers['etag'];
+        if (etag != null) {
+          ETagCacheService.instance.store(urlString, etag, response.body);
+          PerfLogger.etagMisses++;
+          PerfLogger.log('etag_200_stored', {'url': urlString});
+        }
+
         final data = json.decode(response.body) as Map<String, dynamic>;
         if (data['success'] == true) {
           return ContentEngineResult.fromJson(data);

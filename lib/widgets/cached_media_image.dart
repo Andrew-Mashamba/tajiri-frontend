@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_blurhash/flutter_blurhash.dart';
 import '../services/media_cache_service.dart';
+import '../services/perf_logger.dart';
 
 /// Max decode size for list/feed images when dimensions are unbounded (reduces jank).
 const int kDefaultFeedImageCacheWidth = 800;
@@ -23,6 +25,8 @@ class CachedMediaImage extends StatelessWidget {
   final Widget? errorWidget;
   final BorderRadius? borderRadius;
   final Color? backgroundColor;
+  final String? blurhash;
+  final String? dominantColor;
   /// Override fade-in duration (default 200ms). Set to Duration.zero for blur layers.
   final Duration? fadeInDuration;
   /// Override fade-out duration (default 200ms). Set to Duration.zero for blur layers.
@@ -40,6 +44,8 @@ class CachedMediaImage extends StatelessWidget {
     this.errorWidget,
     this.borderRadius,
     this.backgroundColor,
+    this.blurhash,
+    this.dominantColor,
     this.fadeInDuration,
     this.fadeOutDuration,
   });
@@ -78,22 +84,55 @@ class CachedMediaImage extends StatelessWidget {
   }
 
   Widget _buildPlaceholder() {
-    return placeholder ??
-        Container(
+    if (placeholder != null) return placeholder!;
+    if (blurhash != null && blurhash!.isNotEmpty) {
+      PerfLogger.blurhashRendered++;
+      return SizedBox(
+        width: width,
+        height: height,
+        child: BlurHash(
+          hash: blurhash!,
+          imageFit: BoxFit.cover,
+        ),
+      );
+    }
+    if (dominantColor != null && dominantColor!.isNotEmpty) {
+      final color = _parseDominantColor(dominantColor!);
+      if (color != null) {
+        return Container(
           width: width,
           height: height,
-          color: backgroundColor ?? Colors.grey.shade200,
-          child: Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.grey.shade400,
-              ),
-            ),
-          ),
+          color: color,
         );
+      }
+    }
+    return Container(
+      width: width,
+      height: height,
+      color: backgroundColor ?? Colors.grey.shade200,
+      child: Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.grey.shade400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Color? _parseDominantColor(String hex) {
+    try {
+      final cleaned = hex.replaceFirst('#', '');
+      if (cleaned.length == 6) {
+        return Color(int.parse('FF$cleaned', radix: 16));
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _buildErrorWidget() {
@@ -134,6 +173,8 @@ class CachedAvatarImage extends StatelessWidget {
 
     return CachedNetworkImage(
       imageUrl: imageUrl!,
+      memCacheWidth: (radius * 6).toInt(),
+      memCacheHeight: (radius * 6).toInt(),
       imageBuilder: (context, imageProvider) => CircleAvatar(
         radius: radius,
         backgroundImage: imageProvider,

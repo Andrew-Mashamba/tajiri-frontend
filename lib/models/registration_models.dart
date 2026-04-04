@@ -106,6 +106,7 @@ class RegistrationState {
     }
   }
 
+  /// Local persistence format (nested objects for Hive/SharedPreferences).
   Map<String, dynamic> toJson() {
     return {
       'user_id': userId,
@@ -129,6 +130,110 @@ class RegistrationState {
       'university_education': universityEducation?.toJson(),
       'current_employer': currentEmployer?.toJson(),
     };
+  }
+
+  /// Flat format matching backend database columns for API calls.
+  /// POST /register only accepts bio fields; education/employer must be sent
+  /// via PUT /users/phone/{phone} using these flat keys.
+  Map<String, dynamic> toFlatJson() {
+    return {
+      'first_name': firstName,
+      'last_name': lastName,
+      'date_of_birth': dateOfBirth?.toIso8601String(),
+      'gender': gender?.name,
+      'phone_number': phoneNumber,
+      'is_phone_verified': isPhoneVerified,
+      'pin': pin,
+      // Location (flat)
+      if (location != null) ...{
+        'region_id': location!.regionId,
+        'region_name': location!.regionName,
+        'district_id': location!.districtId,
+        'district_name': location!.districtName,
+        'ward_id': location!.wardId,
+        'ward_name': location!.wardName,
+        'street_id': location!.streetId,
+        'street_name': location!.streetName,
+      },
+      // Primary school (flat)
+      if (primarySchool != null) ...{
+        'primary_school_id': primarySchool!.schoolId,
+        'primary_school_code': primarySchool!.schoolCode,
+        'primary_school_name': primarySchool!.schoolName,
+        'primary_school_type': primarySchool!.schoolType,
+        'primary_start_year': primarySchool!.startYear,
+        'primary_graduation_year': primarySchool!.graduationYear,
+      },
+      // Secondary school (flat)
+      if (secondarySchool != null) ...{
+        'secondary_school_id': secondarySchool!.schoolId,
+        'secondary_school_code': secondarySchool!.schoolCode,
+        'secondary_school_name': secondarySchool!.schoolName,
+        'secondary_school_type': secondarySchool!.schoolType,
+        'secondary_start_year': secondarySchool!.startYear,
+        'secondary_graduation_year': secondarySchool!.graduationYear,
+      },
+      // A-Level (flat)
+      if (alevelEducation != null) ...{
+        'alevel_school_id': alevelEducation!.schoolId,
+        'alevel_school_code': alevelEducation!.schoolCode,
+        'alevel_school_name': alevelEducation!.schoolName,
+        'alevel_school_type': alevelEducation!.schoolType,
+        'alevel_start_year': alevelEducation!.startYear,
+        'alevel_graduation_year': alevelEducation!.graduationYear,
+        'alevel_combination_code': alevelEducation!.combinationCode,
+        'alevel_combination_name': alevelEducation!.combinationName,
+        if (alevelEducation!.subjects != null)
+          'alevel_subjects': alevelEducation!.subjects,
+      },
+      // Post-secondary (flat)
+      if (postsecondaryEducation != null) ...{
+        'postsecondary_id': postsecondaryEducation!.schoolId,
+        'postsecondary_code': postsecondaryEducation!.schoolCode,
+        'postsecondary_name': postsecondaryEducation!.schoolName,
+        'postsecondary_type': postsecondaryEducation!.schoolType,
+        'postsecondary_start_year': postsecondaryEducation!.startYear,
+        'postsecondary_graduation_year': postsecondaryEducation!.graduationYear,
+      },
+      // University (flat)
+      if (universityEducation != null) ...{
+        'university_id': universityEducation!.universityId,
+        'university_code': universityEducation!.universityCode,
+        'university_name': universityEducation!.universityName,
+        'programme_id': universityEducation!.programmeId,
+        'programme_name': universityEducation!.programmeName,
+        'degree_level': universityEducation!.degreeLevel,
+        'university_start_year': universityEducation!.startYear,
+        'university_graduation_year': universityEducation!.graduationYear,
+        'is_current_student': universityEducation!.isCurrentStudent,
+      },
+      // Employer (flat)
+      if (currentEmployer != null) ...{
+        'employer_id': currentEmployer!.employerId,
+        'employer_code': currentEmployer!.employerCode,
+        'employer_name': currentEmployer!.employerName,
+        'employer_sector': currentEmployer!.sector,
+        'employer_ownership': currentEmployer!.ownership,
+        'is_custom_employer': currentEmployer!.isCustomEmployer,
+      },
+    };
+  }
+
+  /// Returns only the education/employer/location fields (flat) for the
+  /// follow-up PUT after registration.
+  Map<String, dynamic> toEducationEmployerJson() {
+    final flat = toFlatJson();
+    // Remove bio fields that POST /register already saved
+    flat.remove('first_name');
+    flat.remove('last_name');
+    flat.remove('date_of_birth');
+    flat.remove('gender');
+    flat.remove('phone_number');
+    flat.remove('is_phone_verified');
+    flat.remove('pin');
+    // Remove null values
+    flat.removeWhere((_, v) => v == null);
+    return flat;
   }
 
   factory RegistrationState.fromJson(Map<String, dynamic> json) {

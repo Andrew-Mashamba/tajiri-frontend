@@ -142,6 +142,38 @@ class PersonSearchResult {
   bool get isPendingSent => friendshipStatus == 'pending_sent';
   bool get isPendingReceived => friendshipStatus == 'pending_received';
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'first_name': firstName,
+      'last_name': lastName,
+      if (username != null) 'username': username,
+      if (gender != null) 'gender': gender,
+      if (age != null) 'age': age,
+      if (profilePhotoPath != null) 'profile_photo_path': profilePhotoPath,
+      if (coverPhotoPath != null) 'cover_photo_path': coverPhotoPath,
+      if (bio != null) 'bio': bio,
+      if (regionName != null) 'region_name': regionName,
+      if (districtName != null) 'district_name': districtName,
+      if (locationString != null) 'location_string': locationString,
+      if (relationshipStatus != null) 'relationship_status': relationshipStatus,
+      'friends_count': friendsCount,
+      'posts_count': postsCount,
+      'photos_count': photosCount,
+      'mutual_friends_count': mutualFriendsCount,
+      'friendship_status': friendshipStatus,
+      'in_common': inCommon,
+      if (primarySchool != null) 'primary_school': primarySchool,
+      if (secondarySchool != null) 'secondary_school': secondarySchool,
+      if (university != null) 'university': university,
+      if (employer != null) 'employer': employer,
+      'is_online': isOnline,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt!.toIso8601String(),
+      if (lastActiveAt != null) 'last_active_at': lastActiveAt!.toIso8601String(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+    };
+  }
+
   PersonSearchResult copyWith({String? friendshipStatus}) {
     return PersonSearchResult(
       id: id,

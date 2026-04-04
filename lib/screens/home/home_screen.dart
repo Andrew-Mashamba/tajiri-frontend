@@ -8,6 +8,15 @@ import '../profile/profile_screen.dart';
 import '../../services/message_service.dart';
 import '../../services/live_update_service.dart';
 import '../../services/fcm_service.dart';
+import '../../services/tea_warmup_service.dart';
+import '../../services/presence_service.dart';
+import '../../services/people_cache_service.dart';
+import '../../services/message_sync_service.dart';
+import '../../services/user_channel_service.dart';
+import '../../services/callkit_service.dart';
+import '../../calls/call_channel_service.dart';
+import '../calls/incoming_call_flow_screen.dart';
+import '../../services/local_storage_service.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../widgets/tajiri_bottom_nav_bar.dart';
 import '../../widgets/lazy_indexed_stack.dart';
@@ -39,11 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
   int _unreadMessages = 0;
   final MessageService _messageService = MessageService();
   StreamSubscription<LiveUpdateEvent>? _liveUpdateSubscription;
+  StreamSubscription<CallIncomingEvent>? _incomingCallSubscription;
+  Timer? _heartbeatTimer;
 
   /// DESIGN.md: background #FAFAFA.
   static const Color _background = Color(0xFFFAFAFA);
 
-  late final List<Widget> _screens;
+  late final List<Widget Function()> _screens;
 
   @override
   void initState() {
@@ -54,33 +65,79 @@ class _HomeScreenState extends State<HomeScreen> {
         ? widget.initialIndex!
         : 0;
     _screens = [
-      FeedScreen(currentUserId: widget.currentUserId),
-      ConversationsScreen(
+      () => FeedScreen(currentUserId: widget.currentUserId),
+      () => ConversationsScreen(
         currentUserId: widget.currentUserId,
         initialTabIndex: widget.initialMessagesTab ?? 0,
       ),
-      FriendsScreen(
+      () => FriendsScreen(
         currentUserId: widget.currentUserId,
-        isCurrentTab: false, // updated in build from _currentIndex
+        isCurrentTab: true,
       ),
-      ShopScreen(currentUserId: widget.currentUserId),
-      ProfileScreen(
+      () => ShopScreen(currentUserId: widget.currentUserId),
+      () => ProfileScreen(
         userId: widget.currentUserId,
         currentUserId: widget.currentUserId,
       ),
     ];
     _loadUnreadCount();
+    CallKitService.instance.init();
+    PresenceService.heartbeat(widget.currentUserId);
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      PresenceService.heartbeat(widget.currentUserId);
+    });
     LiveUpdateService.instance.start(widget.currentUserId);
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
       if (event is MessagesUpdateEvent && mounted) _loadUnreadCount();
     });
     FcmService.instance.sendTokenToBackend(widget.currentUserId);
     FcmService.instance.processPendingInitialMessage();
+    TeaWarmupService.instance.warmUp();
+    PeopleCacheService.instance.warmCache(widget.currentUserId);
+    MessageSyncService.instance.flushPendingMessages(widget.currentUserId);
+    _startUserChannel();
+  }
+
+  Future<void> _startUserChannel() async {
+    debugPrint('[HomeScreen] ═══ Starting UserChannelService for userId=${widget.currentUserId} ═══');
+    await UserChannelService.instance.start(userId: widget.currentUserId);
+    debugPrint('[HomeScreen] ✓ UserChannelService started, listening for incoming calls');
+    _incomingCallSubscription = UserChannelService.instance.onCallIncoming.listen((event) {
+      if (!mounted) return;
+      debugPrint('[HomeScreen] ═══ INCOMING CALL ═══');
+      debugPrint('[HomeScreen]   callId=${event.callId}');
+      debugPrint('[HomeScreen]   callerId=${event.callerId}, callerName=${event.callerName}');
+      debugPrint('[HomeScreen]   type=${event.type}, isGroupAdd=${event.isGroupAdd}');
+      debugPrint('[HomeScreen]   callerAvatarUrl=${event.callerAvatarUrl}');
+      _openIncomingCall(event);
+    });
+  }
+
+  Future<void> _openIncomingCall(CallIncomingEvent event) async {
+    if (!mounted) return;
+    debugPrint('[HomeScreen] _openIncomingCall: fetching auth token...');
+    final storage = await LocalStorageService.getInstance();
+    final authToken = storage.getAuthToken();
+    debugPrint('[HomeScreen] _openIncomingCall: hasToken=${authToken != null && authToken.isNotEmpty}, mounted=$mounted');
+    if (!mounted) return;
+    debugPrint('[HomeScreen] → Navigating to IncomingCallFlowScreen');
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => IncomingCallFlowScreen(
+          currentUserId: widget.currentUserId,
+          authToken: authToken,
+          incoming: event,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _heartbeatTimer?.cancel();
     _liveUpdateSubscription?.cancel();
+    _incomingCallSubscription?.cancel();
+    UserChannelService.instance.stop();
     LiveUpdateService.instance.stop();
     super.dispose();
   }

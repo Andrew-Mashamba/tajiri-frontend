@@ -48,6 +48,8 @@ class LiveUpdateService {
   int? _currentUserId;
   /// Deduplicate: ignore snapshot if ts unchanged (e.g. app restart).
   int? _lastSeenTs;
+  /// Track permission errors to avoid spamming retries.
+  bool _permissionDenied = false;
 
   /// Stream of live-update events. Screens listen and refetch as needed.
   Stream<LiveUpdateEvent> get stream => _controller.stream;
@@ -65,12 +67,25 @@ class LiveUpdateService {
       return;
     }
 
+    if (_permissionDenied) {
+      if (kDebugMode) debugPrint('[LiveUpdate] Skipped — Firestore permission denied (requires Firebase rules update)');
+      return;
+    }
+
     try {
       final doc = FirebaseFirestore.instance.collection('updates').doc(userId.toString());
       _subscription = doc.snapshots().listen(
         _onSnapshot,
         onError: (e) {
-          if (kDebugMode) debugPrint('[LiveUpdate] Listen error: $e');
+          final msg = e.toString();
+          if (msg.contains('permission-denied')) {
+            _permissionDenied = true;
+            _subscription?.cancel();
+            _subscription = null;
+            if (kDebugMode) debugPrint('[LiveUpdate] Firestore permission denied — live updates disabled until app restart. Backend needs to update Firebase security rules for the "updates" collection.');
+          } else {
+            if (kDebugMode) debugPrint('[LiveUpdate] Listen error: $e');
+          }
         },
       );
       if (kDebugMode) debugPrint('[LiveUpdate] Listening for user $userId');

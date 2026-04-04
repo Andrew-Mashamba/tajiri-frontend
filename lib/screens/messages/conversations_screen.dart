@@ -12,19 +12,24 @@ import '../../models/friend_models.dart';
 import '../../services/message_service.dart';
 import '../../services/pending_message_store.dart';
 import '../../services/call_service.dart';
+import '../../services/call_signaling_service.dart';
 import '../../services/friend_service.dart';
 import '../../services/live_update_service.dart';
 import '../groups/create_group_screen.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/tajiri_app_bar.dart';
-import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
-import '../calls/call_history_screen.dart' show OutgoingCallScreen;
 import '../calls/outgoing_call_flow_screen.dart';
+import '../calls/missed_call_voice_screen.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/message_database.dart';
+import '../../services/message_sync_service.dart';
 import '../../models/ad_models.dart';
 import '../../services/ad_service.dart';
 import '../../widgets/conversation_ad_card.dart';
+import '../../services/perf_logger.dart';
+import '../../services/presence_service.dart';
+import 'starred_messages_screen.dart';
 
 // Design: DOCS/DESIGN.md — #FAFAFA background, #1A1A1A primary text, 48dp min touch targets.
 // Pill tabs pattern from Posts → Live (streams_screen.dart).
@@ -43,10 +48,7 @@ class ConversationsScreen extends StatefulWidget {
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-const String _prefFavorites = 'chat_favorites';
-const String _prefArchived = 'chat_archived';
 const String _prefFolders = 'chat_folders';
-const String _prefPinned = 'chat_pinned';
 const String _draftKeyPrefix = 'chat_draft_';
 /// Max pinned chats (WhatsApp-style).
 const int _kMaxPinned = 3;
@@ -57,6 +59,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     with SingleTickerProviderStateMixin {
   final MessageService _messageService = MessageService();
   final CallService _callService = CallService();
+  final CallSignalingService _signalingService = CallSignalingService();
   final FriendService _friendService = FriendService();
   late TabController _tabController;
   StreamSubscription<LiveUpdateEvent>? _liveUpdateSubscription;
@@ -70,10 +73,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   List<CallLog> _callLogs = [];
   bool _callsLoading = true;
 
-  Set<int> _favoriteIds = {};
-  Set<int> _archivedIds = {};
-  /// Pinned conversation IDs (order preserved, max _kMaxPinned).
-  List<int> _pinnedIds = [];
+  /// Online presence for 1:1 chat partners (fetched after conversations load).
+  Map<int, PresenceInfo> _presences = {};
   /// conversationId -> folder name (one of kChatFolderNames)
   Map<int, String> _folderByConversation = {};
   /// Draft text per conversation (from SharedPreferences).
@@ -83,12 +84,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// Conversations where someone is recording (for "Recording audio..." in green).
   Set<int> _recordingConversationIds = {};
   /// User marked as unread (local only; badge shows as unread).
-  Set<int> _unreadOverride = {};
+  final Set<int> _unreadOverride = {};
   /// Archived section expanded in Chats list.
   bool _archivedExpanded = false;
   Timer? _typingPollTimer;
   String _chatsFilter = 'all'; // all | favorites | archived | Work | Friends | Personal
-  String _callsFilter = 'all'; // all | missed
+  String _callsFilter = 'all'; // all | missed | favorites
 
   /// Ads served in the conversations list (inserted every N conversations, server-controlled).
   List<ServedAd> _conversationAds = [];
@@ -138,7 +139,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _loadConversationAds();
     // Real-time: refresh chat list on push (new message, etc.) so list stays in sync without polling
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
-      if (event is MessagesUpdateEvent && mounted) _loadConversations();
+      if (event is MessagesUpdateEvent && mounted) _syncAndReloadConversations();
     });
     PendingMessageStore.instance.addListener(_onPendingMessagesChanged);
     if (index == 0) _startTypingPoll();
@@ -236,17 +237,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   Future<void> _loadChatPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final fav = prefs.getString(_prefFavorites);
-    final arch = prefs.getString(_prefArchived);
     final folders = prefs.getString(_prefFolders);
-    final pinned = prefs.getString(_prefPinned);
     if (mounted) {
       setState(() {
-        _favoriteIds = fav != null ? (jsonDecode(fav) as List).map((e) => (e as num).toInt()).toSet() : {};
-        _archivedIds = arch != null ? (jsonDecode(arch) as List).map((e) => (e as num).toInt()).toSet() : {};
-        _pinnedIds = pinned != null
-            ? (jsonDecode(pinned) as List).map((e) => (e as num).toInt()).toList().take(_kMaxPinned).toList()
-            : [];
         if (folders != null) {
           final decoded = jsonDecode(folders) as Map<String, dynamic>?;
           _folderByConversation = decoded?.map((k, v) => MapEntry(int.parse(k), v as String)) ?? {};
@@ -255,6 +248,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         }
       });
     }
+  }
+
+  // --- Server-synced conversation settings helpers ---
+
+  bool _isPinned(Conversation c) {
+    return c.participants.any((p) => p.userId == widget.currentUserId && p.isPinned);
+  }
+
+  bool _isArchived(Conversation c) {
+    return c.participants.any((p) => p.userId == widget.currentUserId && p.isArchived);
+  }
+
+  bool _isFavorite(Conversation c) {
+    return c.participants.any((p) => p.userId == widget.currentUserId && p.isStarred);
+  }
+
+  bool _isMuted(Conversation c) {
+    final p = c.participants.where((p) => p.userId == widget.currentUserId).firstOrNull;
+    return p?.mutedUntil != null && p!.mutedUntil!.isAfter(DateTime.now());
   }
 
   Future<void> _loadDrafts() async {
@@ -268,16 +280,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (mounted) setState(() => _draftsByConversationId = map);
   }
 
-  Future<void> _togglePin(int conversationId) async {
-    if (_pinnedIds.contains(conversationId)) {
-      _pinnedIds.remove(conversationId);
-    } else {
-      if (_pinnedIds.length >= _kMaxPinned) return;
-      _pinnedIds.insert(0, conversationId);
+  Future<void> _togglePin(Conversation c) async {
+    final current = _isPinned(c);
+    if (!current) {
+      final pinCount = _conversations.where((x) => _isPinned(x)).length;
+      if (pinCount >= _kMaxPinned) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Maximum $_kMaxPinned pinned chats')),
+          );
+        }
+        return;
+      }
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefPinned, jsonEncode(_pinnedIds));
-    if (mounted) setState(() {});
+    await MessageService.updateConversationSettings(
+      conversationId: c.id,
+      userId: widget.currentUserId,
+      isPinned: !current,
+    );
+    _syncAndReloadConversations();
   }
 
   void _markAsUnread(int conversationId) {
@@ -302,26 +323,84 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (mounted) setState(() {});
   }
 
-  Future<void> _toggleFavorite(int conversationId) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_favoriteIds.contains(conversationId)) {
-      _favoriteIds.remove(conversationId);
-    } else {
-      _favoriteIds.add(conversationId);
-    }
-    await prefs.setString(_prefFavorites, jsonEncode(_favoriteIds.toList()));
-    if (mounted) setState(() {});
+  Future<void> _toggleFavorite(Conversation c) async {
+    final current = _isFavorite(c);
+    await MessageService.updateConversationSettings(
+      conversationId: c.id,
+      userId: widget.currentUserId,
+      isStarred: !current,
+    );
+    _syncAndReloadConversations();
   }
 
-  Future<void> _toggleArchived(int conversationId) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_archivedIds.contains(conversationId)) {
-      _archivedIds.remove(conversationId);
-    } else {
-      _archivedIds.add(conversationId);
-    }
-    await prefs.setString(_prefArchived, jsonEncode(_archivedIds.toList()));
-    if (mounted) setState(() {});
+  Future<void> _toggleArchived(Conversation c) async {
+    final current = _isArchived(c);
+    await MessageService.updateConversationSettings(
+      conversationId: c.id,
+      userId: widget.currentUserId,
+      isArchived: !current,
+    );
+    _syncAndReloadConversations();
+  }
+
+  void _showMuteOptions(Conversation c) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('8 hours'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _muteConversation(c, DateTime.now().add(const Duration(hours: 8)));
+              },
+            ),
+            ListTile(
+              title: const Text('1 week'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _muteConversation(c, DateTime.now().add(const Duration(days: 7)));
+              },
+            ),
+            ListTile(
+              title: const Text('Always'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _muteConversation(c, DateTime.now().add(const Duration(days: 3650)));
+              },
+            ),
+            if (_isMuted(c))
+              ListTile(
+                title: const Text('Unmute'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _unmuteConversation(c);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _muteConversation(Conversation c, DateTime until) async {
+    await MessageService.updateConversationSettings(
+      conversationId: c.id,
+      userId: widget.currentUserId,
+      mutedUntil: until.toIso8601String(),
+    );
+    _syncAndReloadConversations();
+  }
+
+  Future<void> _unmuteConversation(Conversation c) async {
+    await MessageService.updateConversationSettings(
+      conversationId: c.id,
+      userId: widget.currentUserId,
+      mutedUntil: null,
+    );
+    _syncAndReloadConversations();
   }
 
   /// Fetch ads for the conversations list placement.
@@ -365,42 +444,113 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       });
       return;
     }
-    if (kDebugMode) debugPrint('[Messages] Chats tab: loading all conversations (GET /conversations?user_id=${widget.currentUserId}&include_groups=1)');
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    if (kDebugMode) debugPrint('[Messages] Chats tab: loading conversations (SQLite-first, then server sync)');
 
-    final result = await _messageService.getConversations(
-      userId: widget.currentUserId,
-      perPage: 100,
-    );
+    // --- Step 1: Load from local SQLite instantly (always, not just when empty) ---
+    try {
+      final cached = await MessageDatabase.instance.getConversations();
+      if (cached.isNotEmpty && mounted) {
+        PerfLogger.conversationCacheHits++;
+        PerfLogger.log('conversation_cache_hit', {'count': cached.length});
+        setState(() {
+          _conversations = cached;
+          _isLoading = true; // still loading fresh data from server
+          _error = null;
+        });
+      }
+    } catch (_) {}
+
+    if (mounted && _conversations.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
+
+    // --- Step 2: Sync from server in background ---
+    final serverConversations = await MessageSyncService.instance
+        .syncConversationList(widget.currentUserId);
 
     if (!mounted) return;
-    if (kDebugMode) {
-      debugPrint('[Messages] Chats tab: response success=${result.success}, count=${result.conversations.length}${result.message != null ? ', message=${result.message}' : ''}');
-    }
-    setState(() {
-      _isLoading = false;
-      _groupConversationsFromApi = null;
-      if (result.success) {
-        final list = result.conversations;
-        list.sort((a, b) {
-          final aAt = a.lastMessageAt ?? a.updatedAt;
-          final bAt = b.lastMessageAt ?? b.updatedAt;
-          return bAt.compareTo(aAt);
-        });
-        _conversations = list;
-      } else {
-        _error = result.message;
+
+    if (serverConversations.isNotEmpty) {
+      // --- Step 3: Reload from DB (server data is now persisted) and update UI ---
+      final updatedList = await MessageDatabase.instance.getConversations();
+      if (kDebugMode) {
+        debugPrint('[Messages] Chats tab: synced ${serverConversations.length} from server, ${updatedList.length} total in DB');
       }
-    });
+      setState(() {
+        _isLoading = false;
+        _groupConversationsFromApi = null;
+        _conversations = updatedList;
+        PerfLogger.conversationCacheMisses++;
+        _error = null;
+      });
+    } else {
+      // Server sync returned empty — could be network error or no conversations.
+      // If we already have local data, keep it; otherwise show empty state.
+      if (kDebugMode) {
+        debugPrint('[Messages] Chats tab: server sync returned empty, keeping local data (${_conversations.length} conversations)');
+      }
+      setState(() {
+        _isLoading = false;
+        _groupConversationsFromApi = null;
+        if (_conversations.isEmpty) {
+          _error = null; // Show empty state rather than error
+        }
+      });
+    }
     _loadDrafts();
+    // Batch-fetch online presence for 1:1 chat partners
+    _fetchPresences();
+  }
+
+  void _fetchPresences() {
+    final partnerIds = _conversations
+        .where((c) => c.isPrivate && c.participants.length >= 2)
+        .map((c) {
+          final partner = c.participants.where((p) => p.userId != widget.currentUserId).firstOrNull;
+          return partner?.userId;
+        })
+        .whereType<int>()
+        .toSet()
+        .toList();
+    if (partnerIds.isNotEmpty) {
+      PresenceService.batchPresence(partnerIds).then((map) {
+        if (mounted) setState(() => _presences = map);
+      });
+    }
+  }
+
+  /// Lightweight sync triggered by real-time updates and pull-to-refresh.
+  /// Syncs from server, then reloads from local DB.
+  Future<void> _syncAndReloadConversations() async {
+    if (!mounted || widget.currentUserId == 0) return;
+    await MessageSyncService.instance.syncConversationList(widget.currentUserId);
+    if (!mounted) return;
+    final conversations = await MessageDatabase.instance.getConversations();
+    if (mounted) {
+      setState(() {
+        _conversations = conversations;
+        _groupConversationsFromApi = null;
+      });
+      _fetchPresences();
+    }
   }
 
   /// Fetch only group conversations for the Groups tab (optional optimization).
   Future<void> _loadGroupConversations() async {
     if (!mounted || widget.currentUserId == 0) return;
+
+    // Load from SQLite first for instant display
+    try {
+      final cached = await MessageDatabase.instance.getConversations();
+      final cachedGroups = cached.where((c) => c.isGroup).toList();
+      if (cachedGroups.isNotEmpty && mounted) {
+        setState(() => _groupConversationsFromApi = cachedGroups);
+      }
+    } catch (_) {}
+
     if (kDebugMode) debugPrint('[Messages] Groups tab: loading group conversations (GET /conversations?user_id=${widget.currentUserId}&type=group)');
     final result = await _messageService.getConversations(
       userId: widget.currentUserId,
@@ -417,6 +567,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         final bAt = b.lastMessageAt ?? b.updatedAt;
         return bAt.compareTo(aAt);
       });
+      // Cache group conversations in SQLite
+      await MessageDatabase.instance.upsertConversations(list);
       setState(() => _groupConversationsFromApi = list);
     }
   }
@@ -425,16 +577,153 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (!mounted) return;
     setState(() => _callsLoading = true);
 
-    final result = await _callService.getCallHistory(
-      userId: widget.currentUserId,
-      perPage: 50,
-    );
+    // 1. Load cached call history from SQLite for instant display
+    try {
+      final cachedRows = await MessageDatabase.instance.getCallHistory();
+      if (cachedRows.isNotEmpty && mounted) {
+        final cached = cachedRows.map(_rowToCallLog).toList();
+        setState(() {
+          _callLogs = cached;
+          _callsLoading = false;
+        });
+      }
+    } catch (_) {
+      // SQLite read failed — continue to API
+    }
 
-    if (!mounted) return;
-    setState(() {
-      _callsLoading = false;
-      _callLogs = result.success ? result.logs : [];
+    // 2. Fetch from API with auth token (new endpoint with user details)
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final authToken = storage.getAuthToken();
+      List<CallLog> apiFetched = [];
+
+      if (authToken != null && authToken.isNotEmpty) {
+        final resp = await _signalingService.getCallLog(
+          page: 1,
+          perPage: 50,
+          authToken: authToken,
+          userId: widget.currentUserId,
+        );
+        if (!mounted) return;
+        if (resp.success) {
+          apiFetched = resp.data.map((e) => _callLogFromEntry(e, widget.currentUserId)).toList();
+        }
+      } else {
+        // Fallback to legacy API (no user details)
+        final result = await _callService.getCallHistory(
+          userId: widget.currentUserId,
+          perPage: 50,
+        );
+        if (!mounted) return;
+        if (result.success) {
+          apiFetched = result.logs;
+        }
+      }
+
+      // 3. Cache API results to SQLite
+      if (apiFetched.isNotEmpty) {
+        final rows = apiFetched.map(_callLogToRow).toList();
+        MessageDatabase.instance.upsertCallLogs(rows);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _callsLoading = false;
+        if (apiFetched.isNotEmpty) {
+          _callLogs = apiFetched;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _callsLoading = false);
+      debugPrint('[ConversationsScreen] _loadCallHistory error: $e');
+    }
+  }
+
+  Map<String, dynamic> _callLogToRow(CallLog log) => {
+    'id': log.id,
+    'user_id': log.userId,
+    'other_user_id': log.otherUserId,
+    'call_id': log.callId,
+    'type': log.type,
+    'direction': log.direction,
+    'status': log.status,
+    'duration': log.duration,
+    'call_time': log.callTime.toIso8601String(),
+    'other_user_json': log.otherUser != null ? jsonEncode({
+      'id': log.otherUser!.id,
+      'first_name': log.otherUser!.firstName,
+      'last_name': log.otherUser!.lastName,
+      'username': log.otherUser!.username,
+      'profile_photo_path': log.otherUser!.profilePhotoPath,
+    }) : null,
+    'json_data': jsonEncode({
+      'id': log.id,
+      'user_id': log.userId,
+      'other_user_id': log.otherUserId,
+      'call_id': log.callId,
+      'type': log.type,
+      'direction': log.direction,
+      'status': log.status,
+      'duration': log.duration,
+      'call_time': log.callTime.toIso8601String(),
+      'other_user': log.otherUser != null ? {
+        'id': log.otherUser!.id,
+        'first_name': log.otherUser!.firstName,
+        'last_name': log.otherUser!.lastName,
+        'username': log.otherUser!.username,
+        'profile_photo_path': log.otherUser!.profilePhotoPath,
+      } : null,
+    }),
+  };
+
+  CallLog _rowToCallLog(Map<String, dynamic> row) {
+    if (row['json_data'] != null) {
+      try {
+        final json = jsonDecode(row['json_data'] as String) as Map<String, dynamic>;
+        return CallLog.fromJson(json);
+      } catch (_) {}
+    }
+    return CallLog.fromJson({
+      'id': row['id'],
+      'user_id': row['user_id'],
+      'other_user_id': row['other_user_id'],
+      'call_id': row['call_id'],
+      'type': row['type'],
+      'direction': row['direction'],
+      'status': row['status'],
+      'duration': row['duration'],
+      'call_time': row['call_time'],
     });
+  }
+
+  static CallLog _callLogFromEntry(CallLogEntry e, int currentUserId) {
+    final other = e.otherParty;
+    int? otherId;
+    CallUser? otherUser;
+    if (other != null) {
+      otherId = other['id'] is int ? other['id'] as int : (other['id'] is num ? (other['id'] as num).toInt() : null);
+      otherUser = CallUser(
+        id: otherId ?? 0,
+        firstName: other['first_name']?.toString() ?? '',
+        lastName: other['last_name']?.toString() ?? '',
+        username: other['username']?.toString(),
+        profilePhotoPath: other['profile_photo_path']?.toString(),
+      );
+    }
+    final callTime = e.createdAt ?? e.endedAt ?? e.startedAt ?? DateTime.now();
+    return CallLog(
+      id: e.callId.hashCode,
+      userId: currentUserId,
+      otherUserId: otherId,
+      type: e.type,
+      direction: e.direction,
+      status: e.status == 'connected' ? 'answered' : (e.status == 'ended' ? 'answered' : e.status),
+      duration: e.durationSeconds,
+      callTime: callTime,
+      callId: e.callId,
+      otherUser: otherUser,
+    );
   }
 
   void _openChat(Conversation conversation) {
@@ -600,6 +889,35 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   _openChatWithVoiceNote(call.otherUserId!);
                 },
               ),
+            if (call.wasMissed && call.callId != null && call.callId!.isNotEmpty)
+              ListTile(
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _primaryText.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.voicemail_rounded, color: _primaryText, size: 24),
+                ),
+                title: const Text('Leave voice message'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final storage = await LocalStorageService.getInstance();
+                  if (!mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MissedCallVoiceScreen(
+                        callId: call.callId!,
+                        currentUserId: widget.currentUserId,
+                        authToken: storage.getAuthToken(),
+                        otherUserName: call.otherUser?.displayName,
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -629,7 +947,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  /// Starts 1:1 call. Uses new flow (OutgoingCallFlowScreen) when authToken exists.
+  /// Starts 1:1 call via OutgoingCallFlowScreen.
   Future<void> _initiateCall(
     int calleeId,
     String type, {
@@ -641,48 +959,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final name = calleeName ?? 'User';
     final avatar = calleeAvatarUrl;
 
-    if (authToken != null && authToken.isNotEmpty && mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => OutgoingCallFlowScreen(
-            currentUserId: widget.currentUserId,
-            authToken: authToken,
-            calleeId: calleeId,
-            calleeName: name,
-            calleeAvatarUrl: avatar,
-            type: type,
-          ),
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => OutgoingCallFlowScreen(
+          currentUserId: widget.currentUserId,
+          authToken: authToken,
+          calleeId: calleeId,
+          calleeName: name,
+          calleeAvatarUrl: avatar,
+          type: type,
         ),
-      ).then((_) {
-        if (mounted) _loadCallHistory();
-      });
-      return;
-    }
-
-    final result = await _callService.initiateCall(
-      userId: widget.currentUserId,
-      calleeId: calleeId,
-      type: type,
-    );
-
-    if (result.success && result.call != null && mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => OutgoingCallScreen(
-            currentUserId: widget.currentUserId,
-            call: result.call!,
-          ),
-        ),
-      ).then((_) {
-        if (mounted) _loadCallHistory();
-      });
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? 'Call failed')),
-      );
-    }
+      ),
+    ).then((_) {
+      if (mounted) _loadCallHistory();
+    });
   }
 
   String _formatCallTime(DateTime time) {
@@ -725,30 +1017,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   List<Conversation> get _filteredChats {
     final list = _privateConversations;
-    if (_chatsFilter == 'favorites') return list.where((c) => _favoriteIds.contains(c.id)).toList();
-    if (_chatsFilter == 'archived') return list.where((c) => _archivedIds.contains(c.id)).toList();
+    if (_chatsFilter == 'favorites') return list.where((c) => _isFavorite(c)).toList();
+    if (_chatsFilter == 'archived') return list.where((c) => _isArchived(c)).toList();
     if (kChatFolderNames.contains(_chatsFilter)) return list.where((c) => _folderByConversation[c.id] == _chatsFilter).toList();
-    return list.where((c) => !_archivedIds.contains(c.id)).toList();
+    return list.where((c) => !_isArchived(c)).toList();
   }
 
-  /// Chats list with pinned first (order preserved), then rest by last activity.
+  /// Chats list with pinned first, then rest by last activity.
   List<Conversation> get _filteredChatsPinnedFirst {
     final list = _filteredChats;
     if (list.isEmpty) return list;
-    final pinned = _pinnedIds.where((id) => list.any((c) => c.id == id)).toList();
-    final rest = list.where((c) => !_pinnedIds.contains(c.id)).toList();
-    final order = <Conversation>[];
-    for (final id in pinned) {
-      final c = list.cast<Conversation?>().firstWhere((x) => x?.id == id, orElse: () => null);
-      if (c != null) order.add(c);
-    }
-    order.addAll(rest);
-    return order;
+    final pinned = list.where((c) => _isPinned(c)).toList();
+    final rest = list.where((c) => !_isPinned(c)).toList();
+    return [...pinned, ...rest];
   }
 
   /// Archived private chats (for collapsed "Archived" section).
   List<Conversation> get _archivedChats =>
-      _privateConversations.where((c) => _archivedIds.contains(c.id)).toList();
+      _privateConversations.where((c) => _isArchived(c)).toList();
 
   /// Chats matching search query (title or participant names). Used when _searchQuery is not empty.
   List<Conversation> get _searchFilteredChats {
@@ -771,6 +1057,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   List<CallLog> get _filteredCalls {
     if (_callsFilter == 'missed') return _callLogs.where((c) => c.wasMissed).toList();
+    if (_callsFilter == 'favorites') {
+      // Collect userIds from favorited conversations
+      final favoriteUserIds = <int>{};
+      for (final c in _conversations) {
+        if (_isFavorite(c) && !c.isGroup) {
+          for (final p in c.participants) {
+            if (p.userId != widget.currentUserId) {
+              favoriteUserIds.add(p.userId);
+            }
+          }
+        }
+      }
+      return _callLogs.where((c) =>
+        c.otherUserId != null && favoriteUserIds.contains(c.otherUserId)
+      ).toList();
+    }
     return _callLogs;
   }
 
@@ -788,6 +1090,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         title: s?.messages ?? 'Messages',
         automaticallyImplyLeading: false,
         actions: [
+          TajiriAppBar.action(
+            icon: HeroIcons.microphone,
+            onPressed: () => Navigator.pushNamed(context, '/audio-rooms'),
+          ),
+          TajiriAppBar.action(
+            icon: HeroIcons.star,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => StarredMessagesScreen(
+                    currentUserId: widget.currentUserId,
+                  ),
+                ),
+              );
+            },
+          ),
           TajiriAppBar.action(
             icon: HeroIcons.magnifyingGlass,
             onPressed: () => Navigator.pushNamed(context, '/search-conversations'),
@@ -817,6 +1136,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ],
         ),
       ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton(
+              onPressed: _createNewConversation,
+              backgroundColor: _primaryText,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.chat_bubble_outline_rounded),
+            )
+          : null,
     );
   }
 
@@ -1185,8 +1512,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
-      backgroundColor: _accent.withOpacity(0.2),
-      selectedColor: _primaryText.withOpacity(0.2),
+      backgroundColor: _accent.withValues(alpha: 0.2),
+      selectedColor: _primaryText.withValues(alpha: 0.2),
     );
   }
 
@@ -1196,7 +1523,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
     if (_error != null) return _buildErrorState(s);
     final list = _filteredGroupConversations;
-    final hasSearch = _groupSearchQuery.isNotEmpty;
     final noGroupsAtAll = _groupConversations.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1316,6 +1642,88 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
+  /// Build the horizontal favorites row shown at the top of the Calls tab.
+  Widget _buildCallsFavoritesRow() {
+    final favorites = _conversations.where((c) => _isFavorite(c) && !c.isGroup).toList();
+    if (favorites.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 88,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemCount: favorites.length,
+        itemBuilder: (context, index) {
+          final conv = favorites[index];
+          final name = conv.title;
+          final photo = conv.avatarUrl;
+          // Find the other user's ID for calling
+          final otherParticipant = conv.participants.where((p) => p.userId != widget.currentUserId).firstOrNull;
+          final otherUserId = otherParticipant?.userId;
+          return GestureDetector(
+            onTap: () {
+              if (otherUserId == null) return;
+              _showFavoriteCallMenu(otherUserId, name, photo);
+            },
+            child: SizedBox(
+              width: 60,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  UserAvatar(photoUrl: photo, name: name, radius: 24),
+                  const SizedBox(height: 4),
+                  Text(
+                    name,
+                    style: const TextStyle(fontSize: 11, color: _primaryText),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showFavoriteCallMenu(int userId, String name, String? avatarUrl) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.call, color: _primaryText),
+                title: const Text('Voice Call'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _initiateCall(userId, 'voice', calleeName: name, calleeAvatarUrl: avatarUrl);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam_rounded, color: _primaryText),
+                title: const Text('Video Call'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _initiateCall(userId, 'video', calleeName: name, calleeAvatarUrl: avatarUrl);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCallsBody(AppStrings? s) {
     if (_callsLoading) {
       return const Center(child: CircularProgressIndicator(color: _primaryText));
@@ -1324,6 +1732,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildCallsFavoritesRow(),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(0, 1, 16, 4),
@@ -1332,6 +1741,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               _filterChip('All', _callsFilter == 'all', () => setState(() => _callsFilter = 'all')),
               const SizedBox(width: 8),
               _filterChip('Missed', _callsFilter == 'missed', () => setState(() => _callsFilter = 'missed')),
+              const SizedBox(width: 8),
+              _filterChip('Favorites', _callsFilter == 'favorites', () => setState(() => _callsFilter = 'favorites')),
             ],
           ),
         ),
@@ -1469,21 +1880,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  List<Widget> _buildSlidableChatTiles(List<Conversation> list, AppStrings? s, {bool showFavoriteArchive = false}) {
-    return [
-      for (int i = 0; i < list.length; i++) ...[
-        if (i > 0) const Divider(height: 1),
-        _wrapSlidable(list[i], s, showFavoriteArchive: showFavoriteArchive),
-      ],
-    ];
-  }
-
   Widget _wrapSlidable(Conversation conversation, AppStrings? s, {bool showFavoriteArchive = false}) {
     final s0 = AppStringsScope.of(context);
-    final isArchived = _archivedIds.contains(conversation.id);
+    final archived = _isArchived(conversation);
     final effectiveUnread = _unreadOverride.contains(conversation.id)
         ? (conversation.unreadCount > 0 ? conversation.unreadCount : 1)
         : conversation.unreadCount;
+    // Resolve online presence for 1:1 chats
+    final partnerId = conversation.isPrivate
+        ? conversation.participants.where((p) => p.userId != widget.currentUserId).firstOrNull?.userId
+        : null;
+    final isPartnerOnline = partnerId != null && (_presences[partnerId]?.isOnline ?? false);
     return Slidable(
       key: ValueKey(conversation.id),
       startActionPane: ActionPane(
@@ -1510,11 +1917,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         extentRatio: 0.75,
         children: [
           SlidableAction(
-            onPressed: (_) => _toggleArchived(conversation.id),
+            onPressed: (_) => _toggleArchived(conversation),
             backgroundColor: const Color(0xFF9E9E9E),
             foregroundColor: Colors.white,
-            icon: isArchived ? Icons.unarchive_rounded : Icons.archive_rounded,
-            label: isArchived ? (s0?.unarchive ?? 'Unarchive') : (s0?.archive ?? 'Archive'),
+            icon: archived ? Icons.unarchive_rounded : Icons.archive_rounded,
+            label: archived ? (s0?.unarchive ?? 'Unarchive') : (s0?.archive ?? 'Archive'),
           ),
           SlidableAction(
             onPressed: (_) => _showConversationMoreSheet(conversation),
@@ -1536,9 +1943,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         conversation: conversation,
         currentUserId: widget.currentUserId,
         onTap: () => _openChat(conversation),
-        isFavorite: _favoriteIds.contains(conversation.id),
-        isArchived: isArchived,
-        isPinned: _pinnedIds.contains(conversation.id),
+        isFavorite: _isFavorite(conversation),
+        isArchived: archived,
+        isPinned: _isPinned(conversation),
+        isMuted: _isMuted(conversation),
+        isOnline: isPartnerOnline,
         folderName: _folderByConversation[conversation.id],
         draftText: _draftsByConversationId[conversation.id],
         isTyping: _typingConversationIds.contains(conversation.id),
@@ -1546,8 +1955,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         pendingPreview: PendingMessageStore.instance.getPending(conversation.id)?.preview,
         isSending: PendingMessageStore.instance.hasPending(conversation.id),
         effectiveUnreadCount: effectiveUnread,
-        onToggleFavorite: showFavoriteArchive ? () => _toggleFavorite(conversation.id) : null,
-        onToggleArchived: showFavoriteArchive ? () => _toggleArchived(conversation.id) : null,
+        onToggleFavorite: showFavoriteArchive ? () => _toggleFavorite(conversation) : null,
+        onToggleArchived: showFavoriteArchive ? () => _toggleArchived(conversation) : null,
         onAssignFolder: showFavoriteArchive ? (name) => _setConversationFolder(conversation.id, name) : null,
       ),
     );
@@ -1555,7 +1964,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   void _showConversationMoreSheet(Conversation conversation) {
     final s0 = AppStringsScope.of(context);
-    final isPinned = _pinnedIds.contains(conversation.id);
+    final pinned = _isPinned(conversation);
+    final muted = _isMuted(conversation);
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1563,11 +1973,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined),
-              title: Text(isPinned ? (s0?.unpin ?? 'Unpin') : (s0?.pin ?? 'Pin')),
+              leading: Icon(pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined),
+              title: Text(pinned ? (s0?.unpin ?? 'Unpin') : (s0?.pin ?? 'Pin')),
               onTap: () {
                 Navigator.pop(ctx);
-                _togglePin(conversation.id);
+                _togglePin(conversation);
+              },
+            ),
+            ListTile(
+              leading: Icon(muted ? Icons.volume_up_rounded : Icons.volume_off_rounded),
+              title: Text(muted ? 'Unmute' : 'Mute'),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (muted) {
+                  _unmuteConversation(conversation);
+                } else {
+                  _showMuteOptions(conversation);
+                }
               },
             ),
             ListTile(
@@ -1642,7 +2064,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final ok = await _messageService.leaveConversation(conversation.id, widget.currentUserId);
     if (mounted) {
       if (ok) {
-        _archivedIds.remove(conversation.id);
         _conversations.removeWhere((c) => c.id == conversation.id);
         setState(() {});
       }
@@ -1693,11 +2114,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               extentRatio: 0.75,
               children: [
                 SlidableAction(
-                  onPressed: (_) => _toggleArchived(conversation.id),
+                  onPressed: (_) => _toggleArchived(conversation),
                   backgroundColor: const Color(0xFF9E9E9E),
                   foregroundColor: Colors.white,
-                  icon: _archivedIds.contains(conversation.id) ? Icons.unarchive_rounded : Icons.archive_rounded,
-                  label: _archivedIds.contains(conversation.id) ? (s?.unarchive ?? 'Unarchive') : (s?.archive ?? 'Archive'),
+                  icon: _isArchived(conversation) ? Icons.unarchive_rounded : Icons.archive_rounded,
+                  label: _isArchived(conversation) ? (s?.unarchive ?? 'Unarchive') : (s?.archive ?? 'Archive'),
                 ),
                 SlidableAction(
                   onPressed: (_) => _showConversationMoreSheet(conversation),
@@ -1719,9 +2140,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               conversation: conversation,
               currentUserId: widget.currentUserId,
               onTap: () => _openChat(conversation),
-              isFavorite: _favoriteIds.contains(conversation.id),
-              isArchived: _archivedIds.contains(conversation.id),
-              isPinned: _pinnedIds.contains(conversation.id),
+              isFavorite: _isFavorite(conversation),
+              isArchived: _isArchived(conversation),
+              isPinned: _isPinned(conversation),
+              isMuted: _isMuted(conversation),
+              isOnline: false, // Groups don't show online status
               folderName: _folderByConversation[conversation.id],
               draftText: _draftsByConversationId[conversation.id],
               isTyping: _typingConversationIds.contains(conversation.id),
@@ -1729,8 +2152,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               pendingPreview: PendingMessageStore.instance.getPending(conversation.id)?.preview,
               isSending: PendingMessageStore.instance.hasPending(conversation.id),
               effectiveUnreadCount: effectiveUnread,
-              onToggleFavorite: showFavoriteArchive ? () => _toggleFavorite(conversation.id) : null,
-              onToggleArchived: showFavoriteArchive ? () => _toggleArchived(conversation.id) : null,
+              onToggleFavorite: showFavoriteArchive ? () => _toggleFavorite(conversation) : null,
+              onToggleArchived: showFavoriteArchive ? () => _toggleArchived(conversation) : null,
               onAssignFolder: showFavoriteArchive ? (name) => _setConversationFolder(conversation.id, name) : null,
             ),
           );
@@ -1988,6 +2411,8 @@ class _ConversationTile extends StatelessWidget {
   final bool isFavorite;
   final bool isArchived;
   final bool isPinned;
+  final bool isMuted;
+  final bool isOnline;
   final String? folderName;
   final String? draftText;
   final bool isTyping;
@@ -2006,6 +2431,8 @@ class _ConversationTile extends StatelessWidget {
     this.isFavorite = false,
     this.isArchived = false,
     this.isPinned = false,
+    this.isMuted = false,
+    this.isOnline = false,
     this.folderName,
     this.draftText,
     this.isTyping = false,
@@ -2031,6 +2458,22 @@ class _ConversationTile extends StatelessWidget {
   static const double _paddingV = 6;
   static const double _gapNamePreview = 4; // space between name row and preview row (context block)
   static const Color _brandGreen = Color(0xFF25D366); // Brand reinforcement (unread badge, read tick)
+
+  /// Returns the appropriate icon for a chat bridge type.
+  static IconData _bridgeIconForType(String? bridgeType) {
+    switch (bridgeType) {
+      case 'matrix':
+        return Icons.grid_view_rounded;
+      case 'rcs':
+        return Icons.sms_rounded;
+      case 'sms':
+        return Icons.message_rounded;
+      case 'email':
+        return Icons.email_rounded;
+      default:
+        return Icons.link_rounded;
+    }
+  }
 
   void _showFolderMenu(BuildContext context) {
     if (onAssignFolder == null) return;
@@ -2130,6 +2573,39 @@ class _ConversationTile extends StatelessWidget {
                           child: Icon(Icons.group_rounded, size: 14, color: primaryText),
                         ),
                       ),
+                    if (isOnline && conversation.isPrivate)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: _brandGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
+                          ),
+                        ),
+                      ),
+                    // Bridge badge: small icon at top-left for bridged conversations
+                    if (conversation.isBridged)
+                      Positioned(
+                        left: -4,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.scaffoldBackgroundColor, width: 1.5),
+                          ),
+                          child: Icon(
+                            _bridgeIconForType(conversation.bridgeType),
+                            size: 12,
+                            color: primaryText,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(width: 12),
@@ -2191,7 +2667,7 @@ class _ConversationTile extends StatelessWidget {
                                   fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
                                 ),
                               ),
-                              if (conversation.isMuted) ...[
+                              if (isMuted) ...[
                                 const SizedBox(width: 4),
                                 Icon(Icons.volume_off_rounded, size: 14, color: secondaryText.withValues(alpha: 0.85)),
                               ],
@@ -2213,14 +2689,10 @@ class _ConversationTile extends StatelessWidget {
                               padding: const EdgeInsets.only(right: 4),
                               child: Icon(Icons.schedule_rounded, size: 16, color: secondaryText),
                             )
-                          else if (lastMessageFromMe && lastMessage != null && draftText == null && !isTyping && !isRecording)
+                          else if (lastMessageFromMe && draftText == null && !isTyping && !isRecording)
                             Padding(
                               padding: const EdgeInsets.only(right: 4),
-                              child: Icon(
-                                lastMessage.isRead ? Icons.done_all : Icons.done,
-                                size: 16,
-                                color: lastMessage.isRead ? _brandGreen : secondaryText,
-                              ),
+                              child: _buildStatusIcon(lastMessage.status),
                             ),
                           Expanded(
                             child: Text(
@@ -2309,6 +2781,21 @@ class _ConversationTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildStatusIcon(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.pending:
+        return const Icon(Icons.access_time, size: 14, color: Color(0xFF999999));
+      case MessageStatus.sent:
+        return const Icon(Icons.check, size: 14, color: Color(0xFF999999));
+      case MessageStatus.delivered:
+        return const Icon(Icons.done_all, size: 14, color: Color(0xFF999999));
+      case MessageStatus.read:
+        return const Icon(Icons.done_all, size: 14, color: Color(0xFF2196F3));
+      case MessageStatus.failed:
+        return const Icon(Icons.error_outline, size: 14, color: Color(0xFFE53935));
+    }
   }
 
   /// WhatsApp-style: Today = "3:45 PM", Yesterday = "Yesterday", < 7 days = "Mon", else "12/02/25".

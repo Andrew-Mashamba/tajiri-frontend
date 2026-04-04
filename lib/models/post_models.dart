@@ -305,16 +305,29 @@ class Post {
       'shares_count': sharesCount,
       'views_count': viewsCount,
       'saves_count': savesCount,
+      'replies_count': repliesCount,
+      'impressions_count': impressionsCount,
+      'watch_time_seconds': watchTimeSeconds,
+      'engagement_score': engagementScore,
+      'trending_score': trendingScore,
       'is_pinned': isPinned,
       'is_short_video': isShortVideo,
+      'is_viral': isViral,
+      'is_featured': isFeatured,
       'original_post_id': originalPostId,
-      'reply_to_post_id': replyToPostId,
-      'stitch_from_post_id': stitchFromPostId,
-      'reply_layout': replyLayout,
-      'stitch_trim_start_ms': stitchTrimStartMs,
-      'stitch_trim_end_ms': stitchTrimEndMs,
       'region_id': regionId,
-      // New fields
+      'thread_id': threadId,
+      'thread_title': threadTitle,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'user': user?.toJson(),
+      'media': media.map((m) => m.toJson()).toList(),
+      'hashtags': hashtags.map((h) => h.toJson()).toList(),
+      'original_post': originalPost?.toJson(),
+      'is_liked': isLiked,
+      'is_saved': isSaved,
+      'user_reaction': userReaction?.value,
+      'is_subscribed_to_author': isSubscribedToAuthor,
       'background_color': backgroundColor,
       'audio_path': audioPath,
       'audio_duration': audioDuration,
@@ -324,13 +337,25 @@ class Post {
       'music_start_time': musicStartTime,
       'original_audio_volume': originalAudioVolume,
       'music_volume': musicVolume,
+      'music_track': musicTrack?.toJson(),
       'video_speed': videoSpeed,
       'text_overlays': textOverlays?.map((t) => t.toJson()).toList(),
       'video_filter': videoFilter,
-      if (pollId != null) 'poll_id': pollId,
+      'poll_id': pollId,
+      'allow_comments': allowComments,
+      'reply_to_post_id': replyToPostId,
+      'stitch_from_post_id': stitchFromPostId,
+      'reply_layout': replyLayout,
+      'stitch_trim_start_ms': stitchTrimStartMs,
+      'stitch_trim_end_ms': stitchTrimEndMs,
+      'reply_to_post': replyToPost?.toJson(),
+      'stitch_from_post': stitchFromPost?.toJson(),
       'is_sponsored': isSponsored,
-      if (sponsorId != null) 'sponsor_id': sponsorId,
-      if (sponsorName != null) 'sponsor_name': sponsorName,
+      'sponsor_id': sponsorId,
+      'sponsor_name': sponsorName,
+      'top_comment_text': topCommentText,
+      'top_comment_author': topCommentAuthor,
+      'top_comment_replies': topCommentReplies,
     };
   }
 
@@ -610,6 +635,18 @@ class Hashtag {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'posts_count': postsCount,
+      'usage_count_24h': usageCount24h,
+      'usage_count_7d': usageCount7d,
+      'is_trending': isTrending,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
   /// Format posts count for display (e.g., 1.2K, 5.3M)
   String get formattedPostsCount {
     if (postsCount >= 1000000) {
@@ -730,6 +767,7 @@ class PostMedia {
   final String filePath;
   final String? thumbnailPath;
   final String? dominantColor;
+  final String? blurhash;
   final String? gridThumbnailPath;
   final String? originalFilename;
   final int? fileSize;
@@ -745,6 +783,7 @@ class PostMedia {
     required this.filePath,
     this.thumbnailPath,
     this.dominantColor,
+    this.blurhash,
     this.gridThumbnailPath,
     this.originalFilename,
     this.fileSize,
@@ -762,6 +801,7 @@ class PostMedia {
       filePath: json['file_path'] ?? '',
       thumbnailPath: json['thumbnail_path'],
       dominantColor: json['dominant_color'],
+      blurhash: json['blurhash'],
       gridThumbnailPath: json['grid_thumbnail_path'],
       originalFilename: json['original_filename'],
       fileSize: json['file_size'] != null ? _parseInt(json['file_size']) : null,
@@ -770,6 +810,25 @@ class PostMedia {
       duration: json['duration'] != null ? _parseInt(json['duration']) : null,
       order: _parseInt(json['order']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'post_id': postId,
+      'media_type': mediaType.value,
+      'file_path': filePath,
+      'thumbnail_path': thumbnailPath,
+      'dominant_color': dominantColor,
+      'blurhash': blurhash,
+      'grid_thumbnail_path': gridThumbnailPath,
+      'original_filename': originalFilename,
+      'file_size': fileSize,
+      'width': width,
+      'height': height,
+      'duration': duration,
+      'order': order,
+    };
   }
 
   String get fileUrl => _buildStorageUrl(filePath);
@@ -876,6 +935,19 @@ class PostUser {
           ? (json['mutual_follower_names'] as List).map((e) => e.toString()).toList()
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'first_name': firstName,
+      'last_name': lastName,
+      'username': username,
+      'profile_photo_path': profilePhotoPath,
+      'is_following': isFollowing,
+      'mutual_followers_count': mutualFollowersCount,
+      'mutual_follower_names': mutualFollowerNames,
+    };
   }
 
   String get fullName => '$firstName $lastName'.trim();

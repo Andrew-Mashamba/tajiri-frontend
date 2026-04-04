@@ -13,11 +13,13 @@ class TeaService {
     String token, {
     String? message,
     String? conversationId,
+    int? userId,
   }) async {
     try {
       final body = <String, dynamic>{};
       if (message != null) body['message'] = message;
       if (conversationId != null) body['conversation_id'] = conversationId;
+      if (userId != null) body['user_id'] = userId;
 
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/tea/chat'),

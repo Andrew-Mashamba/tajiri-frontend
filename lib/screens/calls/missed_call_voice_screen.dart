@@ -33,6 +33,8 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
   String? _recordedPath;
   bool _sending = false;
   Timer? _timer;
+  Timer? _pulseTimer;
+  bool _pulseVisible = true;
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _pulseTimer?.cancel();
     _recorder?.closeRecorder();
     super.dispose();
   }
@@ -61,9 +64,13 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
         setState(() {
           _isRecording = true;
           _durationSec = 0;
+          _pulseVisible = true;
         });
         _timer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (mounted) setState(() => _durationSec += 1);
+        });
+        _pulseTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+          if (mounted) setState(() => _pulseVisible = !_pulseVisible);
         });
       }
     } catch (e) {
@@ -77,6 +84,7 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
 
   Future<void> _stopRecording() async {
     _timer?.cancel();
+    _pulseTimer?.cancel();
     if (_recorder == null || !_isRecording) return;
     try {
       await _recorder!.stopRecorder();
@@ -115,12 +123,29 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
     }
   }
 
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = widget.otherUserName ?? 'User';
     return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Leave voice message'),
+        backgroundColor: const Color(0xFFFAFAFA),
+        foregroundColor: const Color(0xFF1A1A1A),
+        elevation: 0,
+        title: const Text(
+          'Leave voice message',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -128,60 +153,216 @@ class _MissedCallVoiceScreenState extends State<MissedCallVoiceScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'After missed call to $name',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              if (_isRecording) ...[
-                Text(
-                  '$_durationSec s',
-                  style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: _stopRecording,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop'),
-                ),
-              ] else if (_recordedPath != null) ...[
-                Text(
-                  '$_durationSec s recorded',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OutlinedButton(
-                      onPressed: _sending ? null : () => setState(() => _recordedPath = null),
-                      child: const Text('Record again'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _sending ? null : _sendVoiceMessage,
-                      child: _sending
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Send'),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                ElevatedButton.icon(
-                  onPressed: _sending ? null : _startRecording,
-                  icon: const Icon(Icons.mic),
-                  label: const Text('Record voice message'),
-                ),
-              ],
+              if (_isRecording)
+                _buildRecordingState()
+              else if (_recordedPath != null)
+                _buildRecordedState()
+              else
+                _buildInitialState(name),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInitialState(String name) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'After missed call to $name',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 48),
+        SizedBox(
+          width: 80,
+          height: 80,
+          child: Material(
+            color: const Color(0xFF1A1A1A),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: _sending ? null : _startRecording,
+              customBorder: const CircleBorder(),
+              child: const Center(
+                child: Icon(
+                  Icons.mic_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Tap to record',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF666666),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecordingState() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Pulsing red dot indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedOpacity(
+              opacity: _pulseVisible ? 1.0 : 0.3,
+              duration: const Duration(milliseconds: 400),
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFD32F2F),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Recording...',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // Duration display
+        Text(
+          _formatDuration(_durationSec),
+          style: const TextStyle(
+            fontSize: 48,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1A1A1A),
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(height: 48),
+        // Stop button
+        SizedBox(
+          width: 64,
+          height: 64,
+          child: Material(
+            color: const Color(0xFF1A1A1A),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: _stopRecording,
+              customBorder: const CircleBorder(),
+              child: const Center(
+                child: Icon(
+                  Icons.stop_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecordedState() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$_durationSec seconds recorded',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Record again button — outlined style
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _sending
+                    ? null
+                    : () => setState(() => _recordedPath = null),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1A1A1A),
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF1A1A1A)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: const Text(
+                  'Record again',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Send button — filled style
+            SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _sending ? null : _sendVoiceMessage,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  disabledBackgroundColor: const Color(0xFF1A1A1A).withAlpha(128),
+                  disabledForegroundColor: Colors.white.withAlpha(128),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                icon: _sending
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 20),
+                label: const Text(
+                  'Send',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

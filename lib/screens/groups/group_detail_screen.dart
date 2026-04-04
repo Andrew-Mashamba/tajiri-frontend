@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../config/api_config.dart';
 import '../../models/group_models.dart';
 import '../../models/post_models.dart';
 import '../../services/group_service.dart';
@@ -285,7 +287,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       elevation: 2,
-                      shadowColor: Colors.black.withOpacity(0.1),
+                      shadowColor: Colors.black.withValues(alpha: 0.1),
                       child: InkWell(
                         onTap: _isJoining ? null : _handleJoinLeave,
                         borderRadius: BorderRadius.circular(16),
@@ -335,10 +337,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       elevation: 2,
-                      shadowColor: Colors.black.withOpacity(0.1),
+                      shadowColor: Colors.black.withValues(alpha: 0.1),
                       child: InkWell(
                         onTap: () {
-                          // TODO: Share group
+                          final groupUrl = '${ApiConfig.baseUrl.replaceFirst('/api', '')}/groups/${widget.groupId}';
+                          SharePlus.instance.share(
+                            ShareParams(text: '${_group!.name}\n$groupUrl'),
+                          );
                         },
                         borderRadius: BorderRadius.circular(16),
                         child: const Icon(Icons.share, color: _primaryText),
@@ -377,7 +382,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -752,6 +757,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              onTap: () => Navigator.pushNamed(context, '/profile/${_group!.creator!.id}'),
               leading: CircleAvatar(
                 backgroundImage: _group!.creator!.profilePhotoPath != null
                     ? NetworkImage(_group!.creator!.profilePhotoPath!)
@@ -784,6 +790,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> with SingleTicker
         itemBuilder: (context, index) {
           final member = _members[index];
           return ListTile(
+            onTap: () => Navigator.pushNamed(context, '/profile/${member.id}'),
             leading: CircleAvatar(
               backgroundImage: member.profilePhotoPath != null
                   ? NetworkImage(member.profilePhotoPath!)

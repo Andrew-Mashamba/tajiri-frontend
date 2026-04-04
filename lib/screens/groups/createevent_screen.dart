@@ -136,7 +136,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         backgroundColor: _buttonBg,
         foregroundColor: _primaryText,
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         title: const Text(
           'Unda Tukio',
           style: TextStyle(
@@ -206,11 +206,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           height: 150,
           constraints: const BoxConstraints(minHeight: 72),
           decoration: BoxDecoration(
-            color: _accent.withOpacity(0.2),
+            color: _accent.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withValues(alpha: 0.06),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -274,7 +274,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       color: _buttonBg,
       borderRadius: BorderRadius.circular(16),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: InkWell(
         onTap: _isLoading ? null : _selectDate,
         borderRadius: BorderRadius.circular(16),
@@ -324,7 +324,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       color: _buttonBg,
       borderRadius: BorderRadius.circular(16),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: SwitchListTile(
         title: const Text(
           'Siku nzima',
@@ -350,7 +350,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         color: _buttonBg,
         borderRadius: BorderRadius.circular(16),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         child: InkWell(
           onTap: _isLoading ? null : _selectTime,
           borderRadius: BorderRadius.circular(16),
@@ -403,7 +403,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       color: _buttonBg,
       borderRadius: BorderRadius.circular(16),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: SwitchListTile(
         title: const Text(
           'Tukio la mtandaoni',

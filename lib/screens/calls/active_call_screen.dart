@@ -2,6 +2,7 @@
 // Voice: header, avatar, bottom bar (Mute, Speaker, Add, End). Video: full-screen remote, PiP self, bottom bar.
 
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../calls/call_state.dart';
@@ -38,7 +39,11 @@ class ActiveCallScreen extends StatefulWidget {
   State<ActiveCallScreen> createState() => _ActiveCallScreenState();
 }
 
-class _ActiveCallScreenState extends State<ActiveCallScreen> {
+/// Network quality levels for adaptive bandwidth (Feature #21).
+enum NetworkQuality { good, medium, poor }
+
+class _ActiveCallScreenState extends State<ActiveCallScreen>
+    with SingleTickerProviderStateMixin {
   StreamSubscription? _endedSub;
   StreamSubscription? _remoteStreamSub;
   Timer? _durationTimer;
@@ -53,6 +58,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   // Tap to swap main/PiP: when false, main = local, PiP = remote
   bool _mainIsRemote = true;
   bool _reconnecting = false;
+  bool _popped = false;
   bool _weakNetwork = false;
   bool _handRaised = false;
   bool _remoteHandRaised = false;
@@ -72,15 +78,31 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   StreamSubscription<SignalingOfferEvent>? _signalingOfferSub;
   bool _screenSharing = false;
 
+  // Feature #22: Pinch-to-zoom on remote video
+  double _currentScale = 1.0;
+  double _baseScale = 1.0;
+
+  // Feature #21: Adaptive bandwidth — network quality monitoring
+  NetworkQuality _networkQuality = NetworkQuality.good;
+  Timer? _bandwidthStatsTimer;
+
+  // Avatar ring animation for connected state
+  late AnimationController _avatarRingController;
+
   @override
   void initState() {
     super.initState();
+    _avatarRingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
     _channelListen();
     _channelSignalingForReconnect();
     _iceReconnectListen();
     _reactionAndRaiseHandListen();
     _bindStreams();
     _startOverlayHideTimer();
+    _startBandwidthMonitor();
     if (widget.callState.status == CallStatus.connected) {
       _startDurationTimer();
     }
@@ -186,7 +208,15 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
           state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         if (!mounted) return;
-        setState(() => _reconnecting = true);
+        if (!_reconnecting) {
+          // Show weak network immediately, then attempt ICE restart
+          setState(() {
+            _weakNetwork = true;
+            _reconnecting = true;
+          });
+        } else {
+          setState(() => _reconnecting = true);
+        }
         try {
           final offer = await widget.webrtcService.createOfferIceRestart();
           if (offer != null && mounted) {
@@ -206,11 +236,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             _weakNetwork = false;
           });
         }
-      } else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
-          state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
-        if (mounted && !_reconnecting) {
-          setState(() => _weakNetwork = true);
-        }
       }
     });
   }
@@ -223,10 +248,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     });
     final remote = widget.webrtcService.remoteStream;
     if (remote != null) {
-      widget.callState.setRemoteStream(remote);
-      _initRenderersIfNeeded();
+      // Defer to avoid notifyListeners during build phase
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.callState.setRemoteStream(remote);
+        _initRenderersIfNeeded();
+        if (mounted) setState(() {});
+      });
     }
-    if (mounted) setState(() {});
   }
 
   Future<void> _initRenderersIfNeeded() async {
@@ -241,6 +269,113 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     if (mounted) setState(() {});
   }
 
+  // ── Feature #21: Adaptive bandwidth monitoring ──────────────────────
+  void _startBandwidthMonitor() {
+    _bandwidthStatsTimer?.cancel();
+    _bandwidthStatsTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      final pc = widget.webrtcService.peerConnection;
+      if (pc == null) return;
+      try {
+        final stats = await pc.getStats();
+        int totalPacketsLost = 0;
+        int totalPacketsSent = 0;
+        for (final report in stats) {
+          final values = report.values;
+          if (report.type == 'outbound-rtp' && values['kind'] == 'video') {
+            totalPacketsSent += (values['packetsSent'] as int?) ?? 0;
+          }
+          if (report.type == 'remote-inbound-rtp' && values['kind'] == 'video') {
+            totalPacketsLost += (values['packetsLost'] as int?) ?? 0;
+          }
+        }
+        // Calculate packet loss ratio
+        final totalPackets = totalPacketsSent + totalPacketsLost;
+        final lossPercent = totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100.0 : 0.0;
+
+        NetworkQuality newQuality;
+        if (lossPercent > 5.0) {
+          newQuality = NetworkQuality.poor;
+        } else if (lossPercent > 2.0) {
+          newQuality = NetworkQuality.medium;
+        } else {
+          newQuality = NetworkQuality.good;
+        }
+
+        if (mounted && newQuality != _networkQuality) {
+          setState(() => _networkQuality = newQuality);
+        }
+
+        // Adjust bitrate via sender parameters
+        _adaptBitrate(newQuality);
+      } catch (_) {
+        // Stats unavailable — keep current quality
+      }
+    });
+  }
+
+  Future<void> _adaptBitrate(NetworkQuality quality) async {
+    final pc = widget.webrtcService.peerConnection;
+    if (pc == null) return;
+    int targetBitrate;
+    switch (quality) {
+      case NetworkQuality.good:
+        targetBitrate = 1500000; // 1500 kbps
+      case NetworkQuality.medium:
+        targetBitrate = 800000; // 800 kbps
+      case NetworkQuality.poor:
+        targetBitrate = 400000; // 400 kbps
+    }
+    try {
+      final senders = await pc.getSenders();
+      for (final sender in senders) {
+        if (sender.track?.kind == 'video') {
+          final params = sender.parameters;
+          if (params.encodings != null && params.encodings!.isNotEmpty) {
+            params.encodings!.first.maxBitrate = targetBitrate;
+            await sender.setParameters(params);
+          }
+          break;
+        }
+      }
+    } catch (_) {
+      // Sender parameter adjustment not supported — ignore
+    }
+  }
+
+  /// Build a small network quality bars indicator (Feature #21).
+  Widget _buildNetworkQualityIndicator() {
+    final Color activeBarColor;
+    final int activeBars;
+    switch (_networkQuality) {
+      case NetworkQuality.good:
+        activeBarColor = Colors.white;
+        activeBars = 3;
+      case NetworkQuality.medium:
+        activeBarColor = Colors.white60;
+        activeBars = 2;
+      case NetworkQuality.poor:
+        activeBarColor = Colors.white30;
+        activeBars = 1;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: List.generate(3, (i) {
+        final height = 6.0 + (i * 4.0); // 6, 10, 14
+        final isActive = i < activeBars;
+        return Container(
+          width: 4,
+          height: height,
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          decoration: BoxDecoration(
+            color: isActive ? activeBarColor : Colors.white10,
+            borderRadius: BorderRadius.circular(1),
+          ),
+        );
+      }),
+    );
+  }
+
   void _startDurationTimer() {
     _durationTimer?.cancel();
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -251,6 +386,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   Future<void> _endCall() async {
+    if (_popped) return; // Already handled by WS listener
+    // Cancel WS listener BEFORE the API call to prevent double-pop race
+    _endedSub?.cancel();
     await widget.signalingService.endCall(
       callId: widget.callId,
       authToken: widget.authToken,
@@ -261,6 +399,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   /// Leave call without ending for others (Phase 2). Use for group calls.
   Future<void> _leaveCall() async {
+    if (_popped) return;
+    _endedSub?.cancel();
     await widget.signalingService.leaveCall(
       callId: widget.callId,
       authToken: widget.authToken,
@@ -270,6 +410,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   void _cleanupAndPop() {
+    if (_popped) return; // Prevent double-pop race condition
+    _popped = true;
     _durationTimer?.cancel();
     _endedSub?.cancel();
     _iceStateSub?.cancel();
@@ -291,6 +433,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _durationTimer?.cancel();
     _overlayHideTimer?.cancel();
     _reactionClearTimer?.cancel();
+    _bandwidthStatsTimer?.cancel();
     _endedSub?.cancel();
     _iceStateSub?.cancel();
     _reactionSub?.cancel();
@@ -304,6 +447,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     widget.callState.removeListener(_onStateChanged);
     _localRenderer?.dispose();
     _remoteRenderer?.dispose();
+    _avatarRingController.dispose();
     super.dispose();
   }
 
@@ -327,20 +471,54 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   Widget _buildVoiceLayout(String name, String? avatarUrl) {
+    final isConnected = widget.callState.status == CallStatus.connected;
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
+      backgroundColor: const Color(0xFF1A1A1A),
       body: SafeArea(
         child: Column(
           children: [
-            // Header: name, status/timer
+            // Duration pill chip at top
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _reconnecting
+                        ? 'Reconnecting...'
+                        : isConnected
+                            ? _durationText
+                            : 'Connecting...',
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildNetworkQualityIndicator(),
+                ],
+              ),
+            ),
+            // Header: back arrow + name + status
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(8, 16, 16, 0),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white70),
-                    onPressed: () => _endCall(),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white70),
+                      onPressed: () => _endCall(),
+                    ),
                   ),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,16 +528,20 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         Text(
                           _reconnecting
-                              ? 'Reconnecting…'
-                              : (widget.callState.status == CallStatus.connected
-                                  ? _durationText
-                                  : 'Connecting…'),
-                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                              ? 'Reconnecting...'
+                              : isConnected
+                                  ? 'Voice call'
+                                  : 'Connecting...',
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ],
                     ),
@@ -368,55 +550,84 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
               ),
             ),
             const Spacer(),
-            // Center avatar
-            UserAvatar(
-              photoUrl: avatarUrl,
-              name: name,
-              radius: 70,
+            // Center avatar with subtle ring animation when connected
+            AnimatedBuilder(
+              animation: _avatarRingController,
+              builder: (context, child) {
+                final animValue = _avatarRingController.value;
+                final ringOpacity = isConnected ? (0.15 + 0.15 * (1.0 - animValue)) : 0.0;
+                final ringScale = isConnected ? 1.0 + (0.08 * animValue) : 1.0;
+                return Transform.scale(
+                  scale: ringScale,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(ringOpacity),
+                        width: 3,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                );
+              },
+              child: UserAvatar(
+                photoUrl: avatarUrl,
+                name: name,
+                radius: 70,
+              ),
             ),
             const Spacer(),
-            // Bottom bar: Mute, Speaker, Add, End
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _controlButton(
-                  icon: widget.callState.isMuted ? Icons.mic_off : Icons.mic,
-                  label: widget.callState.isMuted ? 'Unmute' : 'Mute',
-                  onPressed: () {
-                    widget.callState.setMuted(!widget.callState.isMuted);
-                    widget.webrtcService.setMicrophoneEnabled(!widget.callState.isMuted);
-                  },
-                ),
-                _controlButton(
-                  icon: widget.callState.isSpeakerOn ? Icons.volume_up : Icons.volume_down,
-                  label: 'Speaker',
-                  onPressed: () async {
-                    final next = !widget.callState.isSpeakerOn;
-                    widget.callState.setSpeakerOn(next);
-                    try {
-                      await Helper.setSpeakerphoneOn(next);
-                    } catch (_) {
-                      // Ignore on unsupported platforms (e.g. web)
-                    }
-                  },
-                ),
-                _controlButton(
-                  icon: Icons.person_add,
-                  label: 'Add',
-                  onPressed: _showAddParticipantSheet,
-                ),
-                _controlButton(
-                  icon: Icons.exit_to_app,
-                  label: 'Leave',
-                  onPressed: _leaveCall,
-                ),
-                _controlButton(
-                  icon: Icons.call_end,
-                  label: 'End',
-                  backgroundColor: Colors.red,
-                  onPressed: _endCall,
-                ),
-              ],
+            // Bottom bar: Mute, Speaker, Add, Leave, End
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _controlButton(
+                    icon: widget.callState.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                    label: widget.callState.isMuted ? 'Unmute' : 'Mute',
+                    isActive: widget.callState.isMuted,
+                    onPressed: () {
+                      widget.callState.setMuted(!widget.callState.isMuted);
+                      widget.webrtcService.setMicrophoneEnabled(!widget.callState.isMuted);
+                    },
+                  ),
+                  _controlButton(
+                    icon: widget.callState.isSpeakerOn
+                        ? Icons.volume_up_rounded
+                        : Icons.volume_down_rounded,
+                    label: 'Speaker',
+                    isActive: widget.callState.isSpeakerOn,
+                    onPressed: () async {
+                      final next = !widget.callState.isSpeakerOn;
+                      widget.callState.setSpeakerOn(next);
+                      try {
+                        await Helper.setSpeakerphoneOn(next);
+                      } catch (_) {
+                        // Ignore on unsupported platforms (e.g. web)
+                      }
+                    },
+                  ),
+                  _controlButton(
+                    icon: Icons.person_add_rounded,
+                    label: 'Add',
+                    onPressed: _showAddParticipantSheet,
+                  ),
+                  _controlButton(
+                    icon: Icons.exit_to_app_rounded,
+                    label: 'Leave',
+                    onPressed: _leaveCall,
+                  ),
+                  _controlButton(
+                    icon: Icons.call_end_rounded,
+                    label: 'End',
+                    isDestructive: true,
+                    onPressed: _endCall,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 32),
           ],
@@ -442,7 +653,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Main video: tap = show overlay + swap, double-tap = focus feedback (02 § 3.2)
+                // Main video: tap = show overlay + swap, pinch-to-zoom (#22), double-tap = reset zoom
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -452,12 +663,26 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                     _startOverlayHideTimer();
                   },
                   onDoubleTap: () {
-                    setState(() => _overlayVisible = true);
+                    setState(() {
+                      _currentScale = 1.0;
+                      _overlayVisible = true;
+                    });
                     _startOverlayHideTimer();
                   },
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4.0,
+                  onScaleStart: (details) => _baseScale = _currentScale,
+                  onScaleUpdate: (details) {
+                    setState(() {
+                      _currentScale = (_baseScale * details.scale).clamp(1.0, 4.0);
+                    });
+                  },
+                  onScaleEnd: (_) {
+                    // Snap back to 1x if barely zoomed
+                    if (_currentScale < 1.1) {
+                      setState(() => _currentScale = 1.0);
+                    }
+                  },
+                  child: Transform.scale(
+                    scale: _currentScale,
                     child: mainRenderer != null && _renderersInitialized
                         ? RTCVideoView(
                             mainRenderer,
@@ -468,7 +693,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                           ),
                   ),
                 ),
-                // Self PiP: draggable, tap to swap
+                // Self PiP: draggable, tap to swap — with subtle border/shadow
                 if (pipRenderer != null && _renderersInitialized)
                   Positioned(
                     left: pipLeft.clamp(0.0, w - _pipWidth),
@@ -483,179 +708,224 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                           _pipTop = (pipTop + details.delta.dy).clamp(0.0, h - _pipHeight - 80);
                         });
                       },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: RTCVideoView(
-                          pipRenderer,
-                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                  ),
-            // Reconnecting banner
-            if (_reconnecting)
-              Positioned(
-                top: 8,
-                left: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade800,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Reconnecting…',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            // Weak network banner (02 § 2.5 optional)
-            if (_weakNetwork && !_reconnecting)
-              Positioned(
-                top: _reconnecting ? 48 : 8,
-                left: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade700,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.signal_cellular_alt, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Weak network',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            // Incoming reaction overlay (4.F.1)
-            if (_lastReactionEmoji != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: Text(
-                    _lastReactionEmoji!,
-                    style: const TextStyle(fontSize: 80),
-                  ),
-                ),
-              ),
-            // Remote raise hand icon on tile (4.F.2)
-            if (_remoteHandRaised)
-              Positioned(
-                top: (_reconnecting ? 48 : 8) + 40,
-                right: 24,
-                child: const Icon(Icons.back_hand, color: Colors.white, size: 32),
-              ),
-            // Top overlay: name, timer (auto-hide after 3s, show on tap — 02 § 3.2)
-            if (_overlayVisible)
-              Positioned(
-                top: (_reconnecting || _weakNetwork) ? 48 : 8,
-                left: 16,
-                right: 80,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() => _overlayVisible = true);
-                    _startOverlayHideTimer();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: RTCVideoView(
+                            pipRenderer,
+                            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _reconnecting ? 'Reconnecting…' : _durationText,
-                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                // Reconnecting banner — monochromatic
+                if (_reconnecting)
+                  Positioned(
+                    top: 8,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A2A),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Reconnecting...',
+                            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Weak network banner — monochromatic
+                if (_weakNetwork && !_reconnecting)
+                  Positioned(
+                    top: _reconnecting ? 48 : 8,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A2A),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.signal_cellular_alt_rounded, color: Colors.white.withOpacity(0.7), size: 18),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Weak network',
+                            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Incoming reaction overlay (4.F.1)
+                if (_lastReactionEmoji != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Text(
+                        _lastReactionEmoji!,
+                        style: const TextStyle(fontSize: 80),
+                      ),
+                    ),
+                  ),
+                // Remote raise hand icon on tile (4.F.2)
+                if (_remoteHandRaised)
+                  Positioned(
+                    top: (_reconnecting ? 48 : 8) + 40,
+                    right: 24,
+                    child: const Icon(Icons.back_hand_rounded, color: Colors.white, size: 32),
+                  ),
+                // Network quality indicator (Feature #21)
+                Positioned(
+                  top: (_reconnecting || _weakNetwork) ? 52 : 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: _buildNetworkQualityIndicator(),
+                  ),
+                ),
+                // Top overlay: name, timer — frosted glass style (auto-hide after 3s)
+                if (_overlayVisible)
+                  Positioned(
+                    top: (_reconnecting || _weakNetwork) ? 48 : 8,
+                    left: 16,
+                    right: 80,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _overlayVisible = true);
+                        _startOverlayHideTimer();
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _reconnecting ? 'Reconnecting...' : _durationText,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // Bottom bar: Mute, Camera, End, Add, Leave, More (auto-hide with overlay)
+                if (_overlayVisible)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 24,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _controlButton(
+                          icon: widget.callState.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                          label: 'Mute',
+                          isActive: widget.callState.isMuted,
+                          size: 48,
+                          onPressed: () {
+                            widget.callState.setMuted(!widget.callState.isMuted);
+                            widget.webrtcService.setMicrophoneEnabled(!widget.callState.isMuted);
+                          },
+                        ),
+                        _controlButton(
+                          icon: widget.callState.isCameraOff
+                              ? Icons.videocam_off_rounded
+                              : Icons.videocam_rounded,
+                          label: 'Camera',
+                          isActive: widget.callState.isCameraOff,
+                          size: 48,
+                          onPressed: () {
+                            widget.callState.setCameraOff(!widget.callState.isCameraOff);
+                            widget.webrtcService.setCameraEnabled(!widget.callState.isCameraOff);
+                          },
+                        ),
+                        _controlButton(
+                          icon: Icons.call_end_rounded,
+                          label: 'End',
+                          isDestructive: true,
+                          size: 48,
+                          onPressed: _endCall,
+                        ),
+                        _controlButton(
+                          icon: Icons.person_add_rounded,
+                          label: 'Add',
+                          size: 48,
+                          onPressed: _showAddParticipantSheet,
+                        ),
+                        _controlButton(
+                          icon: Icons.exit_to_app_rounded,
+                          label: 'Leave',
+                          size: 48,
+                          onPressed: _leaveCall,
+                        ),
+                        _controlButton(
+                          icon: Icons.more_horiz_rounded,
+                          label: 'More',
+                          size: 48,
+                          onPressed: _showMoreMenu,
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
-            // Bottom bar: Mute, Camera, End, Add, More (auto-hide with overlay)
-            if (_overlayVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 24,
-                child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _controlButton(
-                    icon: widget.callState.isMuted ? Icons.mic_off : Icons.mic,
-                    label: 'Mute',
-                    onPressed: () {
-                      widget.callState.setMuted(!widget.callState.isMuted);
-                      widget.webrtcService.setMicrophoneEnabled(!widget.callState.isMuted);
-                    },
-                  ),
-                  _controlButton(
-                    icon: widget.callState.isCameraOff ? Icons.videocam_off : Icons.videocam,
-                    label: 'Camera',
-                    onPressed: () {
-                      widget.callState.setCameraOff(!widget.callState.isCameraOff);
-                      widget.webrtcService.setCameraEnabled(!widget.callState.isCameraOff);
-                    },
-                  ),
-                  _controlButton(
-                    icon: Icons.call_end,
-                    label: 'End',
-                    backgroundColor: Colors.red,
-                    onPressed: _endCall,
-                  ),
-                  _controlButton(
-                    icon: Icons.person_add,
-                    label: 'Add',
-                    onPressed: _showAddParticipantSheet,
-                  ),
-                  _controlButton(
-                    icon: Icons.exit_to_app,
-                    label: 'Leave',
-                    onPressed: _leaveCall,
-                  ),
-                  _controlButton(
-                    icon: Icons.more_horiz,
-                    label: 'More',
-                    onPressed: _showMoreMenu,
-                  ),
-                ],
-              ),
+              ],
             ),
-            ],
-        ),
-      ),
+          ),
         );
       },
     );
@@ -664,6 +934,10 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void _showAddParticipantSheet() {
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: const Color(0xFFFAFAFA),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => FutureBuilder<FriendListResult>(
         future: _friendService.getFriends(userId: widget.currentUserId, perPage: 50),
         builder: (ctx, snapshot) {
@@ -671,7 +945,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             return const SafeArea(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF1A1A1A))),
               ),
             );
           }
@@ -681,13 +955,36 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const SizedBox(height: 8),
+                // Handle bar
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF999999),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
                 const Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Add participant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Add participant',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
                 ),
                 Flexible(
                   child: list.isEmpty
-                      ? const Padding(padding: EdgeInsets.all(24), child: Text('No contacts'))
+                      ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'No contacts',
+                            style: TextStyle(color: Color(0xFF666666)),
+                          ),
+                        )
                       : ListView.builder(
                           shrinkWrap: true,
                           itemCount: list.length,
@@ -695,7 +992,11 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                             final u = list[index];
                             return ListTile(
                               leading: UserAvatar(photoUrl: u.profilePhotoUrl, name: u.fullName, radius: 24),
-                              title: Text(u.fullName),
+                              title: Text(
+                                u.fullName,
+                                style: const TextStyle(color: Color(0xFF1A1A1A)),
+                              ),
+                              trailing: const Icon(Icons.person_add_rounded, color: Color(0xFF666666)),
                               onTap: () async {
                                 Navigator.pop(ctx);
                                 final ok = await widget.signalingService.addParticipant(
@@ -727,14 +1028,32 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void _showMoreMenu() {
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: const Color(0xFFFAFAFA),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const SizedBox(height: 8),
+            // Handle bar
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF999999),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
             if (widget.callState.isVideo)
               ListTile(
-                leading: const Icon(Icons.cameraswitch),
-                title: const Text('Switch camera'),
+                leading: const Icon(Icons.cameraswitch_rounded, color: Color(0xFF1A1A1A)),
+                title: const Text(
+                  'Switch camera',
+                  style: TextStyle(color: Color(0xFF1A1A1A)),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   try {
@@ -747,8 +1066,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                 },
               ),
             ListTile(
-              leading: Icon(_screenSharing ? Icons.stop_screen_share : Icons.screen_share),
-              title: Text(_screenSharing ? 'Stop sharing' : 'Share screen'),
+              leading: Icon(
+                _screenSharing ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded,
+                color: const Color(0xFF1A1A1A),
+              ),
+              title: Text(
+                _screenSharing ? 'Stop sharing' : 'Share screen',
+                style: const TextStyle(color: Color(0xFF1A1A1A)),
+              ),
               onTap: () async {
                 Navigator.pop(ctx);
                 if (_screenSharing) {
@@ -779,8 +1104,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
               },
             ),
             ListTile(
-              leading: Icon(_handRaised ? Icons.back_hand : Icons.back_hand_outlined),
-              title: Text(_handRaised ? 'Lower hand' : 'Raise hand'),
+              leading: Icon(
+                _handRaised ? Icons.back_hand_rounded : Icons.back_hand_rounded,
+                color: const Color(0xFF1A1A1A),
+              ),
+              title: Text(
+                _handRaised ? 'Lower hand' : 'Raise hand',
+                style: const TextStyle(color: Color(0xFF1A1A1A)),
+              ),
               onTap: () async {
                 setState(() => _handRaised = !_handRaised);
                 Navigator.pop(ctx);
@@ -793,54 +1124,73 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Send reaction'),
+              leading: const Icon(Icons.emoji_emotions_rounded, color: Color(0xFF1A1A1A)),
+              title: const Text(
+                'Send reaction',
+                style: TextStyle(color: Color(0xFF1A1A1A)),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _showReactionPicker(ctx);
               },
             ),
-            if (widget.callState.isVideo)
-              ListTile(
-                leading: const Icon(Icons.auto_fix_high),
-                title: const Text('Video effects'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Video effects coming soon')),
-                  );
-                },
-              ),
+            // Video effects: Not yet implemented — hidden until ready.
           ],
         ),
       ),
     );
   }
 
-  void _showReactionPicker(BuildContext context) {
+  void _showReactionPicker(BuildContext _) {
     const emojis = ['👍', '❤️', '😂', '👏', '🙌'];
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: const Color(0xFFFAFAFA),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: emojis.map((emoji) {
-              return IconButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await widget.signalingService.sendReaction(
-                    callId: widget.callId,
-                    emoji: emoji,
-                    authToken: widget.authToken,
-                    userId: widget.currentUserId,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            // Handle bar
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF999999),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: emojis.map((emoji) {
+                  return SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await widget.signalingService.sendReaction(
+                          callId: widget.callId,
+                          emoji: emoji,
+                          authToken: widget.authToken,
+                          userId: widget.currentUserId,
+                        );
+                      },
+                      child: Center(
+                        child: Text(emoji, style: const TextStyle(fontSize: 32)),
+                      ),
+                    ),
                   );
-                },
-                icon: Text(emoji, style: const TextStyle(fontSize: 32)),
-              );
-            }).toList(),
-          ),
+                }).toList(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -850,26 +1200,46 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     required IconData icon,
     required String label,
     VoidCallback? onPressed,
-    Color? backgroundColor,
+    bool isActive = false,
+    bool isDestructive = false,
+    double size = 56,
   }) {
+    final bgColor = isDestructive
+        ? const Color(0xFF2A2A2A)
+        : isActive
+            ? const Color(0xFFFFFFFF)
+            : const Color(0xFF2A2A2A);
+    final iconColor = isDestructive
+        ? Colors.red.shade400
+        : isActive
+            ? const Color(0xFF1A1A1A)
+            : Colors.white;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Material(
-          color: backgroundColor ?? Colors.white24,
-          shape: const CircleBorder(),
-          child: IconButton(
-            icon: Icon(icon, color: Colors.white, size: 28),
-            onPressed: onPressed,
+        SizedBox(
+          width: size,
+          height: size,
+          child: Material(
+            color: bgColor,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onPressed,
+              customBorder: const CircleBorder(),
+              child: Icon(icon, color: iconColor, size: size * 0.43),
+            ),
           ),
         ),
         const SizedBox(height: 6),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+          ),
         ),
       ],
     );
   }
 }
-

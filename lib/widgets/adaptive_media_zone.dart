@@ -126,6 +126,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
         ratio: ratio,
         bgColor: bg,
         imageUrl: media.fileUrl,
+        blurhash: media.blurhash,
+        dominantColor: media.dominantColor,
       ),
     );
   }
@@ -161,6 +163,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
     required double ratio,
     required Color bgColor,
     required String imageUrl,
+    String? blurhash,
+    String? dominantColor,
   }) {
     final cls = _classifyRatio(ratio);
     final cacheW = _optimalCacheWidth(context);
@@ -173,6 +177,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
             imageUrl: imageUrl,
             fit: BoxFit.cover,
             backgroundColor: bgColor,
+            blurhash: blurhash,
+            dominantColor: dominantColor,
             placeholder: Container(color: bgColor),
             errorWidget: _buildErrorPlaceholder(bgColor),
             cacheWidth: cacheW,
@@ -194,6 +200,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
                     imageUrl: imageUrl,
                     fit: BoxFit.cover,
                     backgroundColor: bgColor,
+                    blurhash: blurhash,
+                    dominantColor: dominantColor,
                     fadeInDuration: Duration.zero,
                     fadeOutDuration: Duration.zero,
                     cacheWidth: cw,
@@ -208,6 +216,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
                   backgroundColor: Colors.transparent,
+                  blurhash: blurhash,
+                  dominantColor: dominantColor,
                   cacheWidth: cw,
                 ),
               ),
@@ -225,6 +235,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
                 backgroundColor: Colors.transparent,
+                blurhash: blurhash,
+                dominantColor: dominantColor,
                 cacheWidth: cacheW,
               ),
             ),
@@ -347,6 +359,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
             imageUrl: isVideo ? (media.thumbnailUrl ?? media.fileUrl) : media.fileUrl,
             fit: BoxFit.cover,
             backgroundColor: bg,
+            blurhash: media.blurhash,
+            dominantColor: media.dominantColor,
           ),
           if (isVideo)
             Center(
@@ -390,6 +404,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
             imageUrl: media.fileUrl,
             fit: BoxFit.cover,
             backgroundColor: _mediaBgColor(media, widget.dominantColor),
+            blurhash: media.blurhash,
+            dominantColor: media.dominantColor,
           ),
           Container(color: Colors.black54),
           Center(
@@ -521,6 +537,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
         imageUrl: media.fileUrl,
         fit: BoxFit.cover,
         backgroundColor: bg,
+        blurhash: media.blurhash,
+        dominantColor: media.dominantColor,
       );
     }
 
@@ -536,6 +554,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
               imageUrl: media.fileUrl,
               fit: BoxFit.cover,
               backgroundColor: bg,
+              blurhash: media.blurhash,
+              dominantColor: media.dominantColor,
               fadeInDuration: Duration.zero,
               fadeOutDuration: Duration.zero,
               cacheWidth: cw,
@@ -548,6 +568,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
             imageUrl: media.fileUrl,
             fit: BoxFit.contain,
             backgroundColor: Colors.transparent,
+            blurhash: media.blurhash,
+            dominantColor: media.dominantColor,
             cacheWidth: cw,
           ),
         ),
@@ -598,6 +620,8 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
                               imageUrl: isVideo ? (item.thumbnailUrl ?? item.fileUrl) : item.fileUrl,
                               fit: BoxFit.cover,
                               backgroundColor: _mediaBgColor(item, widget.dominantColor),
+                              blurhash: item.blurhash,
+                              dominantColor: item.dominantColor,
                             ),
                           ),
                           if (isVideo)

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/tea_models.dart';
 import '../../services/tea_service.dart';
+import '../../services/tea_warmup_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/event_tracking_service.dart';
 import '../../widgets/shangazi_message_bubble.dart';
@@ -30,7 +31,8 @@ class TeaChatScreen extends StatefulWidget {
   State<TeaChatScreen> createState() => _TeaChatScreenState();
 }
 
-class _TeaChatScreenState extends State<TeaChatScreen> {
+class _TeaChatScreenState extends State<TeaChatScreen>
+    with SingleTickerProviderStateMixin {
   final _messages = <_ChatItem>[];
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
@@ -39,39 +41,70 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
   String _streamingText = '';
   bool _isLoading = true;
   StreamSubscription<TeaStreamEvent>? _streamSub;
+  bool _usedPrewarm = false;
+  late final AnimationController _dotsController;
 
   @override
   void initState() {
     super.initState();
+    _dotsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     _initChat();
   }
 
   @override
   void dispose() {
     _streamSub?.cancel();
+    _dotsController.dispose();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<String?> _getToken() async {
+  Future<({String token, int? userId})?> _getAuth() async {
     final storage = await LocalStorageService.getInstance();
-    return storage.getAuthToken();
+    final token = storage.getAuthToken();
+    if (token == null) return null;
+    final userId = storage.getUser()?.userId;
+    return (token: token, userId: userId);
   }
 
   Future<void> _initChat() async {
-    final token = await _getToken();
-    if (token == null || !mounted) return;
+    final auth = await _getAuth();
+    debugPrint('[TeaChat] token=${auth != null ? "${auth.token.substring(0, 5)}..." : "NULL"}, userId=${auth?.userId}');
+    if (auth == null || !mounted) return;
 
-    final response = await TeaService.startChat(token);
+    // Try pre-warmed cache first
+    final cached = TeaWarmupService.instance.consume();
+    if (cached != null) {
+      debugPrint('[TeaChat] using pre-warmed response conv=${cached.conversationId}');
+      _conversationId = cached.conversationId;
+      _usedPrewarm = true;
+      setState(() {
+        _isLoading = false;
+        _isStreaming = true;
+      });
+      _listenToStream(cached.streamUrl, auth.token);
+      return;
+    }
+
+    // No cache — show typing indicator immediately while we wait
+    setState(() {
+      _isLoading = false;
+      _isStreaming = true;
+    });
+
+    final response = await TeaService.startChat(auth.token, userId: auth.userId);
+    debugPrint('[TeaChat] startChat response=${response != null ? "conv=${response.conversationId}, stream=${response.streamUrl}" : "NULL"}');
     if (response == null || !mounted) {
-      setState(() => _isLoading = false);
+      setState(() => _isStreaming = false);
       return;
     }
 
     _conversationId = response.conversationId;
-    setState(() => _isLoading = false);
-    _listenToStream(response.streamUrl, token);
+    _listenToStream(response.streamUrl, auth.token);
   }
 
   Future<void> _sendMessage() async {
@@ -79,22 +112,24 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
     if (text.isEmpty || _isStreaming) return;
 
     _controller.clear();
+    FocusScope.of(context).unfocus();
     setState(() {
       _messages.add(_ChatItem(type: 'user', text: text));
     });
     _scrollToBottom();
 
-    final token = await _getToken();
-    if (token == null || !mounted) return;
+    final auth = await _getAuth();
+    if (auth == null || !mounted) return;
 
     EventTrackingService.getInstance().then((t) => t.trackTeaQuestionAsked(text));
 
     setState(() => _isStreaming = true);
 
     final response = await TeaService.startChat(
-      token,
+      auth.token,
       message: text,
       conversationId: _conversationId,
+      userId: auth.userId,
     );
 
     if (response == null || !mounted) {
@@ -109,7 +144,7 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
     }
 
     _conversationId ??= response.conversationId;
-    _listenToStream(response.streamUrl, token);
+    _listenToStream(response.streamUrl, auth.token);
   }
 
   void _listenToStream(String streamUrl, String token) {
@@ -119,9 +154,11 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
       _streamingText = '';
     });
 
+    debugPrint('[TeaChat] _listenToStream url=$streamUrl');
     _streamSub = TeaService.streamResponse(streamUrl, token).listen(
       (event) {
         if (!mounted) return;
+        debugPrint('[TeaChat] SSE event: type=${event.eventType}');
 
         if (event.isText) {
           setState(() {
@@ -157,6 +194,13 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
           });
           _scrollToBottom();
         } else if (event.isDone) {
+          // If stream completed with no content and we used pre-warm, retry fresh
+          if (_messages.isEmpty && _streamingText.isEmpty && _usedPrewarm) {
+            debugPrint('[TeaChat] pre-warm stream empty, retrying fresh');
+            _usedPrewarm = false;
+            _retryFreshChat();
+            return;
+          }
           setState(() {
             if (_streamingText.isNotEmpty) {
               _messages.add(_ChatItem(type: 'text', text: _streamingText));
@@ -166,8 +210,16 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
           });
         }
       },
-      onError: (_) {
+      onError: (e) {
+        debugPrint('[TeaChat] SSE error: $e');
         if (!mounted) return;
+        // If pre-warm stream failed, retry fresh
+        if (_messages.isEmpty && _streamingText.isEmpty && _usedPrewarm) {
+          debugPrint('[TeaChat] pre-warm stream error, retrying fresh');
+          _usedPrewarm = false;
+          _retryFreshChat();
+          return;
+        }
         setState(() {
           if (_streamingText.isNotEmpty) {
             _messages.add(_ChatItem(type: 'text', text: _streamingText));
@@ -177,6 +229,7 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
         });
       },
       onDone: () {
+        debugPrint('[TeaChat] SSE stream done');
         if (!mounted) return;
         setState(() {
           if (_streamingText.isNotEmpty) {
@@ -190,8 +243,9 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
   }
 
   Future<void> _handleActionConfirm(ActionCard card, bool confirmed) async {
-    final token = await _getToken();
-    if (token == null || !mounted) return;
+    final auth = await _getAuth();
+    if (auth == null || !mounted) return;
+    final token = auth.token;
 
     if (confirmed) {
       EventTrackingService.getInstance().then(
@@ -244,6 +298,25 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
       });
     }
     _scrollToBottom();
+  }
+
+  Future<void> _retryFreshChat() async {
+    _streamSub?.cancel();
+    final auth = await _getAuth();
+    if (auth == null || !mounted) {
+      setState(() => _isStreaming = false);
+      return;
+    }
+
+    final response = await TeaService.startChat(auth.token, userId: auth.userId);
+    debugPrint('[TeaChat] retry startChat response=${response != null ? "conv=${response.conversationId}" : "NULL"}');
+    if (response == null || !mounted) {
+      setState(() => _isStreaming = false);
+      return;
+    }
+
+    _conversationId = response.conversationId;
+    _listenToStream(response.streamUrl, auth.token);
   }
 
   void _scrollToBottom() {
@@ -306,8 +379,13 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
       );
     }
 
-    // Total items = messages + streaming preview (if active)
-    final itemCount = _messages.length + (_isStreaming && _streamingText.isNotEmpty ? 1 : 0);
+    // Show typing indicator when streaming but no text/messages yet
+    final showTypingDots = _isStreaming && _streamingText.isEmpty && _messages.isEmpty;
+
+    // Total items = messages + streaming preview (if has text) + typing dots
+    final itemCount = _messages.length +
+        (_isStreaming && _streamingText.isNotEmpty ? 1 : 0) +
+        (showTypingDots ? 1 : 0);
 
     if (itemCount == 0 && !_isStreaming) {
       return const Center(
@@ -335,6 +413,13 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
       padding: const EdgeInsets.symmetric(vertical: 12),
       itemCount: itemCount,
       itemBuilder: (context, index) {
+        // Typing dots at end (when streaming with no text yet)
+        if (showTypingDots && index == itemCount - 1) {
+          return ShangaziMessageBubble(
+            child: _TypingDotsWidget(controller: _dotsController),
+          );
+        }
+
         // Streaming preview at end
         if (index >= _messages.length) {
           return ShangaziMessageBubble(
@@ -492,5 +577,49 @@ class _TeaChatScreenState extends State<TeaChatScreen> {
   void _sendActionMessage(String action) {
     _controller.text = action;
     _sendMessage();
+  }
+}
+
+/// Animated typing indicator — 3 pulsing dots.
+class _TypingDotsWidget extends StatelessWidget {
+  final AnimationController controller;
+
+  const _TypingDotsWidget({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            // Stagger each dot by 0.2 of the animation cycle
+            final delay = i * 0.2;
+            final t = (controller.value - delay) % 1.0;
+            // Pulse: scale up in first half, down in second
+            final scale = t < 0.5 ? 1.0 + t : 2.0 - t;
+            final opacity = t < 0.5 ? 0.4 + t * 1.2 : 1.0 - (t - 0.5) * 1.2;
+            return Padding(
+              padding: EdgeInsets.only(right: i < 2 ? 4 : 0),
+              child: Opacity(
+                opacity: opacity.clamp(0.3, 1.0),
+                child: Transform.scale(
+                  scale: scale.clamp(0.8, 1.2),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF757575),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
   }
 }

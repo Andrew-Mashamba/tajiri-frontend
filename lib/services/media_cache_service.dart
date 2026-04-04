@@ -15,7 +15,7 @@ class MediaCacheManager {
       Config(
         key,
         stalePeriod: const Duration(days: 30), // Cache for 30 days
-        maxNrOfCacheObjects: 200, // Max 200 files
+        maxNrOfCacheObjects: 1000, // Max 1000 files
         repo: JsonCacheInfoRepository(databaseName: key),
         fileService: HttpFileService(),
       ),
@@ -158,7 +158,7 @@ class MediaCacheService {
       if (url.isNotEmpty && !_preloadedUrls.contains(url)) {
         preloadMedia(url);
         // Small delay to avoid overwhelming the network
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 30));
       }
     }
   }

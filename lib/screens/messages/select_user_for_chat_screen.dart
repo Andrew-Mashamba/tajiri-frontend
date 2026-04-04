@@ -5,7 +5,6 @@ import '../../services/friend_service.dart';
 import '../../services/message_service.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../widgets/user_avatar.dart';
-import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 
 // DESIGN.md: background #FAFAFA, primary #1A1A1A, secondary #666666, 48dp touch, spacing 16
@@ -68,32 +67,49 @@ class _SelectUserForChatScreenState extends State<SelectUserForChatScreen> {
       _hasSearched = true;
     });
 
-    final result = await _friendService.searchUsers(query);
+    try {
+      final result = await _friendService.searchUsers(query);
 
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _results = result.success ? result.friends : [];
-      _error = result.success ? null : (result.message ?? 'Search failed');
-    });
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _results = result.success ? result.friends : [];
+        _error = result.success ? null : (result.message ?? 'Search failed');
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _results = [];
+        _error = 'Search failed: $e';
+      });
+    }
   }
 
   Future<void> _openChatWithUser(UserProfile user) async {
     if (_openingChat || user.id == widget.currentUserId) return;
     setState(() => _openingChat = true);
 
-    final result = await _messageService.getPrivateConversation(
-      widget.currentUserId,
-      user.id,
-    );
+    try {
+      final result = await _messageService.getPrivateConversation(
+        widget.currentUserId,
+        user.id,
+      );
 
-    if (!mounted) return;
-    setState(() => _openingChat = false);
-    if (result.success && result.conversation != null) {
-      Navigator.pop(context, result.conversation);
-    } else {
+      if (!mounted) return;
+      setState(() => _openingChat = false);
+      if (result.success && result.conversation != null) {
+        Navigator.pop(context, result.conversation);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? 'Could not open chat')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _openingChat = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? 'Could not open chat')),
+        SnackBar(content: Text('Could not open chat: $e')),
       );
     }
   }
