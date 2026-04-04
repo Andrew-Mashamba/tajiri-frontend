@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../models/shop_models.dart';
 import '../config/api_config.dart';
+import 'shop_database.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -98,6 +99,8 @@ String _handleServerError(Map<String, dynamic> data, int statusCode) {
 }
 
 class ShopService {
+  final ShopDatabase _db = ShopDatabase.instance;
+
   // ============================================================================
   // PRODUCT DISCOVERY
   // ============================================================================
@@ -1522,6 +1525,115 @@ class ShopService {
     } catch (_) {
       // Silently fail - view tracking is not critical
     }
+  }
+
+  // ============================================================================
+  // SQLITE-FIRST CACHED METHODS
+  // ============================================================================
+
+  /// Load products: SQLite first (instant), then API in background.
+  Future<void> loadProductsCached({
+    int? categoryId,
+    String? search,
+    String sortBy = 'newest',
+    double? minPrice,
+    double? maxPrice,
+    String? condition,
+    int? currentUserId,
+    int page = 1,
+    int perPage = 20,
+    required void Function(List<Product> products, bool fromCache) onData,
+    void Function(String error)? onError,
+  }) async {
+    // 1. Return cached products instantly
+    if (search == null || search.isEmpty) {
+      try {
+        final cached = await _db.queryProducts(
+          categoryId: categoryId,
+          sortBy: sortBy,
+          minPrice: minPrice,
+          maxPrice: maxPrice,
+          condition: condition,
+          limit: perPage,
+          offset: (page - 1) * perPage,
+        );
+        if (cached.isNotEmpty) {
+          onData(cached, true);
+        }
+      } catch (e) {
+        debugPrint('[ShopService] SQLite cache read failed: $e');
+      }
+    } else {
+      // FTS5 local search
+      try {
+        final localResults = await _db.searchProducts(search, limit: perPage);
+        if (localResults.isNotEmpty) {
+          onData(localResults, true);
+        }
+      } catch (e) {
+        debugPrint('[ShopService] FTS5 search failed: $e');
+      }
+    }
+
+    // 2. Fetch fresh from API in background
+    try {
+      final result = await getProducts(
+        page: page,
+        perPage: perPage,
+        categoryId: categoryId,
+        search: search,
+        sortBy: sortBy,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        condition: condition != null ? ProductCondition.fromString(condition) : null,
+        currentUserId: currentUserId,
+      );
+      if (result.success && result.products.isNotEmpty) {
+        // Cache in SQLite
+        await _db.upsertProducts(result.products);
+        onData(result.products, false);
+
+        // Save search query if applicable
+        if (search != null && search.isNotEmpty) {
+          await _db.saveSearchQuery(search, resultCount: result.products.length);
+        }
+      } else if (result.message != null) {
+        onError?.call(result.message!);
+      }
+    } catch (e) {
+      onError?.call(e.toString());
+    }
+  }
+
+  /// Get categories: SQLite first, then API
+  Future<List<ProductCategory>> getCategoriesCached() async {
+    // Try SQLite first
+    try {
+      final cached = await _db.getCategories();
+      if (cached.isNotEmpty) {
+        // Refresh in background (fire and forget)
+        _refreshCategories();
+        return cached;
+      }
+    } catch (e) {
+      debugPrint('[ShopService] Category cache read failed: $e');
+    }
+    // Fall through to API
+    final result = await getCategories();
+    if (result.success && result.categories.isNotEmpty) {
+      await _db.upsertCategories(result.categories);
+      return result.categories;
+    }
+    return [];
+  }
+
+  Future<void> _refreshCategories() async {
+    try {
+      final result = await getCategories();
+      if (result.success && result.categories.isNotEmpty) {
+        await _db.upsertCategories(result.categories);
+      }
+    } catch (_) {}
   }
 }
 
