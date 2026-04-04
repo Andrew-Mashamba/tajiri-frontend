@@ -7,8 +7,10 @@ import '../../models/ad_models.dart';
 import '../../services/shop_service.dart';
 import '../../services/ad_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/shop_database.dart';
 import '../../widgets/shop/filter_bottom_sheet.dart';
 import '../../widgets/shop/product_card.dart';
+import '../../widgets/shop/search_suggestions.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/native_ad_card.dart';
 
@@ -66,6 +68,7 @@ class _ShopScreenState extends State<ShopScreen> {
   // Search
   String _searchQuery = '';
   Timer? _searchDebounce;
+  bool _showSuggestions = false;
 
   // Cart
   int _cartItemCount = 0;
@@ -289,6 +292,7 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   void _onSearchChanged(String value) {
+    setState(() => _showSuggestions = true);
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
@@ -300,7 +304,10 @@ class _ShopScreenState extends State<ShopScreen> {
   void _clearSearch() {
     _searchController.clear();
     _searchDebounce?.cancel();
-    setState(() => _searchQuery = '');
+    setState(() {
+      _searchQuery = '';
+      _showSuggestions = false;
+    });
     _loadProducts(refresh: true);
   }
 
@@ -464,7 +471,30 @@ class _ShopScreenState extends State<ShopScreen> {
                 ],
               ),
 
-              // 2. Category filter chips
+              // 2. Search suggestions overlay
+              if (_showSuggestions)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SearchSuggestions(
+                      query: _searchController.text,
+                      onSelect: (query) {
+                        _searchController.text = query;
+                        setState(() {
+                          _showSuggestions = false;
+                          _searchQuery = query;
+                        });
+                        _loadProducts(refresh: true);
+                      },
+                      onClearHistory: () async {
+                        await ShopDatabase.instance.clearSearchHistory();
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                ),
+
+              // 3. Category filter chips
               SliverToBoxAdapter(child: _buildCategoryChips()),
 
               // 3. Featured banner
