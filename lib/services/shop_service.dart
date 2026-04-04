@@ -1647,6 +1647,9 @@ class ShopService {
     required void Function(List<Product> products, bool fromCache) onData,
     void Function(String error)? onError,
   }) async {
+    // 0. Flush any pending offline mutations (fire-and-forget)
+    syncPendingMutations();
+
     // 1. Return cached products instantly
     if (search == null || search.isEmpty) {
       try {
@@ -1736,6 +1739,54 @@ class ShopService {
         await _db.upsertCategories(result.categories);
       }
     } catch (_) {}
+  }
+
+  /// Flush pending offline mutations to the API.
+  /// Called automatically from loadProductsCached and can be invoked manually.
+  Future<void> syncPendingMutations() async {
+    try {
+      final mutations = await _db.getPendingMutations();
+      if (mutations.isEmpty) return;
+      debugPrint('[ShopService] Syncing ${mutations.length} pending mutations');
+      for (final m in mutations) {
+        final id = m['id'] as int;
+        final entity = m['entity'] as String;
+        final action = m['action'] as String;
+        final payload = jsonDecode(m['payload'] as String) as Map<String, dynamic>;
+        try {
+          final success = await _executeMutation(entity, action, payload);
+          if (success) {
+            await _db.completeMutation(id);
+          } else {
+            await _db.failMutation(id, 'API returned failure');
+          }
+        } catch (e) {
+          await _db.failMutation(id, e.toString());
+        }
+      }
+    } catch (e) {
+      debugPrint('[ShopService] syncPendingMutations error: $e');
+    }
+  }
+
+  Future<bool> _executeMutation(String entity, String action, Map<String, dynamic> payload) async {
+    switch ('$entity:$action') {
+      case 'cart:add':
+        final result = await addToCart(payload['user_id'] as int, payload['product_id'] as int, quantity: payload['quantity'] as int? ?? 1);
+        return result.success;
+      case 'cart:remove':
+        final result = await removeFromCart(payload['user_id'] as int, payload['item_id'] as int);
+        return result.success;
+      case 'wishlist:add':
+        final result = await toggleFavorite(payload['user_id'] as int, payload['product_id'] as int);
+        return result.success;
+      case 'wishlist:remove':
+        final result = await toggleFavorite(payload['user_id'] as int, payload['product_id'] as int);
+        return result.success;
+      default:
+        debugPrint('[ShopService] Unknown mutation: $entity:$action');
+        return false;
+    }
   }
 }
 

@@ -116,6 +116,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
       _orders = [];
       _currentPage = 1;
       _hasMore = true;
+      _multiSelectMode = false;
+      _selectedOrderIds.clear();
     });
 
     final result = await _shopService.getSellerOrders(
