@@ -12,11 +12,16 @@ class ZoomableImageGallery extends StatefulWidget {
   final int initialIndex;
   final double height;
 
+  /// Optional Hero tag applied to the first image to animate the transition
+  /// from a product card. Only index 0 participates in the Hero animation.
+  final Object? heroTag;
+
   const ZoomableImageGallery({
     super.key,
     required this.imageUrls,
     this.initialIndex = 0,
     this.height = 360,
+    this.heroTag,
   });
 
   @override
@@ -77,9 +82,13 @@ class _ZoomableImageGalleryState extends State<ZoomableImageGallery> {
             onPageChanged: (i) => setState(() => _currentIndex = i),
             itemBuilder: (context, index) {
               final url = ApiConfig.sanitizeUrl(widget.imageUrls[index]);
+              Widget image = CachedMediaImage(imageUrl: url, fit: BoxFit.contain);
+              if (index == 0 && widget.heroTag != null) {
+                image = Hero(tag: widget.heroTag!, child: image);
+              }
               return GestureDetector(
                 onTap: () => _openFullScreen(index),
-                child: CachedMediaImage(imageUrl: url, fit: BoxFit.contain),
+                child: image,
               );
             },
           ),

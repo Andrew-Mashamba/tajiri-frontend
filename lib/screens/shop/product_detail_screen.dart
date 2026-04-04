@@ -447,6 +447,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  Widget _buildShimmer({double width = double.infinity, double height = 16, double radius = 8}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0E0E0),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+
+  Widget _buildPdpShimmer() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildShimmer(height: 300, radius: 0), // image area
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildShimmer(width: 200, height: 20),
+                const SizedBox(height: 12),
+                _buildShimmer(width: 120, height: 24),
+                const SizedBox(height: 16),
+                _buildShimmer(height: 14),
+                const SizedBox(height: 8),
+                _buildShimmer(height: 14),
+                const SizedBox(height: 8),
+                _buildShimmer(width: 180, height: 14),
+                const SizedBox(height: 24),
+                _buildShimmer(height: 48, radius: 12), // button placeholder
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -454,9 +495,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: SafeArea(
         top: false, // image gallery extends behind status bar
         child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: _kPrimaryText),
-              )
+            ? _buildPdpShimmer()
             : _error != null
                 ? _buildErrorState()
                 : _buildContent(),
@@ -569,6 +608,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ZoomableImageGallery(
           imageUrls: _product!.imageUrls,
           height: 350,
+          heroTag: 'product_image_${widget.productId}',
         ),
 
         // Back button

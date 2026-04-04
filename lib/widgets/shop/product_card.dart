@@ -163,9 +163,12 @@ class ProductCard extends StatelessWidget {
         children: [
           // Image
           product.thumbnailUrl.isNotEmpty
-              ? CachedMediaImage(
-                  imageUrl: product.thumbnailUrl,
-                  fit: BoxFit.cover,
+              ? Hero(
+                  tag: 'product_image_${product.id}',
+                  child: CachedMediaImage(
+                    imageUrl: product.thumbnailUrl,
+                    fit: BoxFit.cover,
+                  ),
                 )
               : Container(
                   color: _kBackground,
