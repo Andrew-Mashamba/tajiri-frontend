@@ -1,4 +1,5 @@
 // lib/services/shop_database.dart
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
@@ -13,6 +14,8 @@ class ShopDatabase {
     return _instance!;
   }
 
+  void _log(String msg) => debugPrint('[ShopDatabase] $msg');
+
   Future<Database> get database async {
     _database ??= await _initDatabase();
     return _database!;
@@ -21,16 +24,18 @@ class ShopDatabase {
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'tajiri_shop.db');
+    _log('Opening shop database');
     return openDatabase(
       path,
       version: 1,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE shop_products (
+      CREATE TABLE IF NOT EXISTS shop_products (
         id INTEGER PRIMARY KEY,
         title TEXT NOT NULL,
         description TEXT,
@@ -71,19 +76,19 @@ class ShopDatabase {
 
     // Triggers to keep FTS in sync
     await db.execute('''
-      CREATE TRIGGER shop_products_ai AFTER INSERT ON shop_products BEGIN
+      CREATE TRIGGER IF NOT EXISTS shop_products_ai AFTER INSERT ON shop_products BEGIN
         INSERT INTO shop_products_fts(rowid, title, description, category_name, seller_name)
         VALUES (new.id, new.title, new.description, new.category_name, new.seller_name);
       END
     ''');
     await db.execute('''
-      CREATE TRIGGER shop_products_ad AFTER DELETE ON shop_products BEGIN
+      CREATE TRIGGER IF NOT EXISTS shop_products_ad AFTER DELETE ON shop_products BEGIN
         INSERT INTO shop_products_fts(shop_products_fts, rowid, title, description, category_name, seller_name)
         VALUES ('delete', old.id, old.title, old.description, old.category_name, old.seller_name);
       END
     ''');
     await db.execute('''
-      CREATE TRIGGER shop_products_au AFTER UPDATE ON shop_products BEGIN
+      CREATE TRIGGER IF NOT EXISTS shop_products_au AFTER UPDATE ON shop_products BEGIN
         INSERT INTO shop_products_fts(shop_products_fts, rowid, title, description, category_name, seller_name)
         VALUES ('delete', old.id, old.title, old.description, old.category_name, old.seller_name);
         INSERT INTO shop_products_fts(rowid, title, description, category_name, seller_name)
@@ -91,15 +96,15 @@ class ShopDatabase {
       END
     ''');
 
-    await db.execute('CREATE INDEX idx_sp_category ON shop_products(category_id)');
-    await db.execute('CREATE INDEX idx_sp_price ON shop_products(price)');
-    await db.execute('CREATE INDEX idx_sp_rating ON shop_products(rating)');
-    await db.execute('CREATE INDEX idx_sp_seller ON shop_products(seller_id)');
-    await db.execute('CREATE INDEX idx_sp_cached ON shop_products(cached_at)');
-    await db.execute('CREATE INDEX idx_sp_viewed ON shop_products(viewed_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_category ON shop_products(category_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_price ON shop_products(price)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_rating ON shop_products(rating)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_seller ON shop_products(seller_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_cached ON shop_products(cached_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sp_viewed ON shop_products(viewed_at)');
 
     await db.execute('''
-      CREATE TABLE shop_categories (
+      CREATE TABLE IF NOT EXISTS shop_categories (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
         slug TEXT,
@@ -112,9 +117,9 @@ class ShopDatabase {
     ''');
 
     await db.execute('''
-      CREATE TABLE shop_cart (
+      CREATE TABLE IF NOT EXISTS shop_cart (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL UNIQUE,
         quantity INTEGER DEFAULT 1,
         delivery_method TEXT,
         selected INTEGER DEFAULT 1,
@@ -123,10 +128,9 @@ class ShopDatabase {
         sync_state TEXT DEFAULT 'pending'
       )
     ''');
-    await db.execute('CREATE INDEX idx_cart_product ON shop_cart(product_id)');
 
     await db.execute('''
-      CREATE TABLE shop_wishlist (
+      CREATE TABLE IF NOT EXISTS shop_wishlist (
         product_id INTEGER PRIMARY KEY,
         added_at INTEGER NOT NULL,
         added_price REAL,
@@ -135,25 +139,25 @@ class ShopDatabase {
     ''');
 
     await db.execute('''
-      CREATE TABLE shop_search_history (
+      CREATE TABLE IF NOT EXISTS shop_search_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        query TEXT NOT NULL,
+        query TEXT NOT NULL UNIQUE,
         searched_at INTEGER NOT NULL,
         result_count INTEGER DEFAULT 0
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE shop_sync_state (
+      CREATE TABLE IF NOT EXISTS shop_sync_state (
         entity TEXT PRIMARY KEY,
-        last_synced_at TEXT,
+        last_synced_at INTEGER,
         last_synced_id INTEGER,
         last_etag TEXT
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE shop_pending_mutations (
+      CREATE TABLE IF NOT EXISTS shop_pending_mutations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         entity TEXT NOT NULL,
         action TEXT NOT NULL,
@@ -165,6 +169,11 @@ class ShopDatabase {
     ''');
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Migrations go here
+    // if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
+  }
+
   /// Close database (used in tests and logout)
   Future<void> close() async {
     final db = _database;
@@ -172,11 +181,14 @@ class ShopDatabase {
       await db.close();
       _database = null;
     }
+    _instance = null;
+    _log('Database closed');
   }
 
   /// Clear all shop data (called on logout)
   Future<void> clearAll() async {
     final db = await database;
+    await db.execute("INSERT INTO shop_products_fts(shop_products_fts) VALUES('delete-all')");
     await db.delete('shop_products');
     await db.delete('shop_categories');
     await db.delete('shop_cart');
@@ -184,5 +196,6 @@ class ShopDatabase {
     await db.delete('shop_search_history');
     await db.delete('shop_sync_state');
     await db.delete('shop_pending_mutations');
+    _log('All shop data cleared');
   }
 }
