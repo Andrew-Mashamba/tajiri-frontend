@@ -12,7 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import 'HttpService.dart';
 import 'DataStore.dart';
-import 'main.dart';
+// import 'main.dart'; // removed — auth handled by TAJIRI bridge
 import 'vicobaList.dart';
 import 'waitDialog.dart';
 

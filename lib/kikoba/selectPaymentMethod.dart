@@ -5,11 +5,11 @@ import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'DataStore.dart';
 
-import '../HttpService.dart';
-import '../chooseBank.dart';
-import '../enterNumber.dart';
-import '../paymentStatus.dart';
-import '../waitDialog.dart';
+import 'HttpService.dart';
+import 'chooseBank.dart';
+import 'enterNumber.dart';
+import 'paymentStatus.dart';
+import 'waitDialog.dart';
 
 // Design Guidelines Colors (Monochrome)
 const _primaryBg = Color(0xFFFAFAFA);

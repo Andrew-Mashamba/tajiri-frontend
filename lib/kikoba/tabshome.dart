@@ -24,7 +24,7 @@ import 'members.dart';
 import 'voting_firestore_service.dart';
 import 'services/offline_vote_queue.dart';
 import 'OfflineDatabase.dart';
-import 'RegisterOrLogin.dart';
+// import 'RegisterOrLogin.dart'; // removed — auth handled by TAJIRI bridge
 import 'utils/retry_helper.dart';
 
 import 'appColor.dart';
@@ -2203,12 +2203,9 @@ class _TabshomeState extends State<tabshome>
       DataStore.currentKikobaName = '';
       DataStore.visitedKikobaId = '';
 
-      // Navigate to login/register screen
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const RegisterOrLogin()),
-          (route) => false,
-        );
+      // Auth handled by TAJIRI bridge — pop back to main app
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
       }
     } catch (e) {
       _logger.e('Logout error: $e');

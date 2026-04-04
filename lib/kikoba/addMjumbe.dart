@@ -1,4 +1,4 @@
-import 'main.dart';
+// import 'main.dart'; // removed — auth handled by TAJIRI bridge
 import 'vicobaList.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'package:uuid/uuid.dart';
-import 'start.dart';
+// import 'start.dart'; // removed — auth handled by TAJIRI bridge
 
 import 'waitDialog.dart';
 import 'HttpService.dart';

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'sajiriKikoba.dart';
 import 'searchForKikoba.dart';
-import 'login.dart';
+// import 'login.dart'; // removed — auth handled by TAJIRI bridge
 
 class searchOrcreate extends StatefulWidget {
   final String? message;
@@ -143,7 +143,7 @@ class _SearchOrCreateState extends State<searchOrcreate>
                           icon: Icons.login_rounded,
                           title: "Ingia",
                           subtitle: "Ingia kwenye akaunti yako",
-                          onPressed: () => _navigateToPage(const LoginScreen()),
+                          onPressed: () { if (Navigator.of(context).canPop()) Navigator.of(context).pop(); },
                         ),
                       ),
                       // Bottom Padding

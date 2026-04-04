@@ -14,14 +14,25 @@ import 'package:uuid/uuid.dart';
 import 'DataStore.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
+// import 'package:record/record.dart'; // stubbed — package not available
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 
-import '../imagePicker.dart';
+import 'imagePicker.dart';
 import 'HttpService.dart';
 import 'services/baraza_cache_service.dart';
+
+// Stub classes for audio recording (record package not available)
+class RecordConfig {
+  const RecordConfig();
+}
+class AudioRecorder {
+  Future<bool> hasPermission() async => false;
+  Future<void> start(RecordConfig config, {required String path}) async {}
+  Future<String?> stop() async => null;
+  void dispose() {}
+}
 
 // Minimalist monochrome color palette from design guidelines
 const Color primaryColor = Color(0xFF1A1A1A);

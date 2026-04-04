@@ -16,7 +16,7 @@ import 'package:video_player/video_player.dart';
 
 import 'HttpService.dart';
 import 'DataStore.dart';
-import 'loginExt.dart';
+// import 'loginExt.dart'; // removed — auth handled by TAJIRI bridge
 
 
 class profileImage extends StatelessWidget {
@@ -507,7 +507,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void goToMessages(String data){
 
     print("DATA SAVED");
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => CreateNewAccount()), (Route<dynamic> route) => false);
+    // Auth handled by TAJIRI bridge — pop back to main app
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     print('codeSent');
 
   }

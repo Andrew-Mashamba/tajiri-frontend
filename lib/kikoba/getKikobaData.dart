@@ -9,7 +9,7 @@ import 'HttpService.dart';
 import 'Article.dart';
 import 'DataStore.dart';
 import 'OfflineDatabase.dart';
-import 'RegisterOrLogin.dart';
+// import 'RegisterOrLogin.dart'; // removed — auth handled by TAJIRI bridge
 
 class getKikobaData extends StatefulWidget {
   const getKikobaData({Key? key}) : super(key: key);
@@ -143,12 +143,10 @@ class SplashState extends State<getKikobaData>
     }
 
     try {
-      await Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => RegisterOrLogin(),
-        ),
-        (route) => false,
-      );
+      // Auth handled by TAJIRI bridge — pop back to main app
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e, stackTrace) {
       _logger.e('❌ Error navigating to login', error: e, stackTrace: stackTrace);
     }

@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'DataStore.dart';
 import 'appColor.dart';
 
-import '../ada.dart';
+import 'ada.dart';
 import 'HttpService.dart';
 
 

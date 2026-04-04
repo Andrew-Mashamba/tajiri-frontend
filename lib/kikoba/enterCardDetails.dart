@@ -1,12 +1,12 @@
 
 import 'package:flutter/material.dart';
-import 'package:progress_indicators/progress_indicators.dart';
+// import 'package:progress_indicators/progress_indicators.dart'; // replaced with CircularProgressIndicator
 import 'DataStore.dart';
 
-import '../Constants.dart';
-import '../HttpService.dart';
-import '../paymentStatus.dart';
-import '../waitDialog.dart';
+import 'constants.dart';
+import 'HttpService.dart';
+import 'paymentStatus.dart';
+import 'waitDialog.dart';
 import 'credit_card_form.dart';
 import 'credit_card_model.dart';
 import 'credit_card_widget.dart';
@@ -233,9 +233,9 @@ class MySampleState extends State<enterCardDetails> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              JumpingDotsProgressIndicator(
-                fontSize: 80.0,
-              ),
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
 
               Text("Tafadhali Subiri",style: TextStyle(fontSize: 22,fontWeight: FontWeight.w600),),
               SizedBox(height: 15,),
