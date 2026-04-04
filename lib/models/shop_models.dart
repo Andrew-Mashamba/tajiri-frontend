@@ -379,14 +379,19 @@ class Product {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
+      'seller_id': sellerId,
       'title': title,
       'description': description,
+      'slug': slug,
       'type': type.value,
+      'status': status.value,
       'price': price,
       if (compareAtPrice != null) 'compare_at_price': compareAtPrice,
       'currency': currency,
       'stock_quantity': stockQuantity,
       'images': images,
+      if (thumbnailPath != null) 'thumbnail_path': thumbnailPath,
       if (categoryId != null) 'category_id': categoryId,
       if (tags != null) 'tags': tags,
       'condition': condition.value,
@@ -403,6 +408,16 @@ class Product {
       if (downloadLimit != null) 'download_limit': downloadLimit,
       if (durationMinutes != null) 'duration_minutes': durationMinutes,
       if (serviceLocation != null) 'service_location': serviceLocation,
+      'views_count': viewsCount,
+      'favorites_count': favoritesCount,
+      'orders_count': ordersCount,
+      'rating': rating,
+      'reviews_count': reviewsCount,
+      if (seller != null) 'seller': seller!.toJson(),
+      if (category != null) 'category': category!.toJson(),
+      'is_favorited': isFavorited,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 
@@ -493,6 +508,20 @@ class ProductSeller {
   String get avatarUrl => profilePhotoPath != null
       ? '${ApiConfig.storageUrl}/$profilePhotoPath'
       : '';
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'first_name': firstName,
+      'last_name': lastName,
+      if (username != null) 'username': username,
+      if (profilePhotoPath != null) 'profile_photo_path': profilePhotoPath,
+      'rating': rating,
+      'total_sales': totalSales,
+      'product_count': productCount,
+      'is_verified': isVerified,
+    };
+  }
 }
 
 class ProductCategory {
