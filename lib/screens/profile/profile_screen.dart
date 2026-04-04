@@ -47,6 +47,7 @@ import 'edit_profile_screen.dart';
 import '../../services/creator_service.dart';
 import '../../models/flywheel_models.dart';
 import '../../utils/face_validator.dart';
+import '../../kikoba/kikoba_module.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -1018,6 +1019,45 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'storefront': return Icons.storefront_outlined;
       case 'people': return Icons.people_outlined;
       case 'info': return Icons.info_outlined;
+      // Finance
+      case 'account_balance_wallet': return Icons.account_balance_wallet_outlined;
+      case 'savings': return Icons.savings_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'trending_up': return Icons.trending_up_rounded;
+      case 'request_quote': return Icons.request_quote_outlined;
+      // Health
+      case 'medical_services': return Icons.medical_services_outlined;
+      case 'local_pharmacy': return Icons.local_pharmacy_outlined;
+      case 'health_and_safety': return Icons.health_and_safety_outlined;
+      case 'fitness_center': return Icons.fitness_center_outlined;
+      // Family & Education
+      case 'family_restroom': return Icons.family_restroom_outlined;
+      case 'school': return Icons.school_outlined;
+      case 'child_care': return Icons.child_care_outlined;
+      case 'menu_book': return Icons.menu_book_outlined;
+      // Work
+      case 'work': return Icons.work_outline;
+      case 'business_center': return Icons.business_center_outlined;
+      // Daily Life
+      case 'restaurant': return Icons.restaurant_outlined;
+      case 'directions_car': return Icons.directions_car_outlined;
+      case 'home_repair_service': return Icons.home_repair_service_outlined;
+      case 'home': return Icons.home_outlined;
+      case 'receipt_long': return Icons.receipt_long_outlined;
+      case 'two_wheeler': return Icons.two_wheeler_outlined;
+      // Planning
+      case 'calendar_month': return Icons.calendar_month_outlined;
+      case 'edit_note': return Icons.edit_note_outlined;
+      // Government & Legal
+      case 'assured_workload': return Icons.assured_workload_outlined;
+      case 'gavel': return Icons.gavel_outlined;
+      // Community & Lifestyle
+      case 'mosque': return Icons.mosque_outlined;
+      case 'diversity_3': return Icons.diversity_3_outlined;
+      case 'event': return Icons.event_outlined;
+      case 'flight': return Icons.flight_outlined;
+      case 'newspaper': return Icons.newspaper_outlined;
+      case 'sports_esports': return Icons.sports_esports_outlined;
       default: return Icons.circle_outlined;
     }
   }
@@ -1389,22 +1429,71 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  /// Grid of four: profile tabs - tapping opens full page
+  /// Categorized flat grid: profile tabs grouped by life domain with thin dividers.
+  /// Social tabs first (no header), then service categories with hairline + label.
   Widget _buildTabMenuGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.88,
+    final enabledSet = _enabledTabs.map((t) => t.id).toSet();
+    final tabMap = {for (final t in _enabledTabs) t.id: t};
+
+    final children = <Widget>[];
+    bool isFirst = true;
+
+    for (final category in ProfileTabDefaults.categories) {
+      final categoryTabs = category.tabIds
+          .where(enabledSet.contains)
+          .map((id) => tabMap[id]!)
+          .toList();
+      if (categoryTabs.isEmpty) continue;
+
+      // Category header with hairline divider (skip for first/social section)
+      if (!isFirst && category.label.isNotEmpty) {
+        children.add(_buildCategoryDivider(category.label));
+      }
+      isFirst = false;
+
+      // 4-column grid for this category's tabs
+      children.add(
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 4,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 0,
+          childAspectRatio: 0.88,
+          children: categoryTabs.map((t) => _buildTabMenuItem(t)).toList(),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  /// Thin hairline divider with uppercase category label.
+  Widget _buildCategoryDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 1, thickness: 0.5, color: Color(0xFFE0E0E0)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 0, 4),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF999999),
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+        ],
       ),
-      itemCount: _enabledTabs.length,
-      itemBuilder: (context, index) {
-        final tab = _enabledTabs[index];
-        return _buildTabMenuItem(tab);
-      },
     );
   }
 
@@ -1779,6 +1868,234 @@ class _ProfileTabPage extends StatelessWidget {
           isOwnProfile: isOwnProfile,
           onProductAdded: onRefresh,
         );
+      // ── Finance & Money ──────────────────────────────────────────
+      case 'budget':
+        return _ComingSoonTab(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Bajeti Yangu',
+          subtitle: 'My Budget',
+          description: 'Panga matumizi yako, fuatilia mapato na gharama, na fikia malengo ya kifedha.',
+        );
+      case 'kikoba':
+        return KikobaModule(userId: userId);
+      case 'banking':
+        return _ComingSoonTab(
+          icon: Icons.account_balance_outlined,
+          title: 'Benki Yangu',
+          subtitle: 'My Bank',
+          description: 'Akaunti za benki, M-Pesa, tuma na pokea pesa, taarifa za akaunti.',
+        );
+      case 'investments':
+        return _ComingSoonTab(
+          icon: Icons.trending_up_rounded,
+          title: 'Uwekezaji',
+          subtitle: 'Investments',
+          description: 'Hisa, bondi, unit trust, na uwekezaji wa ardhi — kwa mustakabali wako.',
+        );
+      case 'loans':
+        return _ComingSoonTab(
+          icon: Icons.request_quote_outlined,
+          title: 'Mikopo',
+          subtitle: 'Loans',
+          description: 'Omba mkopo, fuatilia malipo, na linganisha viwango vya riba.',
+        );
+
+      // ── Health & Wellness ─────────────────────────────────────────
+      case 'doctor':
+        return _ComingSoonTab(
+          icon: Icons.medical_services_outlined,
+          title: 'Daktari Wangu',
+          subtitle: 'My Doctor',
+          description: 'Pata ushauri wa daktari, rekodi za afya, na miadi yako yote sehemu moja.',
+        );
+      case 'pharmacy':
+        return _ComingSoonTab(
+          icon: Icons.local_pharmacy_outlined,
+          title: 'Duka la Dawa',
+          subtitle: 'Pharmacy',
+          description: 'Agiza dawa, fuatilia maagizo yako, na pata dawa karibu nawe.',
+        );
+      case 'insurance':
+        return _ComingSoonTab(
+          icon: Icons.health_and_safety_outlined,
+          title: 'Bima Yangu',
+          subtitle: 'My Insurance',
+          description: 'Bima ya afya, maisha, na gari — angalia, dai fidia, na pata mipango.',
+        );
+      case 'fitness':
+        return _ComingSoonTab(
+          icon: Icons.fitness_center_outlined,
+          title: 'Afya Yangu',
+          subtitle: 'My Fitness',
+          description: 'Hatua za kutembea, mazoezi, uzito, na maji — fuatilia afya yako ya kila siku.',
+        );
+
+      // ── Family & Education ────────────────────────────────────────
+      case 'family':
+        return _ComingSoonTab(
+          icon: Icons.family_restroom_outlined,
+          title: 'Familia Yangu',
+          subtitle: 'My Family',
+          description: 'Mti wa familia, kalenda ya pamoja, kazi za nyumbani, na mawasiliano ya dharura.',
+        );
+      case 'school':
+        return _ComingSoonTab(
+          icon: Icons.school_outlined,
+          title: 'Shule',
+          subtitle: 'School',
+          description: 'Alama, ada, kazi za nyumbani, mawasiliano na walimu, na ripoti za watoto.',
+        );
+      case 'childcare':
+        return _ComingSoonTab(
+          icon: Icons.child_care_outlined,
+          title: 'Malezi',
+          subtitle: 'Childcare',
+          description: 'Hatua za ukuaji wa mtoto, chanjo, na kupata mlezi wa kuaminika.',
+        );
+      case 'learning':
+        return _ComingSoonTab(
+          icon: Icons.menu_book_outlined,
+          title: 'Masomo',
+          subtitle: 'Learning',
+          description: 'Kozi, vyeti, mafunzo ya ujuzi, na mafunzo ya mtandaoni.',
+        );
+
+      // ── Work & Career ─────────────────────────────────────────────
+      case 'jobs':
+        return _ComingSoonTab(
+          icon: Icons.work_outline,
+          title: 'Kazi Zangu',
+          subtitle: 'My Jobs',
+          description: 'Tafuta kazi, tengeneza CV, kazi za muda mfupi, na maandalizi ya mahojiano.',
+        );
+      case 'business':
+        return _ComingSoonTab(
+          icon: Icons.business_center_outlined,
+          title: 'Biashara Yangu',
+          subtitle: 'My Business',
+          description: 'Sajili biashara, ankara, hesabu ya bidhaa, POS, na mishahara.',
+        );
+
+      // ── Daily Life & Home ─────────────────────────────────────────
+      case 'food':
+        return _ComingSoonTab(
+          icon: Icons.restaurant_outlined,
+          title: 'Chakula',
+          subtitle: 'Food',
+          description: 'Mapishi, mpango wa milo, agiza chakula, na gundua mikahawa.',
+        );
+      case 'transport':
+        return _ComingSoonTab(
+          icon: Icons.directions_car_outlined,
+          title: 'Usafiri',
+          subtitle: 'Transport',
+          description: 'Piga teksi, njia za basi, bei za mafuta, na mipango ya safari.',
+        );
+      case 'services':
+        return _ComingSoonTab(
+          icon: Icons.home_repair_service_outlined,
+          title: 'Fundi',
+          subtitle: 'Home Services',
+          description: 'Fundi bomba, umeme, usafi, seremala — pata na kadiria mafundi.',
+        );
+      case 'housing':
+        return _ComingSoonTab(
+          icon: Icons.home_outlined,
+          title: 'Nyumba Yangu',
+          subtitle: 'My Home',
+          description: 'Panga au nunua nyumba, lipa kodi, na zana za mmiliki.',
+        );
+      case 'bills':
+        return _ComingSoonTab(
+          icon: Icons.receipt_long_outlined,
+          title: 'Bili Zangu',
+          subtitle: 'My Bills',
+          description: 'Maji, umeme, intaneti, TV — lipa na fuatilia bili zako zote.',
+        );
+      case 'vehicle':
+        return _ComingSoonTab(
+          icon: Icons.two_wheeler_outlined,
+          title: 'Gari Langu',
+          subtitle: 'My Vehicle',
+          description: 'Bima ya gari, ukaguzi, mafuta, na kumbukumbu za matengenezo.',
+        );
+
+      // ── Planning & Productivity ───────────────────────────────────
+      case 'calendar':
+        return _ComingSoonTab(
+          icon: Icons.calendar_month_outlined,
+          title: 'Kalenda',
+          subtitle: 'Calendar',
+          description: 'Matukio, vikumbusho, ratiba ya familia, na miadi yako.',
+        );
+      case 'notes':
+        return _ComingSoonTab(
+          icon: Icons.edit_note_outlined,
+          title: 'Kumbukumbu',
+          subtitle: 'Notes',
+          description: 'Maandishi binafsi, orodha, na sauti za kumbukumbu.',
+        );
+
+      // ── Government & Legal ────────────────────────────────────────
+      case 'government':
+        return _ComingSoonTab(
+          icon: Icons.assured_workload_outlined,
+          title: 'Serikali',
+          subtitle: 'Government',
+          description: 'Kitambulisho, pasipoti, vibali, TRA, NIDA, na usajili wa kupiga kura.',
+        );
+      case 'lawyer':
+        return _ComingSoonTab(
+          icon: Icons.gavel_outlined,
+          title: 'Wakili Wangu',
+          subtitle: 'My Lawyer',
+          description: 'Ushauri wa kisheria, mikataba, migogoro ya ardhi, na wosia.',
+        );
+
+      // ── Community & Lifestyle ─────────────────────────────────────
+      case 'faith':
+        return _ComingSoonTab(
+          icon: Icons.mosque_outlined,
+          title: 'Imani Yangu',
+          subtitle: 'My Faith',
+          description: 'Kanisa au msikiti, mahubiri, zaka na sadaka, na nyakati za sala.',
+        );
+      case 'community':
+        return _ComingSoonTab(
+          icon: Icons.diversity_3_outlined,
+          title: 'Jamii Yangu',
+          subtitle: 'My Community',
+          description: 'Jirani, matukio ya mtaa, kujitolea, na arifa za dharura.',
+        );
+      case 'events':
+        return _ComingSoonTab(
+          icon: Icons.event_outlined,
+          title: 'Matukio',
+          subtitle: 'Events',
+          description: 'Tamasha, harusi, mazishi, mikutano — gundua na panga.',
+        );
+      case 'travel':
+        return _ComingSoonTab(
+          icon: Icons.flight_outlined,
+          title: 'Safari',
+          subtitle: 'Travel',
+          description: 'Ndege, hoteli, vifurushi vya utalii, visa, na bima ya safari.',
+        );
+      case 'news':
+        return _ComingSoonTab(
+          icon: Icons.newspaper_outlined,
+          title: 'Habari',
+          subtitle: 'News',
+          description: 'Habari za ndani na nje, mipasho binafsi, na arifa muhimu.',
+        );
+      case 'games':
+        return _ComingSoonTab(
+          icon: Icons.sports_esports_outlined,
+          title: 'Michezo',
+          subtitle: 'Games',
+          description: 'Michezo ya burudani, fantasy sports, na mashindano na marafiki.',
+        );
+
       case 'friends':
         return _ProfileFriendsPage(
           userId: userId,
@@ -4619,5 +4936,86 @@ class _ProfileAboutPage extends StatelessWidget {
       'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+}
+
+/// Placeholder tab for features coming soon.
+class _ComingSoonTab extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String description;
+
+  const _ComingSoonTab({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 48, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A).withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Inakuja Hivi Karibuni',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
