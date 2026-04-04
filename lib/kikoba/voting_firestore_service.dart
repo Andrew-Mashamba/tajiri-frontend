@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 import 'DataStore.dart';
+import 'kikoba_firebase.dart';
 
 /// Model for a voting case from Firestore
 class VotingCase {
@@ -185,7 +186,7 @@ class VotingFirestoreService {
     ),
   );
 
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => KikobaFirebase.firestore;
 
   // Single collection name for all voting cases
   static const String _votingCasesCollection = 'VotingCases';

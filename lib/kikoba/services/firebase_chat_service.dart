@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/chat/chat_models.dart';
+import '../kikoba_firebase.dart';
 
 /// Service for Firebase Realtime Database chat operations
 class FirebaseChatService {
-  final FirebaseDatabase _database = FirebaseDatabase.instance;
+  FirebaseDatabase get _database => KikobaFirebase.database;
 
   // Cache for active subscriptions
   final Map<String, StreamSubscription> _subscriptions = {};
