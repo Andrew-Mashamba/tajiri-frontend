@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../cached_media_image.dart';
@@ -74,6 +75,15 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: () {
+        SharePlus.instance.share(
+          ShareParams(
+            text:
+                '${product.title}\n${product.currency} ${product.price.toStringAsFixed(0)}\nhttps://tajiri.co.tz/shop/product/${product.id}',
+            subject: product.title,
+          ),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: _kSurface,

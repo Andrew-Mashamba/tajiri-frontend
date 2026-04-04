@@ -920,6 +920,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           onTap: _showReturnDialog,
           isDestructive: true,
         ));
+        actions.add(_buildFullButton(
+          label: 'Buy Again',
+          icon: HeroIcons.arrowPath,
+          onTap: _buyAgain,
+          isPrimary: true,
+        ));
       }
     }
 
@@ -996,6 +1002,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _buyAgain() {
+    if (_order == null) return;
+    final productId = _order!.product?.id ?? _order!.productId;
+    Navigator.pushNamed(
+      context,
+      '/shop/product',
+      arguments: {'productId': productId},
     );
   }
 
