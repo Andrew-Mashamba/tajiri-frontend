@@ -95,20 +95,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _error = null;
     });
 
-    final result = await _shopService.getOrder(
-      widget.orderId,
-      userId: widget.currentUserId,
-    );
+    try {
+      final result = await _shopService.getOrder(
+        widget.orderId,
+        userId: widget.currentUserId,
+      );
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (result.success && result.order != null) {
-          _order = result.order;
-        } else {
-          _error = result.message;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (result.success && result.order != null) {
+            _order = result.order;
+          } else {
+            _error = result.message ?? 'Failed to load order';
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Error: $e';
+        });
+      }
     }
   }
 
@@ -309,9 +318,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _showReturnDialog() async {
     if (_isActioning) return;
     final reasonController = TextEditingController();
-    var submitted = false;
 
-    await showDialog<void>(
+    final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Request Return/Refund'),
@@ -343,36 +351,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               backgroundColor: _kPrimaryText,
               foregroundColor: Colors.white,
             ),
-            onPressed: () async {
+            onPressed: () {
               if (reasonController.text.trim().isEmpty) return;
-              submitted = true;
-              final reason = reasonController.text.trim();
-              Navigator.pop(ctx);
-              setState(() => _isActioning = true);
-              final result = await _shopService.requestReturn(
-                widget.orderId,
-                userId: widget.currentUserId,
-                reason: reason,
-              );
-              if (!mounted) return;
-              setState(() => _isActioning = false);
-              if (result.success && result.order != null) {
-                setState(() => _order = result.order);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(result.message ?? 'Return request submitted')),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(result.message ?? 'Failed to submit return request')),
-                );
-              }
+              Navigator.pop(ctx, reasonController.text.trim());
             },
             child: const Text('Submit'),
           ),
         ],
       ),
     );
-    if (!submitted) reasonController.dispose();
+    reasonController.dispose();
+
+    if (reason == null || reason.isEmpty) return;
+
+    setState(() => _isActioning = true);
+    final result = await _shopService.requestReturn(
+      widget.orderId,
+      userId: widget.currentUserId,
+      reason: reason,
+    );
+    if (!mounted) return;
+    setState(() => _isActioning = false);
+    if (result.success && result.order != null) {
+      setState(() => _order = result.order);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Return request submitted')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Failed to submit return request')),
+      );
+    }
   }
 
   @override
@@ -1016,7 +1025,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _navigateToChat(int userId) {
-    Navigator.pushNamed(context, '/chat/$userId');
+    // Navigate to the user's profile where they can initiate a chat,
+    // since /chat/:id expects a conversationId, not a userId.
+    Navigator.pushNamed(context, '/profile/$userId');
   }
 
   HeroIcons _statusIcon(OrderStatus status) {

@@ -62,7 +62,7 @@ class _CreateProductScreenState extends State<CreateProductScreen> {
   // State
   ProductType _productType = ProductType.physical;
   ProductCondition _condition = ProductCondition.brandNew;
-  List<File> _images = [];
+  final List<File> _images = [];
   List<ProductCategory> _categories = [];
   int? _selectedCategoryId;
   bool _allowPickup = true;
@@ -712,39 +712,56 @@ class _CreateProductScreenState extends State<CreateProductScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: _kSurface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _kDivider),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int?>(
-              value: _selectedCategoryId,
-              isExpanded: true,
-              hint: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  s?.selectCategory ?? 'Select category',
-                  style: const TextStyle(color: _kTertiaryText),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+        if (_isLoading)
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: _kSurface,
               borderRadius: BorderRadius.circular(12),
-              items: [
-                DropdownMenuItem<int?>(
-                  value: null,
-                  child: Text(s?.noCategory ?? 'No category'),
+              border: Border.all(color: _kDivider),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: _kSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _kDivider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int?>(
+                value: _selectedCategoryId,
+                isExpanded: true,
+                hint: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    s?.selectCategory ?? 'Select category',
+                    style: const TextStyle(color: _kTertiaryText),
+                  ),
                 ),
-                ..._categories.map((cat) => DropdownMenuItem(
-                      value: cat.id,
-                      child: Text(cat.name),
-                    )),
-              ],
-              onChanged: (val) => setState(() => _selectedCategoryId = val),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                borderRadius: BorderRadius.circular(12),
+                items: [
+                  DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text(s?.noCategory ?? 'No category'),
+                  ),
+                  ..._categories.map((cat) => DropdownMenuItem(
+                        value: cat.id,
+                        child: Text(cat.name),
+                      )),
+                ],
+                onChanged: (val) => setState(() => _selectedCategoryId = val),
+              ),
             ),
           ),
-        ),
       ],
     );
   }

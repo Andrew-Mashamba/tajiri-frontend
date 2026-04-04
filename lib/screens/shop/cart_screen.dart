@@ -135,6 +135,10 @@ class _CartScreenState extends State<CartScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s?.cartCleared ?? 'Cart cleared')),
       );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s?.errorOccurred ?? 'Failed to clear cart')),
+      );
     }
   }
 
