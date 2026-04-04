@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../l10n/app_strings_scope.dart';
@@ -241,7 +242,10 @@ class ProductCard extends StatelessWidget {
               top: 8,
               right: 8,
               child: GestureDetector(
-                onTap: onFavorite,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onFavorite!();
+                },
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -542,7 +546,10 @@ class ProductListCard extends StatelessWidget {
               trailing!
             else if (onFavorite != null)
               IconButton(
-                onPressed: onFavorite,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  onFavorite!();
+                },
                 icon: HeroIcon(
                   HeroIcons.heart,
                   style: product.isFavorited
@@ -843,7 +850,10 @@ class CartItemCard extends StatelessWidget {
                     _buildQuantityButton(
                       icon: HeroIcons.minus,
                       onTap: item.quantity > 1
-                          ? () => onQuantityChanged!(item.quantity - 1)
+                          ? () {
+                              HapticFeedback.lightImpact();
+                              onQuantityChanged!(item.quantity - 1);
+                            }
                           : null,
                     ),
                     Padding(
@@ -859,7 +869,10 @@ class CartItemCard extends StatelessWidget {
                     ),
                     _buildQuantityButton(
                       icon: HeroIcons.plus,
-                      onTap: () => onQuantityChanged!(item.quantity + 1),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        onQuantityChanged!(item.quantity + 1);
+                      },
                     ),
                   ],
                 ),

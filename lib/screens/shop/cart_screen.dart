@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
@@ -53,6 +54,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _updateQuantity(int productId, int quantity) async {
     if (_isUpdating) return;
+    HapticFeedback.lightImpact();
     setState(() => _isUpdating = true);
 
     final result = await _shopService.updateCartItem(
@@ -72,6 +74,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _removeItem(int productId) async {
     if (_isUpdating) return;
+    HapticFeedback.mediumImpact();
     setState(() => _isUpdating = true);
 
     final result = await _shopService.removeFromCart(
@@ -137,6 +140,7 @@ class _CartScreenState extends State<CartScreen> {
 
   void _checkout() {
     if (_cart == null || _cart!.isEmpty) return;
+    HapticFeedback.heavyImpact();
     Navigator.pushNamed(
       context,
       '/shop/checkout',
