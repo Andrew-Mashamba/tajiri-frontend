@@ -7,6 +7,7 @@ import '../../models/ad_models.dart';
 import '../../services/shop_service.dart';
 import '../../services/ad_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../widgets/shop/filter_bottom_sheet.dart';
 import '../../widgets/shop/product_card.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/native_ad_card.dart';
@@ -58,6 +59,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
   // Sort
   String _sortBy = 'newest';
+
+  // Filters
+  ShopFilterResult? _activeFilters;
 
   // Search
   String _searchQuery = '';
@@ -155,6 +159,9 @@ class _ShopScreenState extends State<ShopScreen> {
       categoryId: _selectedCategoryId,
       search: _searchQuery.isNotEmpty ? _searchQuery : null,
       sortBy: _sortBy,
+      minPrice: _activeFilters?.minPrice,
+      maxPrice: _activeFilters?.maxPrice,
+      condition: _activeFilters?.condition,
       currentUserId: widget.currentUserId,
     );
 
@@ -216,6 +223,9 @@ class _ShopScreenState extends State<ShopScreen> {
       categoryId: _selectedCategoryId,
       search: _searchQuery.isNotEmpty ? _searchQuery : null,
       sortBy: _sortBy,
+      minPrice: _activeFilters?.minPrice,
+      maxPrice: _activeFilters?.maxPrice,
+      condition: _activeFilters?.condition,
       currentUserId: widget.currentUserId,
     );
 
@@ -292,6 +302,21 @@ class _ShopScreenState extends State<ShopScreen> {
     _searchDebounce?.cancel();
     setState(() => _searchQuery = '');
     _loadProducts(refresh: true);
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        currentFilters: _activeFilters,
+        onApply: (filters) {
+          setState(() => _activeFilters = filters);
+          _loadProducts(refresh: true);
+        },
+      ),
+    );
   }
 
   Future<void> _onToggleFavorite(Product product) async {
@@ -933,6 +958,44 @@ class _ShopScreenState extends State<ShopScreen> {
                 : _sortBy == 'price_desc'
                     ? ' \u2193'
                     : null,
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: _showFilterSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _activeFilters != null &&
+                        (_activeFilters!.minPrice != null ||
+                            _activeFilters!.maxPrice != null ||
+                            _activeFilters!.condition != null ||
+                            _activeFilters!.minRating != null)
+                    ? _kPrimaryText
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _activeFilters != null &&
+                          (_activeFilters!.minPrice != null ||
+                              _activeFilters!.maxPrice != null ||
+                              _activeFilters!.condition != null ||
+                              _activeFilters!.minRating != null)
+                      ? _kPrimaryText
+                      : _kDivider,
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                Icons.tune_rounded,
+                size: 16,
+                color: _activeFilters != null &&
+                        (_activeFilters!.minPrice != null ||
+                            _activeFilters!.maxPrice != null ||
+                            _activeFilters!.condition != null ||
+                            _activeFilters!.minRating != null)
+                    ? Colors.white
+                    : _kSecondaryText,
+              ),
+            ),
           ),
         ],
       ),
