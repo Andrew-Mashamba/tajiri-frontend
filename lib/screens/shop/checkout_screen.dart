@@ -48,8 +48,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _validatingPromo = false;
 
   // Delivery method per product (for cart checkout)
-  Map<int, DeliveryMethod> _deliveryMethods = {};
-  Map<int, String?> _deliveryAddresses = {};
+  final Map<int, DeliveryMethod> _deliveryMethods = {};
+  final Map<int, String?> _deliveryAddresses = {};
 
   bool _isProcessing = false;
 
@@ -305,20 +305,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final code = _promoController.text.trim();
     if (code.isEmpty) return;
     setState(() => _validatingPromo = true);
-    final result = await _shopService.validatePromoCode(code: code, userId: widget.currentUserId);
-    if (!mounted) return;
-    setState(() => _validatingPromo = false);
-    if (result.success) {
-      setState(() {
-        _appliedPromo = code;
-        _discount = result.discount ?? 0;
-      });
+    try {
+      final result = await _shopService.validatePromoCode(code: code, userId: widget.currentUserId);
+      if (!mounted) return;
+      setState(() => _validatingPromo = false);
+      if (result.success) {
+        setState(() {
+          _appliedPromo = code;
+          _discount = result.discount ?? 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Promo applied: ${result.description ?? 'Discount applied'}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? 'Invalid promo code')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _validatingPromo = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Promo applied: ${result.description ?? 'Discount applied'}')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? 'Invalid promo code')),
+        SnackBar(content: Text('Failed to validate promo code: $e')),
       );
     }
   }
@@ -573,8 +581,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
-                Navigator.popUntil(context, (route) => route.isFirst);
-                Navigator.pushNamed(context, '/shop/orders');
+                if (order != null) {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                  Navigator.pushNamed(
+                    context,
+                    '/shop/order',
+                    arguments: {'orderId': order.id},
+                  );
+                } else {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kPrimaryText,

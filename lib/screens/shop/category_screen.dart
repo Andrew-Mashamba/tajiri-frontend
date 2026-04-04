@@ -204,47 +204,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
       setState(() {
         final index = _products.indexWhere((p) => p.id == product.id);
         if (index != -1) {
-          final old = _products[index];
-          _products[index] = Product(
-            id: old.id,
-            sellerId: old.sellerId,
-            title: old.title,
-            description: old.description,
-            slug: old.slug,
-            type: old.type,
-            status: old.status,
-            price: old.price,
-            compareAtPrice: old.compareAtPrice,
-            currency: old.currency,
-            stockQuantity: old.stockQuantity,
-            images: old.images,
-            thumbnailPath: old.thumbnailPath,
-            categoryId: old.categoryId,
-            tags: old.tags,
-            condition: old.condition,
-            locationName: old.locationName,
-            latitude: old.latitude,
-            longitude: old.longitude,
-            allowPickup: old.allowPickup,
-            allowDelivery: old.allowDelivery,
-            allowShipping: old.allowShipping,
-            deliveryFee: old.deliveryFee,
-            deliveryNotes: old.deliveryNotes,
-            pickupAddress: old.pickupAddress,
-            downloadUrl: old.downloadUrl,
-            downloadLimit: old.downloadLimit,
-            durationMinutes: old.durationMinutes,
-            serviceLocation: old.serviceLocation,
-            viewsCount: old.viewsCount,
-            favoritesCount: old.favoritesCount,
-            ordersCount: old.ordersCount,
-            rating: old.rating,
-            reviewsCount: old.reviewsCount,
-            seller: old.seller,
-            category: old.category,
+          _products[index] = _products[index].copyWith(
             isFavorited: result.isFavorited,
-            createdAt: old.createdAt,
-            updatedAt: old.updatedAt,
           );
         }
       });

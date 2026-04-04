@@ -102,24 +102,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _loadProduct() async {
     setState(() => _isLoading = true);
-    final result = await _shopService.getProduct(
-      widget.productId,
-      currentUserId: widget.currentUserId,
-    );
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      if (result.success && result.product != null) {
-        _product = result.product;
-        // Record view in SQLite for recently viewed
-        ShopDatabase.instance.markViewed(_product!.id);
-        _setDefaultDeliveryMethod();
-        _loadRelatedProducts();
-      } else {
-        final s = AppStringsScope.of(context);
-        _error = result.message ?? s?.productNotFound ?? 'Product not found';
-      }
-    });
+    try {
+      final result = await _shopService.getProduct(
+        widget.productId,
+        currentUserId: widget.currentUserId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        if (result.success && result.product != null) {
+          _product = result.product;
+          // Record view in SQLite for recently viewed
+          ShopDatabase.instance.markViewed(_product!.id);
+          _setDefaultDeliveryMethod();
+          _loadRelatedProducts();
+        } else {
+          final s = AppStringsScope.of(context);
+          _error = result.message ?? s?.productNotFound ?? 'Product not found';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Error: $e';
+      });
+    }
   }
 
   Future<void> _loadReviews() async {
@@ -192,22 +200,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     HapticFeedback.lightImpact();
 
     // API call in background
-    final result = await _shopService.toggleFavorite(widget.currentUserId, _product!.id);
-    if (!result.success && mounted) {
-      // Revert on failure
-      setState(() {
-        _product = _product!.copyWith(
-          isFavorited: wasFavorited,
-          favoritesCount: _product!.favoritesCount + (wasFavorited ? 1 : -1),
-        );
-      });
+    try {
+      final result = await _shopService.toggleFavorite(widget.currentUserId, _product!.id);
+      if (!result.success && mounted) {
+        // Revert on failure
+        setState(() {
+          _product = _product!.copyWith(
+            isFavorited: wasFavorited,
+            favoritesCount: _product!.favoritesCount + (wasFavorited ? 1 : -1),
+          );
+        });
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _product = _product!.copyWith(
+            isFavorited: wasFavorited,
+            favoritesCount: _product!.favoritesCount + (wasFavorited ? 1 : -1),
+          );
+        });
+      }
     }
 
     // Sync SQLite wishlist
-    if (!wasFavorited) {
-      await ShopDatabase.instance.addToWishlist(_product!.id, _product!.price, jsonEncode(_product!.toJson()));
-    } else {
-      await ShopDatabase.instance.removeFromWishlist(_product!.id);
+    try {
+      if (!wasFavorited) {
+        await ShopDatabase.instance.addToWishlist(_product!.id, _product!.price, jsonEncode(_product!.toJson()));
+      } else {
+        await ShopDatabase.instance.removeFromWishlist(_product!.id);
+      }
+    } catch (_) {
+      // SQLite sync is best-effort
     }
   }
 
@@ -339,15 +363,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               title: Text(s?.sendToFriend ?? 'Send to a friend'),
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.pushNamed(
-                  context,
-                  '/messages/forward',
-                  arguments: {
-                    'shareText': _productShareText,
-                    'shareType': 'product',
-                    'productId': _product!.id,
-                  },
-                );
+                // Navigate to select-user-chat to pick a friend, then
+                // the product link can be shared via the share intent.
+                Navigator.pushNamed(context, '/select-user-chat');
               },
             ),
 
@@ -440,11 +458,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _openReviews() {
-    Navigator.pushNamed(
-      context,
-      '/shop/reviews',
-      arguments: {'productId': widget.productId},
-    );
+    // Reviews are displayed inline in the ReviewSection widget below.
+    // Scroll to the review section instead of navigating to an unregistered route.
+    // For now, trigger write-review sheet as the "see all" action.
+    _showWriteReviewSheet();
   }
 
   Widget _buildShimmer({double width = double.infinity, double height = 16, double radius = 8}) {
@@ -1418,7 +1435,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildBuyerProtectionBanner() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
@@ -1478,32 +1495,40 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
     if (_selectedRating == 0) return;
     setState(() => _submitting = true);
 
-    final result = await widget.shopService.createReview(
-      productId: widget.productId,
-      userId: widget.userId,
-      rating: _selectedRating,
-      comment: _commentController.text.trim().isNotEmpty
-          ? _commentController.text.trim()
-          : null,
-    );
-
-    if (!mounted) return;
-    setState(() => _submitting = false);
-
-    if (result.success && result.review != null) {
-      widget.onSubmitted(result.review!);
-      Navigator.pop(context);
-      final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(s?.reviewSubmitted ?? 'Review submitted'),
-        ),
+    try {
+      final result = await widget.shopService.createReview(
+        productId: widget.productId,
+        userId: widget.userId,
+        rating: _selectedRating,
+        comment: _commentController.text.trim().isNotEmpty
+            ? _commentController.text.trim()
+            : null,
       );
-    } else {
+
+      if (!mounted) return;
+      setState(() => _submitting = false);
+
+      if (result.success && result.review != null) {
+        widget.onSubmitted(result.review!);
+        Navigator.pop(context);
+        final s = AppStringsScope.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(s?.reviewSubmitted ?? 'Review submitted'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message ?? 'Failed to submit review'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message ?? 'Failed to submit review'),
-        ),
+        SnackBar(content: Text('Error submitting review: $e')),
       );
     }
   }
