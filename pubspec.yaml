@@ -139,23 +139,33 @@ dependencies:
   # Native incoming call UI (CallKit on iOS, ConnectionService on Android)
   flutter_callkit_incoming: ^2.0.4+1
 
-  # VICOBA dependencies
+  # Kikoba module dependencies (from VICOBA app)
+  firebase_auth: ^5.3.4
+  firebase_database: ^11.2.1
+  firebase_storage: ^12.3.7
+  firebase_analytics: ^11.3.7
+  logger: ^2.5.0
+  device_info_plus: ^11.3.3
+  package_info_plus: ^8.2.1
   pin_code_fields: ^8.0.1
-  steel_crypt: ^3.0.0
   bubble: ^1.2.1
-  emoji_picker_flutter: ^1.6.0
-  group_button: ^5.3.0
+  emoji_picker_flutter: ^4.3.0
+  group_button: ^5.3.4
   awesome_dialog: ^3.2.1
-  bottom_navy_bar: ^6.0.0
-  carousel_slider: ^4.2.1
+  bottom_navy_bar: ^6.1.0
+  carousel_slider: ^5.0.0
   overlay_support: ^2.1.0
-  font_awesome_flutter: ^10.7.0
-  flutter_contacts: ^1.1.5+1
-  # progress_indicators: ^1.0.2  # Not available with compatible version - skipped
-  # flutter_checkout_payment: ^0.0.7  # Not available with compatible version - skipped
-  sms_autofill: ^2.3.1
-  # currency_text_input_formatter: ^2.4.0  # Not available with compatible version - skipped
+  font_awesome_flutter: ^10.8.0
+  flutter_contacts: ^1.1.9+2
+  sms_autofill: ^2.4.0
   encrypt: ^5.0.3
+  currency_text_input_formatter: ^2.2.5
+  google_fonts: ^6.2.1
+  photo_view: ^0.15.0
+  flutter_svg: ^2.0.17
+  screenshot: ^3.0.0
+  timeago: ^3.7.0
+  steel_crypt: ^3.0.0+1
 
 dev_dependencies:
   flutter_test:

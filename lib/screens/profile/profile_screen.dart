@@ -48,6 +48,7 @@ import '../../services/creator_service.dart';
 import '../../models/flywheel_models.dart';
 import '../../utils/face_validator.dart';
 import '../budget/budget_home_screen.dart';
+import '../../kikoba/kikoba_module.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -1872,12 +1873,7 @@ class _ProfileTabPage extends StatelessWidget {
       case 'budget':
         return BudgetHomeScreen(userId: userId);
       case 'kikoba':
-        return _ComingSoonTab(
-          icon: Icons.savings_outlined,
-          title: 'Kikoba Changu',
-          subtitle: 'My Kikoba',
-          description: 'Shiriki katika vikoba, akiba ya kikundi, na mikopo ya wanachama.',
-        );
+        return KikobaModule(userId: userId);
       case 'banking':
         return _ComingSoonTab(
           icon: Icons.account_balance_outlined,
