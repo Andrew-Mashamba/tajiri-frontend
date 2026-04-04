@@ -9,6 +9,7 @@ import '../../services/shop_service.dart';
 import '../../widgets/shop/product_card.dart';
 import '../../widgets/shop/sticky_cart_bar.dart';
 import '../../widgets/shop/review_section.dart';
+import '../../widgets/shop/stock_urgency_badge.dart';
 import '../../widgets/cached_media_image.dart';
 
 // DESIGN.md tokens
@@ -779,6 +780,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ],
             ],
           ),
+
+          const SizedBox(height: 8),
+
+          StockUrgencyBadge(stockQuantity: _product!.stockQuantity),
 
           const SizedBox(height: 16),
 

@@ -3,6 +3,7 @@ import 'package:heroicons/heroicons.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../cached_media_image.dart';
+import 'stock_urgency_badge.dart';
 
 // DESIGN.md tokens for ProductCard (monochrome palette)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -122,6 +123,11 @@ class ProductCard extends StatelessWidget {
 
                       // Price row
                       _buildPriceRow(),
+
+                      if (product.stockQuantity > 0 && product.stockQuantity <= 5) ...[
+                        const SizedBox(height: 4),
+                        StockUrgencyBadge(stockQuantity: product.stockQuantity),
+                      ],
 
                       if (!compact) ...[
                         const SizedBox(height: 4),
