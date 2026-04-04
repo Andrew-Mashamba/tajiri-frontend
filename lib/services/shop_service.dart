@@ -981,6 +981,8 @@ class ShopService {
     String? deliveryAddress,
     String? deliveryNotes,
     String? pin, // TAJIRI Wallet PIN for payment
+    String paymentMethod = 'wallet',
+    String? mpesaPhone,
   }) async {
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/orders';
@@ -991,6 +993,8 @@ class ShopService {
       'delivery_method': deliveryMethod.value,
       if (deliveryAddress != null) 'delivery_address': deliveryAddress,
       if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
+      'payment_method': paymentMethod,
+      if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
       // Note: PIN not logged for security
     };
     _logRequest('POST', url, body: {...body, 'pin': pin != null ? '***' : null});
@@ -1034,6 +1038,8 @@ class ShopService {
     required int buyerId,
     required List<CheckoutItem> items,
     String? pin, // TAJIRI Wallet PIN for payment
+    String paymentMethod = 'wallet',
+    String? mpesaPhone,
   }) async {
     try {
       final response = await http.post(
@@ -1043,6 +1049,8 @@ class ShopService {
           'user_id': buyerId,
           'items': items.map((i) => i.toJson()).toList(),
           if (pin != null) 'pin': pin,
+          'payment_method': paymentMethod,
+          if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
         }),
       );
 

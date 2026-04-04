@@ -39,6 +39,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
+  final TextEditingController _mpesaPhoneController = TextEditingController();
+
+  String _paymentMethod = 'wallet'; // 'wallet' | 'mpesa'
 
   // Delivery method per product (for cart checkout)
   Map<int, DeliveryMethod> _deliveryMethods = {};
@@ -88,6 +91,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _addressController.dispose();
     _notesController.dispose();
     _pinController.dispose();
+    _mpesaPhoneController.dispose();
     super.dispose();
   }
 
@@ -131,6 +135,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (_paymentMethod == 'mpesa') {
+      _processMpesaPayment();
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -142,6 +151,76 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ).whenComplete(() {
       _pinController.clear();
     });
+  }
+
+  Future<void> _processMpesaPayment() async {
+    final s = AppStringsScope.of(context);
+    final phone = _mpesaPhoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your M-Pesa phone number')),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      if (widget.product != null) {
+        final result = await _shopService.createOrder(
+          buyerId: widget.currentUserId,
+          productId: widget.product!.id,
+          quantity: widget.quantity ?? 1,
+          deliveryMethod: widget.deliveryMethod ?? DeliveryMethod.pickup,
+          deliveryAddress: _addressController.text.isNotEmpty ? _addressController.text : null,
+          deliveryNotes: _notesController.text.isNotEmpty ? _notesController.text : null,
+          paymentMethod: 'mpesa',
+          mpesaPhone: phone,
+        );
+
+        if (!mounted) return;
+        if (result.success) {
+          _showSuccessDialog(result.order);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? s?.paymentFailed ?? 'Payment failed')),
+          );
+        }
+      } else if (widget.cart != null) {
+        final items = widget.cart!.items.map((item) {
+          return CheckoutItem(
+            productId: item.productId,
+            quantity: item.quantity,
+            deliveryMethod: _deliveryMethods[item.productId] ?? DeliveryMethod.pickup,
+            deliveryAddress: _deliveryAddresses[item.productId] ?? _addressController.text,
+            deliveryNotes: _notesController.text,
+          );
+        }).toList();
+
+        final result = await _shopService.checkout(
+          buyerId: widget.currentUserId,
+          items: items,
+          paymentMethod: 'mpesa',
+          mpesaPhone: phone,
+        );
+
+        if (!mounted) return;
+        if (result.success) {
+          _showSuccessDialog(result.orders.isNotEmpty ? result.orders.first : null);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? s?.paymentFailed ?? 'Payment failed')),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${s?.error ?? 'Error'}: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   Widget _buildPinSheet() {
@@ -278,6 +357,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ? _notesController.text
               : null,
           pin: _pinController.text,
+          paymentMethod: 'wallet',
         );
 
         if (!mounted) return;
@@ -306,6 +386,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           buyerId: widget.currentUserId,
           items: items,
           pin: _pinController.text,
+          paymentMethod: 'wallet',
         );
 
         if (!mounted) return;
@@ -657,88 +738,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildPaymentMethod() {
-    final s = AppStringsScope.of(context);
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(16),
       color: _kSurface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const HeroIcon(
-                HeroIcons.wallet,
-                size: 20,
-                color: _kPrimaryText,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                s?.paymentMethod ?? 'Payment Method',
-                style: const TextStyle(
-                  color: _kPrimaryText,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _kPrimaryText.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _kPrimaryText, width: 2),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryText,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const HeroIcon(
-                    HeroIcons.wallet,
-                    size: 24,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'TAJIRI Wallet',
-                        style: TextStyle(
-                          color: _kPrimaryText,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        s?.fastSecurePayment ?? 'Fast and secure payment',
-                        style: const TextStyle(
-                          color: _kSecondaryText,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const HeroIcon(
-                  HeroIcons.checkCircle,
-                  style: HeroIconStyle.solid,
-                  size: 24,
-                  color: Color(0xFF10B981),
-                ),
-              ],
+      child: _buildPaymentMethodSelector(),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            'Payment Method',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A1A),
             ),
           ),
-        ],
-      ),
+        ),
+        RadioListTile<String>(
+          value: 'wallet',
+          groupValue: _paymentMethod,
+          onChanged: (v) => setState(() => _paymentMethod = v!),
+          title: const Text('TAJIRI Wallet'),
+          subtitle: const Text('Pay with your wallet balance'),
+          secondary: const Icon(Icons.account_balance_wallet_outlined),
+          activeColor: const Color(0xFF1A1A1A),
+        ),
+        RadioListTile<String>(
+          value: 'mpesa',
+          groupValue: _paymentMethod,
+          onChanged: (v) => setState(() => _paymentMethod = v!),
+          title: const Text('M-Pesa'),
+          subtitle: const Text('Pay via Vodacom M-Pesa'),
+          secondary: const Icon(Icons.phone_android_outlined),
+          activeColor: const Color(0xFF1A1A1A),
+        ),
+        if (_paymentMethod == 'mpesa')
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _mpesaPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'M-Pesa Phone Number',
+                hintText: '+255 7XX XXX XXX',
+                prefixIcon: Icon(Icons.phone_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -842,8 +896,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _showPinDialog,
-          icon: const HeroIcon(HeroIcons.wallet, size: 22),
+          onPressed: _isProcessing ? null : _showPinDialog,
+          icon: _isProcessing
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : (_paymentMethod == 'mpesa'
+                  ? const Icon(Icons.phone_android_outlined, size: 22)
+                  : const HeroIcon(HeroIcons.wallet, size: 22)),
           label: Text(
             '${s?.pay ?? 'Pay'} TZS ${_total.toStringAsFixed(0)}',
             style: const TextStyle(
