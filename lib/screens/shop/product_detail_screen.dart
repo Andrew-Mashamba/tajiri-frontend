@@ -7,6 +7,7 @@ import '../../models/shop_models.dart';
 import '../../config/api_config.dart';
 import '../../services/shop_service.dart';
 import '../../widgets/shop/product_card.dart';
+import '../../widgets/shop/sticky_cart_bar.dart';
 import '../../widgets/cached_media_image.dart';
 
 // DESIGN.md tokens
@@ -478,7 +479,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ? _buildErrorState()
                 : _buildContent(),
       ),
-      bottomNavigationBar: _product != null ? _buildBottomBar() : null,
+      bottomNavigationBar: _product != null
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildActionBar(),
+                StickyCartBar(
+                  price: _product!.price,
+                  compareAtPrice: _product!.compareAtPrice,
+                  currency: _product!.currency,
+                  isInStock: _product!.isInStock,
+                  isAddingToCart: _addingToCart,
+                  onAddToCart: _addToCart,
+                  onBuyNow: _buyNow,
+                ),
+              ],
+            )
+          : null,
     );
   }
 
@@ -1537,7 +1554,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _relatedProducts.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (context, i) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     final product = _relatedProducts[index];
                     return SizedBox(
@@ -1562,23 +1579,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildActionBar() {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12 + MediaQuery.of(context).padding.bottom,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: _kSurface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        border: Border(
+          top: BorderSide(color: _kDivider),
+        ),
       ),
       child: Row(
         children: [
@@ -1627,67 +1635,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               ),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Add to cart button
-          GestureDetector(
-            onTap: _product!.isInStock && !_addingToCart ? _addToCart : null,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _product!.isInStock ? _kPrimaryText : _kDivider,
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: _addingToCart
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _kPrimaryText,
-                        ),
-                      )
-                    : HeroIcon(
-                        HeroIcons.shoppingCart,
-                        size: 22,
-                        color: _product!.isInStock ? _kPrimaryText : _kDivider,
-                      ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Buy now button
-          Expanded(
-            child: Builder(builder: (context) {
-              final s = AppStringsScope.of(context);
-              return ElevatedButton(
-                onPressed: _product!.isInStock ? _buyNow : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kPrimaryText,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  s?.buyNow ?? 'Buy Now',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            }),
           ),
         ],
       ),
