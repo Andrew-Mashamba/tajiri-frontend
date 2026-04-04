@@ -184,9 +184,7 @@ class _CartScreenState extends State<CartScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _kPrimaryText),
-            )
+          ? _buildCartShimmer()
           : _error != null
               ? _buildErrorState()
               : _cart == null || _cart!.isEmpty
@@ -195,6 +193,45 @@ class _CartScreenState extends State<CartScreen> {
       bottomNavigationBar: _cart != null && _cart!.isNotEmpty
           ? _buildCheckoutBar()
           : null,
+    );
+  }
+
+  Widget _buildShimmer({double width = double.infinity, double height = 16, double radius = 8}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0E0E0),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+
+  Widget _buildCartShimmer() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: 3,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            _buildShimmer(width: 80, height: 80, radius: 12),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildShimmer(width: 140, height: 14),
+                  const SizedBox(height: 8),
+                  _buildShimmer(width: 80, height: 16),
+                  const SizedBox(height: 8),
+                  _buildShimmer(width: 100, height: 12),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
