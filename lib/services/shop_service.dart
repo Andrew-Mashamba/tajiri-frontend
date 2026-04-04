@@ -1330,6 +1330,41 @@ class ShopService {
     }
   }
 
+  /// Request a return/refund for an order
+  Future<OrderResult> requestReturn(int orderId, {
+    required int userId,
+    required String reason,
+    List<String>? imageUrls,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/shop/orders/$orderId/return'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'reason': reason,
+          if (imageUrls != null) 'images': imageUrls,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return OrderResult(
+          success: true,
+          order: Order.fromJson(data['data']),
+          message: data['message']?.toString(),
+        );
+      }
+      return OrderResult(
+        success: false,
+        message: data['message'] ?? 'Imeshindwa kuomba kurudisha',
+      );
+    } catch (e) {
+      return OrderResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
   // ============================================================================
   // REVIEWS
   // ============================================================================

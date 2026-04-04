@@ -305,6 +305,75 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     trackingController.dispose();
   }
 
+  Future<void> _showReturnDialog() async {
+    if (_isActioning) return;
+    final reasonController = TextEditingController();
+    var submitted = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request Return/Refund'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Please describe why you want to return this item:',
+              style: TextStyle(fontSize: 14, color: _kSecondaryText),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Reason for return...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kPrimaryText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              if (reasonController.text.trim().isEmpty) return;
+              submitted = true;
+              final reason = reasonController.text.trim();
+              Navigator.pop(ctx);
+              setState(() => _isActioning = true);
+              final result = await _shopService.requestReturn(
+                widget.orderId,
+                userId: widget.currentUserId,
+                reason: reason,
+              );
+              if (!mounted) return;
+              setState(() => _isActioning = false);
+              if (result.success && result.order != null) {
+                setState(() => _order = result.order);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message ?? 'Return request submitted')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message ?? 'Failed to submit return request')),
+                );
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    if (!submitted) reasonController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -840,6 +909,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           label: s?.cancelOrder ?? 'Cancel Order',
           icon: HeroIcons.xCircle,
           onTap: _cancelOrder,
+          isDestructive: true,
+        ));
+      }
+      if (order.status == OrderStatus.delivered || order.status == OrderStatus.completed) {
+        actions.add(_buildFullButton(
+          label: 'Request Return',
+          icon: HeroIcons.arrowUturnLeft,
+          onTap: _showReturnDialog,
           isDestructive: true,
         ));
       }
