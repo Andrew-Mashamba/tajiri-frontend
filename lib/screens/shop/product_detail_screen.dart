@@ -10,7 +10,7 @@ import '../../widgets/shop/product_card.dart';
 import '../../widgets/shop/sticky_cart_bar.dart';
 import '../../widgets/shop/review_section.dart';
 import '../../widgets/shop/stock_urgency_badge.dart';
-import '../../widgets/cached_media_image.dart';
+import '../../widgets/shop/zoomable_image_gallery.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -63,12 +63,10 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ShopService _shopService = ShopService();
-  final PageController _imageController = PageController();
 
   Product? _product;
   bool _isLoading = true;
   String? _error;
-  int _currentImageIndex = 0;
 
   // Reviews
   List<Review> _reviews = [];
@@ -97,7 +95,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   void dispose() {
-    _imageController.dispose();
     super.dispose();
   }
 
@@ -584,41 +581,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildImageGallery() {
-    final images = _product!.imageUrls;
-    if (images.isEmpty) {
-      return Container(
-        height: 350,
-        color: _kDivider,
-        child: const Center(
-          child: HeroIcon(
-            HeroIcons.photo,
-            size: 64,
-            color: _kTertiaryText,
-          ),
-        ),
-      );
-    }
-
     return Stack(
       children: [
-        SizedBox(
+        ZoomableImageGallery(
+          imageUrls: _product!.imageUrls,
           height: 350,
-          child: PageView.builder(
-            controller: _imageController,
-            onPageChanged: (index) {
-              setState(() => _currentImageIndex = index);
-            },
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () => _openFullScreenImage(index),
-                child: CachedMediaImage(
-                  imageUrl: images[index],
-                  fit: BoxFit.contain,
-                ),
-              );
-            },
-          ),
         ),
 
         // Back button
@@ -676,30 +643,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
 
-        // Page indicators
-        if (images.length > 1)
-          Positioned(
-            bottom: 16,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(images.length, (index) {
-                return Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentImageIndex == index
-                        ? _kPrimaryText
-                        : _kPrimaryText.withValues(alpha: 0.3),
-                  ),
-                );
-              }),
-            ),
-          ),
-
         // Discount badge
         if (_product!.hasDiscount)
           Positioned(
@@ -722,16 +665,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
       ],
-    );
-  }
-
-  void _openFullScreenImage(int initialIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => _FullScreenGallery(
-        images: _product!.imageUrls,
-        initialIndex: initialIndex,
-      ),
     );
   }
 
@@ -1663,71 +1596,6 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
 
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-/// Full screen image gallery dialog.
-class _FullScreenGallery extends StatefulWidget {
-  final List<String> images;
-  final int initialIndex;
-
-  const _FullScreenGallery({
-    required this.images,
-    required this.initialIndex,
-  });
-
-  @override
-  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
-}
-
-class _FullScreenGalleryState extends State<_FullScreenGallery> {
-  late PageController _controller;
-  late int _currentIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.initialIndex;
-    _controller = PageController(initialPage: _currentIndex);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          '${_currentIndex + 1} / ${widget.images.length}',
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-      body: PageView.builder(
-        controller: _controller,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
-        itemCount: widget.images.length,
-        itemBuilder: (context, index) {
-          return InteractiveViewer(
-            child: Center(
-              child: CachedMediaImage(
-                imageUrl: widget.images[index],
-                fit: BoxFit.contain,
-              ),
-            ),
-          );
-        },
       ),
     );
   }
