@@ -6,6 +6,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../config/api_config.dart';
 import '../../services/shop_service.dart';
+import '../../services/shop_database.dart';
 import '../../widgets/shop/product_card.dart';
 import '../../widgets/shop/sticky_cart_bar.dart';
 import '../../widgets/shop/review_section.dart';
@@ -109,6 +110,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _isLoading = false;
       if (result.success && result.product != null) {
         _product = result.product;
+        // Record view in SQLite for recently viewed
+        ShopDatabase.instance.markViewed(_product!.id);
         _setDefaultDeliveryMethod();
         _loadRelatedProducts();
       } else {

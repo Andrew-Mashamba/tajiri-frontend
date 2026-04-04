@@ -79,6 +79,9 @@ class _ShopScreenState extends State<ShopScreen> {
   // Ad state
   List<ServedAd> _shopAds = [];
 
+  // Recently viewed
+  List<Product> _recentlyViewed = [];
+
   @override
   void initState() {
     super.initState();
@@ -114,6 +117,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _loadFeaturedProducts(),
       _loadProducts(),
       _loadCartCount(),
+      _loadRecentlyViewed(),
     ]);
   }
 
@@ -250,6 +254,13 @@ class _ShopScreenState extends State<ShopScreen> {
     setState(() {
       _cartItemCount = result.cart?.itemCount ?? 0;
     });
+  }
+
+  Future<void> _loadRecentlyViewed() async {
+    try {
+      final products = await ShopDatabase.instance.getRecentlyViewed(limit: 10);
+      if (mounted) setState(() => _recentlyViewed = products);
+    } catch (_) {}
   }
 
   // ── Banner auto-scroll ────────────────────────────────────────────────
@@ -438,6 +449,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _loadFeaturedProducts(),
       _loadProducts(refresh: true),
       _loadCartCount(),
+      _loadRecentlyViewed(),
     ]);
   }
 
@@ -496,6 +508,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
               // 3. Category filter chips
               SliverToBoxAdapter(child: _buildCategoryChips()),
+
+              // Recently viewed
+              SliverToBoxAdapter(child: _buildRecentlyViewed()),
 
               // 3. Featured banner
               if (_featuredProducts.isNotEmpty || _featuredLoading)
@@ -947,6 +962,40 @@ class _ShopScreenState extends State<ShopScreen> {
               }),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildRecentlyViewed() {
+    if (_recentlyViewed.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text('Recently Viewed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
+        ),
+        SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _recentlyViewed.length,
+            itemBuilder: (context, index) {
+              final product = _recentlyViewed[index];
+              return SizedBox(
+                width: 140,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ProductCard(
+                    product: product,
+                    onTap: () => _openProductDetail(product),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
