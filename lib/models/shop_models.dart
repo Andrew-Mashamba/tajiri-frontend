@@ -1081,3 +1081,11 @@ class PaginationMeta {
 
   bool get hasMore => currentPage < lastPage;
 }
+
+class PromoCodeResult {
+  final bool success;
+  final double? discount;
+  final String? description;
+  final String? message;
+  const PromoCodeResult({required this.success, this.discount, this.description, this.message});
+}

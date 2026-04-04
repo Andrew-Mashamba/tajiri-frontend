@@ -983,6 +983,7 @@ class ShopService {
     String? pin, // TAJIRI Wallet PIN for payment
     String paymentMethod = 'wallet',
     String? mpesaPhone,
+    String? promoCode,
   }) async {
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/orders';
@@ -995,6 +996,7 @@ class ShopService {
       if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
       'payment_method': paymentMethod,
       if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
+      if (promoCode != null) 'promo_code': promoCode,
       // Note: PIN not logged for security
     };
     _logRequest('POST', url, body: {...body, 'pin': pin != null ? '***' : null});
@@ -1040,6 +1042,7 @@ class ShopService {
     String? pin, // TAJIRI Wallet PIN for payment
     String paymentMethod = 'wallet',
     String? mpesaPhone,
+    String? promoCode,
   }) async {
     try {
       final response = await http.post(
@@ -1051,6 +1054,7 @@ class ShopService {
           if (pin != null) 'pin': pin,
           'payment_method': paymentMethod,
           if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
+          if (promoCode != null) 'promo_code': promoCode,
         }),
       );
 
@@ -1071,6 +1075,35 @@ class ShopService {
       );
     } catch (e) {
       return OrderListResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
+  /// Validate a promo code and return discount details
+  Future<PromoCodeResult> validatePromoCode({
+    required String code,
+    required int userId,
+  }) async {
+    final url = '$_baseUrl/shop/promo/validate';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'code': code, 'user_id': userId}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return PromoCodeResult(
+          success: true,
+          discount: double.tryParse(data['discount']?.toString() ?? '0') ?? 0,
+          description: data['description']?.toString(),
+        );
+      }
+      return PromoCodeResult(
+        success: false,
+        message: data['message']?.toString() ?? 'Invalid code',
+      );
+    } catch (e) {
+      return PromoCodeResult(success: false, message: 'Failed to validate: $e');
     }
   }
 

@@ -40,8 +40,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _mpesaPhoneController = TextEditingController();
+  final TextEditingController _promoController = TextEditingController();
 
   String _paymentMethod = 'wallet'; // 'wallet' | 'mpesa'
+  String? _appliedPromo;
+  double _discount = 0;
+  bool _validatingPromo = false;
 
   // Delivery method per product (for cart checkout)
   Map<int, DeliveryMethod> _deliveryMethods = {};
@@ -78,7 +82,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return 0;
   }
 
-  double get _total => _subtotal + _deliveryFee;
+  double get _total => (_subtotal + _deliveryFee - _discount).clamp(0, double.infinity);
 
   @override
   void initState() {
@@ -92,6 +96,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _notesController.dispose();
     _pinController.dispose();
     _mpesaPhoneController.dispose();
+    _promoController.dispose();
     super.dispose();
   }
 
@@ -176,6 +181,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           deliveryNotes: _notesController.text.isNotEmpty ? _notesController.text : null,
           paymentMethod: 'mpesa',
           mpesaPhone: phone,
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -202,6 +208,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           items: items,
           paymentMethod: 'mpesa',
           mpesaPhone: phone,
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -220,6 +227,99 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Widget _buildPromoCodeSection() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      color: _kSurface,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Promo Code',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _kPrimaryText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _promoController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter promo code',
+                      hintStyle: const TextStyle(color: _kTertiaryText),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      suffixIcon: _appliedPromo != null
+                          ? IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () {
+                                setState(() {
+                                  _appliedPromo = null;
+                                  _discount = 0;
+                                  _promoController.clear();
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    enabled: _appliedPromo == null,
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _appliedPromo != null || _validatingPromo ? null : _validatePromo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A1A1A),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  child: _validatingPromo
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(
+                          _appliedPromo != null ? 'Applied ✓' : 'Apply',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _validatePromo() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+    setState(() => _validatingPromo = true);
+    final result = await _shopService.validatePromoCode(code: code, userId: widget.currentUserId);
+    if (!mounted) return;
+    setState(() => _validatingPromo = false);
+    if (result.success) {
+      setState(() {
+        _appliedPromo = code;
+        _discount = result.discount ?? 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Promo applied: ${result.description ?? 'Discount applied'}')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Invalid promo code')),
+      );
     }
   }
 
@@ -358,6 +458,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               : null,
           pin: _pinController.text,
           paymentMethod: 'wallet',
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -387,6 +488,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           items: items,
           pin: _pinController.text,
           paymentMethod: 'wallet',
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -537,6 +639,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
             // Payment method
             _buildPaymentMethod(),
+
+            // Promo code
+            _buildPromoCodeSection(),
 
             // Price breakdown
             _buildPriceBreakdown(),
@@ -847,6 +952,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ],
           ),
+          if (_discount > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Promo${_appliedPromo != null ? ' ($_appliedPromo)' : ''}',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  '-TZS ${_discount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(color: _kDivider, height: 1),
