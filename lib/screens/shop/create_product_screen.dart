@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
@@ -68,14 +71,28 @@ class _CreateProductScreenState extends State<CreateProductScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
 
+  Timer? _autoSaveTimer;
+  static const _draftKey = 'shop_product_draft';
+
   @override
   void initState() {
     super.initState();
     _loadCategories();
+    _loadDraft();
+    _titleController.addListener(_scheduleSave);
+    _descriptionController.addListener(_scheduleSave);
+    _priceController.addListener(_scheduleSave);
+    _comparePriceController.addListener(_scheduleSave);
+    _stockController.addListener(_scheduleSave);
+    _locationController.addListener(_scheduleSave);
+    _deliveryFeeController.addListener(_scheduleSave);
+    _pickupAddressController.addListener(_scheduleSave);
+    _deliveryNotesController.addListener(_scheduleSave);
   }
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
@@ -86,6 +103,82 @@ class _CreateProductScreenState extends State<CreateProductScreen> {
     _pickupAddressController.dispose();
     _deliveryNotesController.dispose();
     super.dispose();
+  }
+
+  void _scheduleSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(seconds: 3), _saveDraft);
+  }
+
+  Future<void> _saveDraft() async {
+    final draft = {
+      'title': _titleController.text,
+      'description': _descriptionController.text,
+      'price': _priceController.text,
+      'comparePrice': _comparePriceController.text,
+      'stock': _stockController.text,
+      'location': _locationController.text,
+      'deliveryFee': _deliveryFeeController.text,
+      'pickupAddress': _pickupAddressController.text,
+      'deliveryNotes': _deliveryNotesController.text,
+      'productType': _productType.value,
+      'condition': _condition.value,
+      'allowPickup': _allowPickup,
+      'allowDelivery': _allowDelivery,
+      'allowShipping': _allowShipping,
+      'categoryId': _selectedCategoryId,
+    };
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_draftKey, jsonEncode(draft));
+    debugPrint('[CreateProduct] Draft auto-saved');
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_draftKey);
+    if (raw == null) return;
+    try {
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      // Only restore if there is meaningful content
+      final hasContent = (draft['title'] as String?)?.isNotEmpty == true ||
+          (draft['description'] as String?)?.isNotEmpty == true ||
+          (draft['price'] as String?)?.isNotEmpty == true;
+      if (!hasContent) return;
+      setState(() {
+        _titleController.text = draft['title'] as String? ?? '';
+        _descriptionController.text = draft['description'] as String? ?? '';
+        _priceController.text = draft['price'] as String? ?? '';
+        _comparePriceController.text = draft['comparePrice'] as String? ?? '';
+        _stockController.text = (draft['stock'] as String?)?.isNotEmpty == true
+            ? draft['stock'] as String
+            : '1';
+        _locationController.text = draft['location'] as String? ?? '';
+        _deliveryFeeController.text = draft['deliveryFee'] as String? ?? '';
+        _pickupAddressController.text = draft['pickupAddress'] as String? ?? '';
+        _deliveryNotesController.text = draft['deliveryNotes'] as String? ?? '';
+        _productType = ProductType.fromString(draft['productType'] as String?);
+        _condition = ProductCondition.fromString(draft['condition'] as String?);
+        _allowPickup = draft['allowPickup'] as bool? ?? true;
+        _allowDelivery = draft['allowDelivery'] as bool? ?? false;
+        _allowShipping = draft['allowShipping'] as bool? ?? false;
+        if (draft['categoryId'] != null) {
+          _selectedCategoryId = draft['categoryId'] as int?;
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Draft restored'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey);
   }
 
   Future<void> _loadCategories() async {
@@ -182,6 +275,8 @@ class _CreateProductScreenState extends State<CreateProductScreen> {
     setState(() => _isSaving = false);
 
     if (result.success) {
+      await _clearDraft();
+      if (!mounted) return;
       final s = AppStringsScope.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s?.productCreated ?? 'Product created successfully')),

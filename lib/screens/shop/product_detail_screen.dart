@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
@@ -6,8 +7,12 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../config/api_config.dart';
 import '../../services/shop_service.dart';
+import '../../services/shop_database.dart';
 import '../../widgets/shop/product_card.dart';
-import '../../widgets/cached_media_image.dart';
+import '../../widgets/shop/sticky_cart_bar.dart';
+import '../../widgets/shop/review_section.dart';
+import '../../widgets/shop/stock_urgency_badge.dart';
+import '../../widgets/shop/zoomable_image_gallery.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -60,12 +65,10 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ShopService _shopService = ShopService();
-  final PageController _imageController = PageController();
 
   Product? _product;
   bool _isLoading = true;
   String? _error;
-  int _currentImageIndex = 0;
 
   // Reviews
   List<Review> _reviews = [];
@@ -94,7 +97,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   void dispose() {
-    _imageController.dispose();
     super.dispose();
   }
 
@@ -109,6 +111,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _isLoading = false;
       if (result.success && result.product != null) {
         _product = result.product;
+        // Record view in SQLite for recently viewed
+        ShopDatabase.instance.markViewed(_product!.id);
         _setDefaultDeliveryMethod();
         _loadRelatedProducts();
       } else {
@@ -176,55 +180,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _toggleFavorite() async {
     if (_product == null) return;
-    final result = await _shopService.toggleFavorite(
-      widget.currentUserId,
-      _product!.id,
-    );
-    if (!mounted) return;
-    if (result.success) {
+    final wasFavorited = _product!.isFavorited;
+
+    // Optimistic update
+    setState(() {
+      _product = _product!.copyWith(
+        isFavorited: !wasFavorited,
+        favoritesCount: _product!.favoritesCount + (wasFavorited ? -1 : 1),
+      );
+    });
+    HapticFeedback.lightImpact();
+
+    // API call in background
+    final result = await _shopService.toggleFavorite(widget.currentUserId, _product!.id);
+    if (!result.success && mounted) {
+      // Revert on failure
       setState(() {
-        _product = Product(
-          id: _product!.id,
-          sellerId: _product!.sellerId,
-          title: _product!.title,
-          description: _product!.description,
-          slug: _product!.slug,
-          type: _product!.type,
-          status: _product!.status,
-          price: _product!.price,
-          compareAtPrice: _product!.compareAtPrice,
-          currency: _product!.currency,
-          stockQuantity: _product!.stockQuantity,
-          images: _product!.images,
-          thumbnailPath: _product!.thumbnailPath,
-          categoryId: _product!.categoryId,
-          tags: _product!.tags,
-          condition: _product!.condition,
-          locationName: _product!.locationName,
-          latitude: _product!.latitude,
-          longitude: _product!.longitude,
-          allowPickup: _product!.allowPickup,
-          allowDelivery: _product!.allowDelivery,
-          allowShipping: _product!.allowShipping,
-          deliveryFee: _product!.deliveryFee,
-          deliveryNotes: _product!.deliveryNotes,
-          pickupAddress: _product!.pickupAddress,
-          downloadUrl: _product!.downloadUrl,
-          downloadLimit: _product!.downloadLimit,
-          durationMinutes: _product!.durationMinutes,
-          serviceLocation: _product!.serviceLocation,
-          viewsCount: _product!.viewsCount,
-          favoritesCount: _product!.favoritesCount,
-          ordersCount: _product!.ordersCount,
-          rating: _product!.rating,
-          reviewsCount: _product!.reviewsCount,
-          seller: _product!.seller,
-          category: _product!.category,
-          isFavorited: result.isFavorited,
-          createdAt: _product!.createdAt,
-          updatedAt: _product!.updatedAt,
+        _product = _product!.copyWith(
+          isFavorited: wasFavorited,
+          favoritesCount: _product!.favoritesCount + (wasFavorited ? 1 : -1),
         );
       });
+    }
+
+    // Sync SQLite wishlist
+    if (!wasFavorited) {
+      await ShopDatabase.instance.addToWishlist(_product!.id, _product!.price, jsonEncode(_product!.toJson()));
+    } else {
+      await ShopDatabase.instance.removeFromWishlist(_product!.id);
     }
   }
 
@@ -464,6 +447,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  Widget _buildShimmer({double width = double.infinity, double height = 16, double radius = 8}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0E0E0),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+
+  Widget _buildPdpShimmer() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildShimmer(height: 300, radius: 0), // image area
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildShimmer(width: 200, height: 20),
+                const SizedBox(height: 12),
+                _buildShimmer(width: 120, height: 24),
+                const SizedBox(height: 16),
+                _buildShimmer(height: 14),
+                const SizedBox(height: 8),
+                _buildShimmer(height: 14),
+                const SizedBox(height: 8),
+                _buildShimmer(width: 180, height: 14),
+                const SizedBox(height: 24),
+                _buildShimmer(height: 48, radius: 12), // button placeholder
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -471,14 +495,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: SafeArea(
         top: false, // image gallery extends behind status bar
         child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: _kPrimaryText),
-              )
+            ? _buildPdpShimmer()
             : _error != null
                 ? _buildErrorState()
                 : _buildContent(),
       ),
-      bottomNavigationBar: _product != null ? _buildBottomBar() : null,
+      bottomNavigationBar: _product != null
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildActionBar(),
+                StickyCartBar(
+                  price: _product!.price,
+                  compareAtPrice: _product!.compareAtPrice,
+                  currency: _product!.currency,
+                  isInStock: _product!.isInStock,
+                  isAddingToCart: _addingToCart,
+                  onAddToCart: _addToCart,
+                  onBuyNow: _buyNow,
+                ),
+              ],
+            )
+          : null,
     );
   }
 
@@ -542,7 +580,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           SliverToBoxAdapter(child: _buildDescription()),
 
         // Reviews section
-        SliverToBoxAdapter(child: _buildReviewsSection()),
+        SliverToBoxAdapter(
+          child: ReviewSection(
+            reviews: _reviews,
+            stats: _reviewStats,
+            isLoading: _reviewsLoading,
+            onWriteReview: _showWriteReviewSheet,
+            onSeeAll: _openReviews,
+          ),
+        ),
 
         // Related products
         if (_relatedProducts.isNotEmpty || _relatedLoading)
@@ -557,41 +603,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildImageGallery() {
-    final images = _product!.imageUrls;
-    if (images.isEmpty) {
-      return Container(
-        height: 350,
-        color: _kDivider,
-        child: const Center(
-          child: HeroIcon(
-            HeroIcons.photo,
-            size: 64,
-            color: _kTertiaryText,
-          ),
-        ),
-      );
-    }
-
     return Stack(
       children: [
-        SizedBox(
+        ZoomableImageGallery(
+          imageUrls: _product!.imageUrls,
           height: 350,
-          child: PageView.builder(
-            controller: _imageController,
-            onPageChanged: (index) {
-              setState(() => _currentImageIndex = index);
-            },
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () => _openFullScreenImage(index),
-                child: CachedMediaImage(
-                  imageUrl: images[index],
-                  fit: BoxFit.contain,
-                ),
-              );
-            },
-          ),
+          heroTag: 'product_image_${widget.productId}',
         ),
 
         // Back button
@@ -649,30 +666,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
 
-        // Page indicators
-        if (images.length > 1)
-          Positioned(
-            bottom: 16,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(images.length, (index) {
-                return Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentImageIndex == index
-                        ? _kPrimaryText
-                        : _kPrimaryText.withValues(alpha: 0.3),
-                  ),
-                );
-              }),
-            ),
-          ),
-
         // Discount badge
         if (_product!.hasDiscount)
           Positioned(
@@ -695,16 +688,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
       ],
-    );
-  }
-
-  void _openFullScreenImage(int initialIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => _FullScreenGallery(
-        images: _product!.imageUrls,
-        initialIndex: initialIndex,
-      ),
     );
   }
 
@@ -754,7 +737,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+
+          StockUrgencyBadge(stockQuantity: _product!.stockQuantity),
+
+          _buildBuyerProtectionBanner(),
 
           // Rating and stats
           Row(
@@ -1313,201 +1300,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildReviewsSection() {
-    final s = AppStringsScope.of(context);
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(16),
-      color: _kSurface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  s?.customerReviews ?? 'Customer Reviews',
-                  style: const TextStyle(
-                    color: _kPrimaryText,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              // Write review button
-              GestureDetector(
-                onTap: _showWriteReviewSheet,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryText,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const HeroIcon(HeroIcons.plus, size: 14, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(
-                        s?.writeReview ?? 'Write a review',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (_reviews.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _openReviews,
-                  child: Text(
-                    s?.viewAll ?? 'View All',
-                    style: const TextStyle(
-                      color: _kSecondaryText,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          if (_reviewsLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(
-                  color: _kPrimaryText,
-                  strokeWidth: 2,
-                ),
-              ),
-            )
-          else if (_reviews.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Column(
-                  children: [
-                    const HeroIcon(
-                      HeroIcons.chatBubbleBottomCenterText,
-                      size: 40,
-                      color: _kTertiaryText,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      s?.noReviewsYet ?? 'No reviews yet',
-                      style: const TextStyle(
-                        color: _kSecondaryText,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else ...[
-            // Rating summary
-            if (_reviewStats != null) _buildRatingSummary(),
-
-            const SizedBox(height: 16),
-
-            // Show first 3 reviews
-            ...(_reviews.take(3).map((review) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: ReviewCard(review: review),
-                ))),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRatingSummary() {
-    return Row(
-      children: [
-        Column(
-          children: [
-            Text(
-              _reviewStats!.averageRating.toStringAsFixed(1),
-              style: const TextStyle(
-                color: _kPrimaryText,
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Row(
-              children: List.generate(5, (index) {
-                return HeroIcon(
-                  HeroIcons.star,
-                  style: index < _reviewStats!.averageRating.round()
-                      ? HeroIconStyle.solid
-                      : HeroIconStyle.outline,
-                  size: 16,
-                  color: const Color(0xFFF59E0B),
-                );
-              }),
-            ),
-            const SizedBox(height: 4),
-            Builder(builder: (context) {
-              final s = AppStringsScope.of(context);
-              return Text(
-                '${_reviewStats!.totalReviews} ${s?.reviews ?? 'reviews'}',
-                style: const TextStyle(
-                  color: _kSecondaryText,
-                  fontSize: 12,
-                ),
-              );
-            }),
-          ],
-        ),
-        const SizedBox(width: 24),
-        Expanded(
-          child: Column(
-            children: List.generate(5, (index) {
-              final rating = 5 - index;
-              final percent = _reviewStats!.getPercentForRating(rating);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    Text(
-                      '$rating',
-                      style: const TextStyle(
-                        color: _kSecondaryText,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: percent / 100,
-                          backgroundColor: _kDivider,
-                          valueColor: const AlwaysStoppedAnimation(
-                            Color(0xFFF59E0B),
-                          ),
-                          minHeight: 8,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildRelatedProducts() {
     final s = AppStringsScope.of(context);
     return Column(
@@ -1537,7 +1329,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _relatedProducts.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (context, i) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     final product = _relatedProducts[index];
                     return SizedBox(
@@ -1562,23 +1354,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildActionBar() {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12 + MediaQuery.of(context).padding.bottom,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: _kSurface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        border: Border(
+          top: BorderSide(color: _kDivider),
+        ),
       ),
       child: Row(
         children: [
@@ -1628,66 +1411,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildBuyerProtectionBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.verified_user_outlined, color: Color(0xFF4CAF50), size: 24),
           const SizedBox(width: 12),
-
-          // Add to cart button
-          GestureDetector(
-            onTap: _product!.isInStock && !_addingToCart ? _addToCart : null,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _product!.isInStock ? _kPrimaryText : _kDivider,
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: _addingToCart
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _kPrimaryText,
-                        ),
-                      )
-                    : HeroIcon(
-                        HeroIcons.shoppingCart,
-                        size: 22,
-                        color: _product!.isInStock ? _kPrimaryText : _kDivider,
-                      ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Buy now button
           Expanded(
-            child: Builder(builder: (context) {
-              final s = AppStringsScope.of(context);
-              return ElevatedButton(
-                onPressed: _product!.isInStock ? _buyNow : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kPrimaryText,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  s?.buyNow ?? 'Buy Now',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            }),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Buyer Protection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+                SizedBox(height: 2),
+                Text('Money held securely until you confirm delivery', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
+              ],
+            ),
           ),
         ],
       ),
@@ -1897,71 +1647,6 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
 
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-/// Full screen image gallery dialog.
-class _FullScreenGallery extends StatefulWidget {
-  final List<String> images;
-  final int initialIndex;
-
-  const _FullScreenGallery({
-    required this.images,
-    required this.initialIndex,
-  });
-
-  @override
-  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
-}
-
-class _FullScreenGalleryState extends State<_FullScreenGallery> {
-  late PageController _controller;
-  late int _currentIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.initialIndex;
-    _controller = PageController(initialPage: _currentIndex);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          '${_currentIndex + 1} / ${widget.images.length}',
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-      body: PageView.builder(
-        controller: _controller,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
-        itemCount: widget.images.length,
-        itemBuilder: (context, index) {
-          return InteractiveViewer(
-            child: Center(
-              child: CachedMediaImage(
-                imageUrl: widget.images[index],
-                fit: BoxFit.contain,
-              ),
-            ),
-          );
-        },
       ),
     );
   }

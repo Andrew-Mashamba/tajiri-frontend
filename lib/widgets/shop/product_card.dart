@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../cached_media_image.dart';
+import 'stock_urgency_badge.dart';
 
 // DESIGN.md tokens for ProductCard (monochrome palette)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -73,6 +76,15 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: () {
+        SharePlus.instance.share(
+          ShareParams(
+            text:
+                '${product.title}\n${product.currency} ${product.price.toStringAsFixed(0)}\nhttps://tajiri.co.tz/shop/product/${product.id}',
+            subject: product.title,
+          ),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: _kSurface,
@@ -123,6 +135,11 @@ class ProductCard extends StatelessWidget {
                       // Price row
                       _buildPriceRow(),
 
+                      if (product.stockQuantity > 0 && product.stockQuantity <= 5) ...[
+                        const SizedBox(height: 4),
+                        StockUrgencyBadge(stockQuantity: product.stockQuantity),
+                      ],
+
                       if (!compact) ...[
                         const SizedBox(height: 4),
                         // Rating and sold count
@@ -146,9 +163,12 @@ class ProductCard extends StatelessWidget {
         children: [
           // Image
           product.thumbnailUrl.isNotEmpty
-              ? CachedMediaImage(
-                  imageUrl: product.thumbnailUrl,
-                  fit: BoxFit.cover,
+              ? Hero(
+                  tag: 'product_image_${product.id}',
+                  child: CachedMediaImage(
+                    imageUrl: product.thumbnailUrl,
+                    fit: BoxFit.cover,
+                  ),
                 )
               : Container(
                   color: _kBackground,
@@ -225,7 +245,10 @@ class ProductCard extends StatelessWidget {
               top: 8,
               right: 8,
               child: GestureDetector(
-                onTap: onFavorite,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onFavorite!();
+                },
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -526,7 +549,10 @@ class ProductListCard extends StatelessWidget {
               trailing!
             else if (onFavorite != null)
               IconButton(
-                onPressed: onFavorite,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  onFavorite!();
+                },
                 icon: HeroIcon(
                   HeroIcons.heart,
                   style: product.isFavorited
@@ -827,7 +853,10 @@ class CartItemCard extends StatelessWidget {
                     _buildQuantityButton(
                       icon: HeroIcons.minus,
                       onTap: item.quantity > 1
-                          ? () => onQuantityChanged!(item.quantity - 1)
+                          ? () {
+                              HapticFeedback.lightImpact();
+                              onQuantityChanged!(item.quantity - 1);
+                            }
                           : null,
                     ),
                     Padding(
@@ -843,7 +872,10 @@ class CartItemCard extends StatelessWidget {
                     ),
                     _buildQuantityButton(
                       icon: HeroIcons.plus,
-                      onTap: () => onQuantityChanged!(item.quantity + 1),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        onQuantityChanged!(item.quantity + 1);
+                      },
                     ),
                   ],
                 ),

@@ -66,6 +66,9 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
   int _currentPage = 1;
   String? _error;
 
+  bool _multiSelectMode = false;
+  final Set<int> _selectedOrderIds = {};
+
   // Tab filters: null = all active, then specific statuses
   final List<(OrderStatus?, String)> _tabs = [
     (null, 'all'),
@@ -113,6 +116,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
       _orders = [];
       _currentPage = 1;
       _hasMore = true;
+      _multiSelectMode = false;
+      _selectedOrderIds.clear();
     });
 
     final result = await _shopService.getSellerOrders(
@@ -326,6 +331,82 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
     ).then((_) => _loadOrders());
   }
 
+  Future<void> _bulkUpdateStatus(OrderStatus newStatus) async {
+    setState(() => _isLoading = true);
+    int successCount = 0;
+    for (final orderId in _selectedOrderIds) {
+      final result = await _shopService.updateOrderStatus(
+        orderId,
+        sellerId: widget.currentUserId,
+        status: newStatus,
+      );
+      if (result.success) successCount++;
+    }
+    if (!mounted) return;
+    setState(() {
+      _multiSelectMode = false;
+      _selectedOrderIds.clear();
+    });
+    _loadOrders();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Updated $successCount orders to ${newStatus.label}')),
+    );
+  }
+
+  Widget? _buildBulkActionBar() {
+    if (!_multiSelectMode || _selectedOrderIds.isEmpty) return null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _kSurface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Text(
+              '${_selectedOrderIds.length} selected',
+              style: const TextStyle(fontWeight: FontWeight.w600, color: _kPrimaryText),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() {
+                _multiSelectMode = false;
+                _selectedOrderIds.clear();
+              }),
+              child: const Text('Cancel', style: TextStyle(color: _kSecondaryText)),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => _bulkUpdateStatus(OrderStatus.confirmed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimaryText,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm All'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => _bulkUpdateStatus(OrderStatus.shipped),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimaryText,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Ship All'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
@@ -361,6 +442,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
           children: _tabs.map((_) => _buildOrderList()).toList(),
         ),
       ),
+      bottomNavigationBar: _buildBulkActionBar(),
     );
   }
 
@@ -463,10 +545,11 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
 
   Widget _buildOrderCard(BuildContext context, Order order) {
     final s = AppStringsScope.of(context);
+    final isSelected = _selectedOrderIds.contains(order.id);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _kSurface,
+        color: isSelected ? _kDivider.withValues(alpha: 0.4) : _kSurface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [_kCardShadow],
       ),
@@ -474,16 +557,56 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen>
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: () => _navigateToOrderDetail(order),
+          onTap: () {
+            if (_multiSelectMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedOrderIds.remove(order.id);
+                  if (_selectedOrderIds.isEmpty) _multiSelectMode = false;
+                } else {
+                  _selectedOrderIds.add(order.id);
+                }
+              });
+            } else {
+              _navigateToOrderDetail(order);
+            }
+          },
+          onLongPress: () {
+            if (!_multiSelectMode) {
+              setState(() {
+                _multiSelectMode = true;
+                _selectedOrderIds.add(order.id);
+              });
+            }
+          },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header: order number + status badge
+                // Header: checkbox (multi-select) + order number + status badge
                 Row(
                   children: [
+                    if (_multiSelectMode) ...[
+                      Checkbox(
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedOrderIds.add(order.id);
+                            } else {
+                              _selectedOrderIds.remove(order.id);
+                              if (_selectedOrderIds.isEmpty) _multiSelectMode = false;
+                            }
+                          });
+                        },
+                        activeColor: _kPrimaryText,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

@@ -7,9 +7,13 @@ import '../../models/ad_models.dart';
 import '../../services/shop_service.dart';
 import '../../services/ad_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/shop_database.dart';
+import '../../widgets/shop/filter_bottom_sheet.dart';
 import '../../widgets/shop/product_card.dart';
+import '../../widgets/shop/search_suggestions.dart';
 import '../../widgets/cached_media_image.dart';
 import '../../widgets/native_ad_card.dart';
+import 'flash_deals_screen.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -59,9 +63,13 @@ class _ShopScreenState extends State<ShopScreen> {
   // Sort
   String _sortBy = 'newest';
 
+  // Filters
+  ShopFilterResult? _activeFilters;
+
   // Search
   String _searchQuery = '';
   Timer? _searchDebounce;
+  bool _showSuggestions = false;
 
   // Cart
   int _cartItemCount = 0;
@@ -71,6 +79,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
   // Ad state
   List<ServedAd> _shopAds = [];
+
+  // Recently viewed
+  List<Product> _recentlyViewed = [];
 
   @override
   void initState() {
@@ -107,6 +118,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _loadFeaturedProducts(),
       _loadProducts(),
       _loadCartCount(),
+      _loadRecentlyViewed(),
     ]);
   }
 
@@ -155,6 +167,9 @@ class _ShopScreenState extends State<ShopScreen> {
       categoryId: _selectedCategoryId,
       search: _searchQuery.isNotEmpty ? _searchQuery : null,
       sortBy: _sortBy,
+      minPrice: _activeFilters?.minPrice,
+      maxPrice: _activeFilters?.maxPrice,
+      condition: _activeFilters?.condition,
       currentUserId: widget.currentUserId,
     );
 
@@ -216,6 +231,9 @@ class _ShopScreenState extends State<ShopScreen> {
       categoryId: _selectedCategoryId,
       search: _searchQuery.isNotEmpty ? _searchQuery : null,
       sortBy: _sortBy,
+      minPrice: _activeFilters?.minPrice,
+      maxPrice: _activeFilters?.maxPrice,
+      condition: _activeFilters?.condition,
       currentUserId: widget.currentUserId,
     );
 
@@ -237,6 +255,13 @@ class _ShopScreenState extends State<ShopScreen> {
     setState(() {
       _cartItemCount = result.cart?.itemCount ?? 0;
     });
+  }
+
+  Future<void> _loadRecentlyViewed() async {
+    try {
+      final products = await ShopDatabase.instance.getRecentlyViewed(limit: 10);
+      if (mounted) setState(() => _recentlyViewed = products);
+    } catch (_) {}
   }
 
   // ── Banner auto-scroll ────────────────────────────────────────────────
@@ -279,6 +304,7 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   void _onSearchChanged(String value) {
+    setState(() => _showSuggestions = true);
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
@@ -290,8 +316,26 @@ class _ShopScreenState extends State<ShopScreen> {
   void _clearSearch() {
     _searchController.clear();
     _searchDebounce?.cancel();
-    setState(() => _searchQuery = '');
+    setState(() {
+      _searchQuery = '';
+      _showSuggestions = false;
+    });
     _loadProducts(refresh: true);
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        currentFilters: _activeFilters,
+        onApply: (filters) {
+          setState(() => _activeFilters = filters);
+          _loadProducts(refresh: true);
+        },
+      ),
+    );
   }
 
   Future<void> _onToggleFavorite(Product product) async {
@@ -406,6 +450,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _loadFeaturedProducts(),
       _loadProducts(refresh: true),
       _loadCartCount(),
+      _loadRecentlyViewed(),
     ]);
   }
 
@@ -430,17 +475,50 @@ class _ShopScreenState extends State<ShopScreen> {
                 titleSpacing: 0,
                 title: _buildSearchField(),
                 actions: [
+                  IconButton(
+                    icon: const HeroIcon(HeroIcons.heart),
+                    onPressed: () => Navigator.pushNamed(context, '/shop/wishlist'),
+                  ),
                   _buildCartButton(),
                   const SizedBox(width: 8),
                 ],
               ),
 
-              // 2. Category filter chips
+              // 2. Search suggestions overlay
+              if (_showSuggestions)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SearchSuggestions(
+                      query: _searchController.text,
+                      onSelect: (query) {
+                        _searchController.text = query;
+                        setState(() {
+                          _showSuggestions = false;
+                          _searchQuery = query;
+                        });
+                        _loadProducts(refresh: true);
+                      },
+                      onClearHistory: () async {
+                        await ShopDatabase.instance.clearSearchHistory();
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                ),
+
+              // 3. Category filter chips
               SliverToBoxAdapter(child: _buildCategoryChips()),
+
+              // Recently viewed
+              SliverToBoxAdapter(child: _buildRecentlyViewed()),
 
               // 3. Featured banner
               if (_featuredProducts.isNotEmpty || _featuredLoading)
                 SliverToBoxAdapter(child: _buildFeaturedBanner()),
+
+              // 3b. Flash deals banner
+              SliverToBoxAdapter(child: _buildFlashDealsBanner()),
 
               // 4. Sort bar
               SliverToBoxAdapter(child: _buildSortBar()),
@@ -892,6 +970,78 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
+  Widget _buildRecentlyViewed() {
+    if (_recentlyViewed.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text('Recently Viewed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
+        ),
+        SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _recentlyViewed.length,
+            itemBuilder: (context, index) {
+              final product = _recentlyViewed[index];
+              return SizedBox(
+                width: 140,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ProductCard(
+                    product: product,
+                    onTap: () => _openProductDetail(product),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFlashDealsBanner() {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FlashDealsScreen(currentUserId: widget.currentUserId),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.flash_on, color: Color(0xFFFFB800), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Flash Deals',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Spacer(),
+            Text(
+              'View All →',
+              style: TextStyle(color: Color(0xFFFFB800), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSortBar() {
     final s = AppStringsScope.of(context);
     final countLabel = _isLoading
@@ -933,6 +1083,44 @@ class _ShopScreenState extends State<ShopScreen> {
                 : _sortBy == 'price_desc'
                     ? ' \u2193'
                     : null,
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: _showFilterSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _activeFilters != null &&
+                        (_activeFilters!.minPrice != null ||
+                            _activeFilters!.maxPrice != null ||
+                            _activeFilters!.condition != null ||
+                            _activeFilters!.minRating != null)
+                    ? _kPrimaryText
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _activeFilters != null &&
+                          (_activeFilters!.minPrice != null ||
+                              _activeFilters!.maxPrice != null ||
+                              _activeFilters!.condition != null ||
+                              _activeFilters!.minRating != null)
+                      ? _kPrimaryText
+                      : _kDivider,
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                Icons.tune_rounded,
+                size: 16,
+                color: _activeFilters != null &&
+                        (_activeFilters!.minPrice != null ||
+                            _activeFilters!.maxPrice != null ||
+                            _activeFilters!.condition != null ||
+                            _activeFilters!.minRating != null)
+                    ? Colors.white
+                    : _kSecondaryText,
+              ),
+            ),
           ),
         ],
       ),

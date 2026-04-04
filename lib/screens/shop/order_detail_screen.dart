@@ -4,6 +4,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
 import '../../widgets/cached_media_image.dart';
+import 'order_tracking_screen.dart';
 
 // DESIGN.md tokens
 const Color _kBackground = Color(0xFFFAFAFA);
@@ -303,6 +304,75 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       trackingNumber: trackingController.text.isNotEmpty ? trackingController.text : null,
     );
     trackingController.dispose();
+  }
+
+  Future<void> _showReturnDialog() async {
+    if (_isActioning) return;
+    final reasonController = TextEditingController();
+    var submitted = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request Return/Refund'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Please describe why you want to return this item:',
+              style: TextStyle(fontSize: 14, color: _kSecondaryText),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Reason for return...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kPrimaryText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              if (reasonController.text.trim().isEmpty) return;
+              submitted = true;
+              final reason = reasonController.text.trim();
+              Navigator.pop(ctx);
+              setState(() => _isActioning = true);
+              final result = await _shopService.requestReturn(
+                widget.orderId,
+                userId: widget.currentUserId,
+                reason: reason,
+              );
+              if (!mounted) return;
+              setState(() => _isActioning = false);
+              if (result.success && result.order != null) {
+                setState(() => _order = result.order);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message ?? 'Return request submitted')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message ?? 'Failed to submit return request')),
+                );
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    if (!submitted) reasonController.dispose();
   }
 
   @override
@@ -843,6 +913,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           isDestructive: true,
         ));
       }
+      if (order.status == OrderStatus.delivered || order.status == OrderStatus.completed) {
+        actions.add(_buildFullButton(
+          label: 'Request Return',
+          icon: HeroIcons.arrowUturnLeft,
+          onTap: _showReturnDialog,
+          isDestructive: true,
+        ));
+        actions.add(_buildFullButton(
+          label: 'Buy Again',
+          icon: HeroIcons.arrowPath,
+          onTap: _buyAgain,
+          isPrimary: true,
+        ));
+      }
+    }
+
+    // Track Order button — always visible for active orders
+    if (order.status.isActive) {
+      actions.add(_buildFullButton(
+        label: 'Track Order',
+        icon: HeroIcons.mapPin,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OrderTrackingScreen(order: order),
+          ),
+        ),
+      ));
     }
 
     if (actions.isEmpty) return const SizedBox.shrink();
@@ -904,6 +1002,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _buyAgain() {
+    if (_order == null) return;
+    final productId = _order!.product?.id ?? _order!.productId;
+    Navigator.pushNamed(
+      context,
+      '/shop/product',
+      arguments: {'productId': productId},
     );
   }
 

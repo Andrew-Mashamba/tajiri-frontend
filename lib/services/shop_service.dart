@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../models/shop_models.dart';
 import '../config/api_config.dart';
+import 'shop_database.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -98,6 +99,8 @@ String _handleServerError(Map<String, dynamic> data, int statusCode) {
 }
 
 class ShopService {
+  final ShopDatabase _db = ShopDatabase.instance;
+
   // ============================================================================
   // PRODUCT DISCOVERY
   // ============================================================================
@@ -255,6 +258,32 @@ class ShopService {
       );
     } catch (e) {
       return ProductListResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
+  /// Get flash deals
+  Future<ProductListResult> getFlashDeals({int page = 1, int perPage = 20}) async {
+    try {
+      final url = '$_baseUrl/shop/flash-deals?page=$page&per_page=$perPage';
+      _logRequest('GET', url);
+      final response = await http.get(Uri.parse(url));
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      _logResponse(response.statusCode, data);
+      if (response.statusCode == 200 && data['success'] == true) {
+        final items = data['data'] is List
+            ? data['data'] as List
+            : (data['data']?['items'] as List?) ?? [];
+        final products = items
+            .map((j) => Product.fromJson(j as Map<String, dynamic>))
+            .toList();
+        return ProductListResult(success: true, products: products);
+      }
+      return ProductListResult(
+        success: false,
+        message: data['message']?.toString(),
+      );
+    } catch (e) {
+      return ProductListResult(success: false, message: 'Failed to load deals: $e');
     }
   }
 
@@ -978,6 +1007,9 @@ class ShopService {
     String? deliveryAddress,
     String? deliveryNotes,
     String? pin, // TAJIRI Wallet PIN for payment
+    String paymentMethod = 'wallet',
+    String? mpesaPhone,
+    String? promoCode,
   }) async {
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/orders';
@@ -988,6 +1020,9 @@ class ShopService {
       'delivery_method': deliveryMethod.value,
       if (deliveryAddress != null) 'delivery_address': deliveryAddress,
       if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
+      'payment_method': paymentMethod,
+      if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
+      if (promoCode != null) 'promo_code': promoCode,
       // Note: PIN not logged for security
     };
     _logRequest('POST', url, body: {...body, 'pin': pin != null ? '***' : null});
@@ -1031,6 +1066,9 @@ class ShopService {
     required int buyerId,
     required List<CheckoutItem> items,
     String? pin, // TAJIRI Wallet PIN for payment
+    String paymentMethod = 'wallet',
+    String? mpesaPhone,
+    String? promoCode,
   }) async {
     try {
       final response = await http.post(
@@ -1040,6 +1078,9 @@ class ShopService {
           'user_id': buyerId,
           'items': items.map((i) => i.toJson()).toList(),
           if (pin != null) 'pin': pin,
+          'payment_method': paymentMethod,
+          if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
+          if (promoCode != null) 'promo_code': promoCode,
         }),
       );
 
@@ -1060,6 +1101,35 @@ class ShopService {
       );
     } catch (e) {
       return OrderListResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
+  /// Validate a promo code and return discount details
+  Future<PromoCodeResult> validatePromoCode({
+    required String code,
+    required int userId,
+  }) async {
+    final url = '$_baseUrl/shop/promo/validate';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'code': code, 'user_id': userId}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return PromoCodeResult(
+          success: true,
+          discount: double.tryParse(data['discount']?.toString() ?? '0') ?? 0,
+          description: data['description']?.toString(),
+        );
+      }
+      return PromoCodeResult(
+        success: false,
+        message: data['message']?.toString() ?? 'Invalid code',
+      );
+    } catch (e) {
+      return PromoCodeResult(success: false, message: 'Failed to validate: $e');
     }
   }
 
@@ -1319,6 +1389,41 @@ class ShopService {
     }
   }
 
+  /// Request a return/refund for an order
+  Future<OrderResult> requestReturn(int orderId, {
+    required int userId,
+    required String reason,
+    List<String>? imageUrls,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/shop/orders/$orderId/return'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'reason': reason,
+          if (imageUrls != null) 'images': imageUrls,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return OrderResult(
+          success: true,
+          order: Order.fromJson(data['data']),
+          message: data['message']?.toString(),
+        );
+      }
+      return OrderResult(
+        success: false,
+        message: data['message'] ?? 'Imeshindwa kuomba kurudisha',
+      );
+    } catch (e) {
+      return OrderResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
   // ============================================================================
   // REVIEWS
   // ============================================================================
@@ -1521,6 +1626,166 @@ class ShopService {
       );
     } catch (_) {
       // Silently fail - view tracking is not critical
+    }
+  }
+
+  // ============================================================================
+  // SQLITE-FIRST CACHED METHODS
+  // ============================================================================
+
+  /// Load products: SQLite first (instant), then API in background.
+  Future<void> loadProductsCached({
+    int? categoryId,
+    String? search,
+    String sortBy = 'newest',
+    double? minPrice,
+    double? maxPrice,
+    String? condition,
+    int? currentUserId,
+    int page = 1,
+    int perPage = 20,
+    required void Function(List<Product> products, bool fromCache) onData,
+    void Function(String error)? onError,
+  }) async {
+    // 0. Flush any pending offline mutations (fire-and-forget)
+    syncPendingMutations();
+
+    // 1. Return cached products instantly
+    if (search == null || search.isEmpty) {
+      try {
+        final cached = await _db.queryProducts(
+          categoryId: categoryId,
+          sortBy: sortBy,
+          minPrice: minPrice,
+          maxPrice: maxPrice,
+          condition: condition,
+          limit: perPage,
+          offset: (page - 1) * perPage,
+        );
+        if (cached.isNotEmpty) {
+          onData(cached, true);
+        }
+      } catch (e) {
+        debugPrint('[ShopService] SQLite cache read failed: $e');
+      }
+    } else {
+      // FTS5 local search
+      try {
+        final localResults = await _db.searchProducts(search, limit: perPage);
+        if (localResults.isNotEmpty) {
+          onData(localResults, true);
+        }
+      } catch (e) {
+        debugPrint('[ShopService] FTS5 search failed: $e');
+      }
+    }
+
+    // 2. Fetch fresh from API in background
+    try {
+      final result = await getProducts(
+        page: page,
+        perPage: perPage,
+        categoryId: categoryId,
+        search: search,
+        sortBy: sortBy,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        condition: condition != null ? ProductCondition.fromString(condition) : null,
+        currentUserId: currentUserId,
+      );
+      if (result.success && result.products.isNotEmpty) {
+        // Cache in SQLite
+        await _db.upsertProducts(result.products);
+        onData(result.products, false);
+
+        // Save search query if applicable
+        if (search != null && search.isNotEmpty) {
+          await _db.saveSearchQuery(search, resultCount: result.products.length);
+        }
+      } else if (result.message != null) {
+        onError?.call(result.message!);
+      }
+    } catch (e) {
+      onError?.call(e.toString());
+    }
+  }
+
+  /// Get categories: SQLite first, then API
+  Future<List<ProductCategory>> getCategoriesCached() async {
+    // Try SQLite first
+    try {
+      final cached = await _db.getCategories();
+      if (cached.isNotEmpty) {
+        // Refresh in background (fire and forget)
+        _refreshCategories();
+        return cached;
+      }
+    } catch (e) {
+      debugPrint('[ShopService] Category cache read failed: $e');
+    }
+    // Fall through to API
+    final result = await getCategories();
+    if (result.success && result.categories.isNotEmpty) {
+      await _db.upsertCategories(result.categories);
+      return result.categories;
+    }
+    return [];
+  }
+
+  Future<void> _refreshCategories() async {
+    try {
+      final result = await getCategories();
+      if (result.success && result.categories.isNotEmpty) {
+        await _db.upsertCategories(result.categories);
+      }
+    } catch (_) {}
+  }
+
+  /// Flush pending offline mutations to the API.
+  /// Called automatically from loadProductsCached and can be invoked manually.
+  Future<void> syncPendingMutations() async {
+    try {
+      final mutations = await _db.getPendingMutations();
+      if (mutations.isEmpty) return;
+      debugPrint('[ShopService] Syncing ${mutations.length} pending mutations');
+      for (final m in mutations) {
+        final id = m['id'] as int;
+        final entity = m['entity'] as String;
+        final action = m['action'] as String;
+        final payload = jsonDecode(m['payload'] as String) as Map<String, dynamic>;
+        try {
+          final success = await _executeMutation(entity, action, payload);
+          if (success) {
+            await _db.completeMutation(id);
+          } else {
+            await _db.failMutation(id, 'API returned failure');
+          }
+        } catch (e) {
+          await _db.failMutation(id, e.toString());
+        }
+      }
+    } catch (e) {
+      debugPrint('[ShopService] syncPendingMutations error: $e');
+    }
+  }
+
+  Future<bool> _executeMutation(String entity, String action, Map<String, dynamic> payload) async {
+    switch ('$entity:$action') {
+      case 'cart:add':
+        final result = await addToCart(payload['user_id'] as int, payload['product_id'] as int, quantity: payload['quantity'] as int? ?? 1);
+        return result.success;
+      case 'cart:remove':
+        final result = await removeFromCart(payload['user_id'] as int, payload['item_id'] as int);
+        return result.success;
+      case 'wishlist:add':
+        final result = await toggleFavorite(payload['user_id'] as int, payload['product_id'] as int);
+        return result.success;
+      case 'wishlist:remove':
+        final result = await toggleFavorite(payload['user_id'] as int, payload['product_id'] as int);
+        return result.success;
+      default:
+        debugPrint('[ShopService] Unknown mutation: $entity:$action');
+        return false;
     }
   }
 }

@@ -4,6 +4,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../screens/shop/seller_analytics_screen.dart';
 import '../cached_media_image.dart';
 import '../shop/product_card.dart';
 
@@ -671,13 +672,29 @@ class _ShopGalleryWidgetState extends State<ShopGalleryWidget>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            s?.shopSummary ?? 'Shop Summary',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: _kPrimaryText,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  s?.shopSummary ?? 'Shop Summary',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _kPrimaryText,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.analytics_outlined, color: _kPrimaryText),
+                tooltip: 'Analytics',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SellerAnalyticsScreen(sellerId: widget.userId),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(

@@ -379,14 +379,19 @@ class Product {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
+      'seller_id': sellerId,
       'title': title,
       'description': description,
+      'slug': slug,
       'type': type.value,
+      'status': status.value,
       'price': price,
       if (compareAtPrice != null) 'compare_at_price': compareAtPrice,
       'currency': currency,
       'stock_quantity': stockQuantity,
       'images': images,
+      if (thumbnailPath != null) 'thumbnail_path': thumbnailPath,
       if (categoryId != null) 'category_id': categoryId,
       if (tags != null) 'tags': tags,
       'condition': condition.value,
@@ -403,7 +408,101 @@ class Product {
       if (downloadLimit != null) 'download_limit': downloadLimit,
       if (durationMinutes != null) 'duration_minutes': durationMinutes,
       if (serviceLocation != null) 'service_location': serviceLocation,
+      'views_count': viewsCount,
+      'favorites_count': favoritesCount,
+      'orders_count': ordersCount,
+      'rating': rating,
+      'reviews_count': reviewsCount,
+      if (seller != null) 'seller': seller!.toJson(),
+      if (category != null) 'category': category!.toJson(),
+      'is_favorited': isFavorited,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
+  }
+
+  Product copyWith({
+    int? id,
+    int? sellerId,
+    String? title,
+    String? description,
+    String? slug,
+    ProductType? type,
+    ProductStatus? status,
+    double? price,
+    double? compareAtPrice,
+    String? currency,
+    int? stockQuantity,
+    List<String>? images,
+    String? thumbnailPath,
+    int? categoryId,
+    List<String>? tags,
+    ProductCondition? condition,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    bool? allowPickup,
+    bool? allowDelivery,
+    bool? allowShipping,
+    double? deliveryFee,
+    String? deliveryNotes,
+    String? pickupAddress,
+    String? downloadUrl,
+    int? downloadLimit,
+    int? durationMinutes,
+    String? serviceLocation,
+    int? viewsCount,
+    int? favoritesCount,
+    int? ordersCount,
+    double? rating,
+    int? reviewsCount,
+    ProductSeller? seller,
+    ProductCategory? category,
+    bool? isFavorited,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      sellerId: sellerId ?? this.sellerId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      slug: slug ?? this.slug,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      price: price ?? this.price,
+      compareAtPrice: compareAtPrice ?? this.compareAtPrice,
+      currency: currency ?? this.currency,
+      stockQuantity: stockQuantity ?? this.stockQuantity,
+      images: images ?? this.images,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      categoryId: categoryId ?? this.categoryId,
+      tags: tags ?? this.tags,
+      condition: condition ?? this.condition,
+      locationName: locationName ?? this.locationName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      allowPickup: allowPickup ?? this.allowPickup,
+      allowDelivery: allowDelivery ?? this.allowDelivery,
+      allowShipping: allowShipping ?? this.allowShipping,
+      deliveryFee: deliveryFee ?? this.deliveryFee,
+      deliveryNotes: deliveryNotes ?? this.deliveryNotes,
+      pickupAddress: pickupAddress ?? this.pickupAddress,
+      downloadUrl: downloadUrl ?? this.downloadUrl,
+      downloadLimit: downloadLimit ?? this.downloadLimit,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      serviceLocation: serviceLocation ?? this.serviceLocation,
+      viewsCount: viewsCount ?? this.viewsCount,
+      favoritesCount: favoritesCount ?? this.favoritesCount,
+      ordersCount: ordersCount ?? this.ordersCount,
+      rating: rating ?? this.rating,
+      reviewsCount: reviewsCount ?? this.reviewsCount,
+      seller: seller ?? this.seller,
+      category: category ?? this.category,
+      isFavorited: isFavorited ?? this.isFavorited,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 
   // Computed properties
@@ -493,6 +592,20 @@ class ProductSeller {
   String get avatarUrl => profilePhotoPath != null
       ? '${ApiConfig.storageUrl}/$profilePhotoPath'
       : '';
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'first_name': firstName,
+      'last_name': lastName,
+      if (username != null) 'username': username,
+      if (profilePhotoPath != null) 'profile_photo_path': profilePhotoPath,
+      'rating': rating,
+      'total_sales': totalSales,
+      'product_count': productCount,
+      'is_verified': isVerified,
+    };
+  }
 }
 
 class ProductCategory {
@@ -538,6 +651,19 @@ class ProductCategory {
       : '';
 
   bool get hasChildren => children != null && children!.isNotEmpty;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'slug': slug,
+      if (icon != null) 'icon': icon,
+      if (imagePath != null) 'image_path': imagePath,
+      if (parentId != null) 'parent_id': parentId,
+      'product_count': productCount,
+      if (children != null) 'children': children!.map((c) => c.toJson()).toList(),
+    };
+  }
 }
 
 // ============================================================================
@@ -1038,4 +1164,12 @@ class PaginationMeta {
   }
 
   bool get hasMore => currentPage < lastPage;
+}
+
+class PromoCodeResult {
+  final bool success;
+  final double? discount;
+  final String? description;
+  final String? message;
+  const PromoCodeResult({required this.success, this.discount, this.description, this.message});
 }

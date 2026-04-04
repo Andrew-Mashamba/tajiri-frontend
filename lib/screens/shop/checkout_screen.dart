@@ -39,6 +39,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
+  final TextEditingController _mpesaPhoneController = TextEditingController();
+  final TextEditingController _promoController = TextEditingController();
+
+  String _paymentMethod = 'wallet'; // 'wallet' | 'mpesa'
+  String? _appliedPromo;
+  double _discount = 0;
+  bool _validatingPromo = false;
 
   // Delivery method per product (for cart checkout)
   Map<int, DeliveryMethod> _deliveryMethods = {};
@@ -75,7 +82,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return 0;
   }
 
-  double get _total => _subtotal + _deliveryFee;
+  double get _total => (_subtotal + _deliveryFee - _discount).clamp(0, double.infinity);
 
   @override
   void initState() {
@@ -88,6 +95,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _addressController.dispose();
     _notesController.dispose();
     _pinController.dispose();
+    _mpesaPhoneController.dispose();
+    _promoController.dispose();
     super.dispose();
   }
 
@@ -131,6 +140,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (_paymentMethod == 'mpesa') {
+      _processMpesaPayment();
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -142,6 +156,171 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ).whenComplete(() {
       _pinController.clear();
     });
+  }
+
+  Future<void> _processMpesaPayment() async {
+    final s = AppStringsScope.of(context);
+    final phone = _mpesaPhoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your M-Pesa phone number')),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      if (widget.product != null) {
+        final result = await _shopService.createOrder(
+          buyerId: widget.currentUserId,
+          productId: widget.product!.id,
+          quantity: widget.quantity ?? 1,
+          deliveryMethod: widget.deliveryMethod ?? DeliveryMethod.pickup,
+          deliveryAddress: _addressController.text.isNotEmpty ? _addressController.text : null,
+          deliveryNotes: _notesController.text.isNotEmpty ? _notesController.text : null,
+          paymentMethod: 'mpesa',
+          mpesaPhone: phone,
+          promoCode: _appliedPromo,
+        );
+
+        if (!mounted) return;
+        if (result.success) {
+          _showSuccessDialog(result.order);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? s?.paymentFailed ?? 'Payment failed')),
+          );
+        }
+      } else if (widget.cart != null) {
+        final items = widget.cart!.items.map((item) {
+          return CheckoutItem(
+            productId: item.productId,
+            quantity: item.quantity,
+            deliveryMethod: _deliveryMethods[item.productId] ?? DeliveryMethod.pickup,
+            deliveryAddress: _deliveryAddresses[item.productId] ?? _addressController.text,
+            deliveryNotes: _notesController.text,
+          );
+        }).toList();
+
+        final result = await _shopService.checkout(
+          buyerId: widget.currentUserId,
+          items: items,
+          paymentMethod: 'mpesa',
+          mpesaPhone: phone,
+          promoCode: _appliedPromo,
+        );
+
+        if (!mounted) return;
+        if (result.success) {
+          _showSuccessDialog(result.orders.isNotEmpty ? result.orders.first : null);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? s?.paymentFailed ?? 'Payment failed')),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${s?.error ?? 'Error'}: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Widget _buildPromoCodeSection() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      color: _kSurface,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Promo Code',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _kPrimaryText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _promoController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter promo code',
+                      hintStyle: const TextStyle(color: _kTertiaryText),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      suffixIcon: _appliedPromo != null
+                          ? IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () {
+                                setState(() {
+                                  _appliedPromo = null;
+                                  _discount = 0;
+                                  _promoController.clear();
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    enabled: _appliedPromo == null,
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _appliedPromo != null || _validatingPromo ? null : _validatePromo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A1A1A),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  child: _validatingPromo
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(
+                          _appliedPromo != null ? 'Applied ✓' : 'Apply',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _validatePromo() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+    setState(() => _validatingPromo = true);
+    final result = await _shopService.validatePromoCode(code: code, userId: widget.currentUserId);
+    if (!mounted) return;
+    setState(() => _validatingPromo = false);
+    if (result.success) {
+      setState(() {
+        _appliedPromo = code;
+        _discount = result.discount ?? 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Promo applied: ${result.description ?? 'Discount applied'}')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Invalid promo code')),
+      );
+    }
   }
 
   Widget _buildPinSheet() {
@@ -278,6 +457,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ? _notesController.text
               : null,
           pin: _pinController.text,
+          paymentMethod: 'wallet',
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -306,6 +487,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           buyerId: widget.currentUserId,
           items: items,
           pin: _pinController.text,
+          paymentMethod: 'wallet',
+          promoCode: _appliedPromo,
         );
 
         if (!mounted) return;
@@ -457,8 +640,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             // Payment method
             _buildPaymentMethod(),
 
+            // Promo code
+            _buildPromoCodeSection(),
+
             // Price breakdown
             _buildPriceBreakdown(),
+
+            // Escrow / buyer protection notice
+            _buildEscrowNotice(),
 
             const SizedBox(height: 100),
           ],
@@ -657,88 +846,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildPaymentMethod() {
-    final s = AppStringsScope.of(context);
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(16),
       color: _kSurface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const HeroIcon(
-                HeroIcons.wallet,
-                size: 20,
-                color: _kPrimaryText,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                s?.paymentMethod ?? 'Payment Method',
-                style: const TextStyle(
-                  color: _kPrimaryText,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _kPrimaryText.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _kPrimaryText, width: 2),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryText,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const HeroIcon(
-                    HeroIcons.wallet,
-                    size: 24,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'TAJIRI Wallet',
-                        style: TextStyle(
-                          color: _kPrimaryText,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        s?.fastSecurePayment ?? 'Fast and secure payment',
-                        style: const TextStyle(
-                          color: _kSecondaryText,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const HeroIcon(
-                  HeroIcons.checkCircle,
-                  style: HeroIconStyle.solid,
-                  size: 24,
-                  color: Color(0xFF10B981),
-                ),
-              ],
+      child: _buildPaymentMethodSelector(),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            'Payment Method',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A1A),
             ),
           ),
-        ],
-      ),
+        ),
+        RadioListTile<String>(
+          value: 'wallet',
+          groupValue: _paymentMethod,
+          onChanged: (v) => setState(() => _paymentMethod = v!),
+          title: const Text('TAJIRI Wallet'),
+          subtitle: const Text('Pay with your wallet balance'),
+          secondary: const Icon(Icons.account_balance_wallet_outlined),
+          activeColor: const Color(0xFF1A1A1A),
+        ),
+        RadioListTile<String>(
+          value: 'mpesa',
+          groupValue: _paymentMethod,
+          onChanged: (v) => setState(() => _paymentMethod = v!),
+          title: const Text('M-Pesa'),
+          subtitle: const Text('Pay via Vodacom M-Pesa'),
+          secondary: const Icon(Icons.phone_android_outlined),
+          activeColor: const Color(0xFF1A1A1A),
+        ),
+        if (_paymentMethod == 'mpesa')
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _mpesaPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'M-Pesa Phone Number',
+                hintText: '+255 7XX XXX XXX',
+                prefixIcon: Icon(Icons.phone_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -790,6 +952,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ],
           ),
+          if (_discount > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Promo${_appliedPromo != null ? ' ($_appliedPromo)' : ''}',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  '-TZS ${_discount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(color: _kDivider, height: 1),
@@ -820,6 +1005,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Widget _buildEscrowNotice() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.lock_outline, size: 20, color: Color(0xFF666666)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Your payment is protected. Funds are held securely and released to the seller only after you confirm delivery.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF666666), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomBar() {
     final s = AppStringsScope.of(context);
     return Container(
@@ -842,8 +1050,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _showPinDialog,
-          icon: const HeroIcon(HeroIcons.wallet, size: 22),
+          onPressed: _isProcessing ? null : _showPinDialog,
+          icon: _isProcessing
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : (_paymentMethod == 'mpesa'
+                  ? const Icon(Icons.phone_android_outlined, size: 22)
+                  : const HeroIcon(HeroIcons.wallet, size: 22)),
           label: Text(
             '${s?.pay ?? 'Pay'} TZS ${_total.toStringAsFixed(0)}',
             style: const TextStyle(
