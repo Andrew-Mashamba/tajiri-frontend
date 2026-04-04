@@ -541,6 +541,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             // Price breakdown
             _buildPriceBreakdown(),
 
+            // Escrow / buyer protection notice
+            _buildEscrowNotice(),
+
             const SizedBox(height: 100),
           ],
         ),
@@ -868,6 +871,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEscrowNotice() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.lock_outline, size: 20, color: Color(0xFF666666)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Your payment is protected. Funds are held securely and released to the seller only after you confirm delivery.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF666666), height: 1.4),
+            ),
           ),
         ],
       ),

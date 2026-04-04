@@ -718,7 +718,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
           StockUrgencyBadge(stockQuantity: _product!.stockQuantity),
 
-          const SizedBox(height: 16),
+          _buildBuyerProtectionBanner(),
 
           // Rating and stats
           Row(
@@ -1386,6 +1386,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   color: _kPrimaryText,
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuyerProtectionBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.verified_user_outlined, color: Color(0xFF4CAF50), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Buyer Protection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+                SizedBox(height: 2),
+                Text('Money held securely until you confirm delivery', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
+              ],
             ),
           ),
         ],
