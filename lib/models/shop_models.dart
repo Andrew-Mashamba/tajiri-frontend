@@ -538,6 +538,19 @@ class ProductCategory {
       : '';
 
   bool get hasChildren => children != null && children!.isNotEmpty;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'slug': slug,
+      if (icon != null) 'icon': icon,
+      if (imagePath != null) 'image_path': imagePath,
+      if (parentId != null) 'parent_id': parentId,
+      'product_count': productCount,
+      if (children != null) 'children': children!.map((c) => c.toJson()).toList(),
+    };
+  }
 }
 
 // ============================================================================

@@ -410,4 +410,202 @@ class ShopDatabase {
       whereArgs: [productId],
     );
   }
+
+  // ─── Cart ─────────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getCartItems() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT c.*, p.json_data as product_json
+      FROM shop_cart c
+      LEFT JOIN shop_products p ON c.product_id = p.id
+      ORDER BY c.added_at DESC
+    ''');
+  }
+
+  Future<void> addToCart(int productId, {int quantity = 1, String? deliveryMethod, String? productJson}) async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final existing = await db.query('shop_cart', where: 'product_id = ?', whereArgs: [productId]);
+    if (existing.isNotEmpty) {
+      final currentQty = existing.first['quantity'] as int? ?? 0;
+      await db.update('shop_cart', {'quantity': currentQty + quantity}, where: 'product_id = ?', whereArgs: [productId]);
+    } else {
+      await db.insert('shop_cart', {
+        'product_id': productId,
+        'quantity': quantity,
+        'delivery_method': deliveryMethod,
+        'selected': 1,
+        'added_at': now,
+        'json_data': productJson ?? '{}',
+        'sync_state': 'pending',
+      });
+    }
+    await _queueMutation('cart', 'add', {'product_id': productId, 'quantity': quantity, 'delivery_method': deliveryMethod});
+  }
+
+  Future<void> updateCartQuantity(int productId, int quantity) async {
+    final db = await database;
+    if (quantity <= 0) {
+      await removeFromCart(productId);
+      return;
+    }
+    await db.update('shop_cart', {'quantity': quantity, 'sync_state': 'pending'}, where: 'product_id = ?', whereArgs: [productId]);
+    await _queueMutation('cart', 'update', {'product_id': productId, 'quantity': quantity});
+  }
+
+  Future<void> removeFromCart(int productId) async {
+    final db = await database;
+    await db.delete('shop_cart', where: 'product_id = ?', whereArgs: [productId]);
+    await _queueMutation('cart', 'remove', {'product_id': productId});
+  }
+
+  Future<void> clearCart() async {
+    final db = await database;
+    await db.delete('shop_cart');
+    await _queueMutation('cart', 'clear', {});
+  }
+
+  Future<int> getCartCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as cnt FROM shop_cart');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ─── Categories ───────────────────────────────────────────────────────
+
+  Future<void> upsertCategories(List<ProductCategory> categories) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final cat in categories) {
+      batch.insert('shop_categories', {
+        'id': cat.id,
+        'name': cat.name,
+        'slug': cat.slug,
+        'icon_url': cat.icon,
+        'parent_id': cat.parentId,
+        'product_count': cat.productCount,
+        'json_data': jsonEncode(cat.toJson()),
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<List<ProductCategory>> getCategories() async {
+    final db = await database;
+    final rows = await db.query('shop_categories', orderBy: 'name ASC');
+    return rows.map((row) {
+      return ProductCategory.fromJson(jsonDecode(row['json_data'] as String) as Map<String, dynamic>);
+    }).toList();
+  }
+
+  // ─── Wishlist ─────────────────────────────────────────────────────────
+
+  Future<void> addToWishlist(int productId, double currentPrice, String productJson) async {
+    final db = await database;
+    await db.insert('shop_wishlist', {
+      'product_id': productId,
+      'added_at': DateTime.now().millisecondsSinceEpoch,
+      'added_price': currentPrice,
+      'json_data': productJson,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _queueMutation('wishlist', 'add', {'product_id': productId});
+  }
+
+  Future<void> removeFromWishlist(int productId) async {
+    final db = await database;
+    await db.delete('shop_wishlist', where: 'product_id = ?', whereArgs: [productId]);
+    await _queueMutation('wishlist', 'remove', {'product_id': productId});
+  }
+
+  Future<List<Map<String, dynamic>>> getWishlistWithPriceDrops() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT w.*, p.price as current_price, p.json_data as product_json,
+             CASE WHEN p.price < w.added_price THEN 1 ELSE 0 END as price_dropped
+      FROM shop_wishlist w
+      LEFT JOIN shop_products p ON w.product_id = p.id
+      ORDER BY w.added_at DESC
+    ''');
+  }
+
+  // ─── Search History ───────────────────────────────────────────────────
+
+  Future<void> saveSearchQuery(String query, {int resultCount = 0}) async {
+    final db = await database;
+    await db.delete('shop_search_history', where: 'query = ?', whereArgs: [query]);
+    await db.insert('shop_search_history', {
+      'query': query,
+      'searched_at': DateTime.now().millisecondsSinceEpoch,
+      'result_count': resultCount,
+    });
+    await db.rawDelete('''
+      DELETE FROM shop_search_history WHERE id NOT IN (
+        SELECT id FROM shop_search_history ORDER BY searched_at DESC LIMIT 50
+      )
+    ''');
+  }
+
+  Future<List<String>> getSearchHistory({int limit = 20}) async {
+    final db = await database;
+    final rows = await db.query('shop_search_history', orderBy: 'searched_at DESC', limit: limit);
+    return rows.map((r) => r['query'] as String).toList();
+  }
+
+  Future<void> clearSearchHistory() async {
+    final db = await database;
+    await db.delete('shop_search_history');
+  }
+
+  // ─── Sync State ───────────────────────────────────────────────────────
+
+  Future<int?> getLastSyncedAt(String entity) async {
+    final db = await database;
+    final rows = await db.query('shop_sync_state', where: 'entity = ?', whereArgs: [entity]);
+    if (rows.isEmpty) return null;
+    return rows.first['last_synced_at'] as int?;
+  }
+
+  Future<void> updateSyncState(String entity, {String? lastSyncedAt, int? lastSyncedId, String? lastEtag}) async {
+    final db = await database;
+    await db.insert('shop_sync_state', {
+      'entity': entity,
+      'last_synced_at': lastSyncedAt != null ? DateTime.parse(lastSyncedAt).millisecondsSinceEpoch : null,
+      'last_synced_id': lastSyncedId,
+      'last_etag': lastEtag,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // ─── Pending Mutations ────────────────────────────────────────────────
+
+  Future<void> _queueMutation(String entity, String action, Map<String, dynamic> payload) async {
+    final db = await database;
+    await db.insert('shop_pending_mutations', {
+      'entity': entity,
+      'action': action,
+      'payload': jsonEncode(payload),
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+      'retry_count': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingMutations() async {
+    final db = await database;
+    return db.query('shop_pending_mutations', orderBy: 'created_at ASC', where: 'retry_count < 3');
+  }
+
+  Future<void> completeMutation(int id) async {
+    final db = await database;
+    await db.delete('shop_pending_mutations', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> failMutation(int id, String error) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE shop_pending_mutations SET retry_count = retry_count + 1, last_error = ? WHERE id = ?',
+      [error, id],
+    );
+  }
 }
