@@ -40,6 +40,7 @@ import 'screens/shop/seller_orders_screen.dart';
 import 'screens/shop/order_detail_screen.dart';
 import 'screens/shop/cart_screen.dart';
 import 'screens/shop/checkout_screen.dart';
+import 'screens/shop/wishlist_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'screens/sponsored/sponsored_posts_screen.dart';
@@ -790,6 +791,19 @@ class _TajiriAppState extends State<TajiriApp> {
                           return const Center(child: CircularProgressIndicator());
                         }
                         return CartScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'wishlist':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return WishlistScreen(currentUserId: snapshot.data!);
                       },
                     ),
                   );

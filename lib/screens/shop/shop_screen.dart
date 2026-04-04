@@ -455,6 +455,10 @@ class _ShopScreenState extends State<ShopScreen> {
                 titleSpacing: 0,
                 title: _buildSearchField(),
                 actions: [
+                  IconButton(
+                    icon: const HeroIcon(HeroIcons.heart),
+                    onPressed: () => Navigator.pushNamed(context, '/shop/wishlist'),
+                  ),
                   _buildCartButton(),
                   const SizedBox(width: 8),
                 ],
