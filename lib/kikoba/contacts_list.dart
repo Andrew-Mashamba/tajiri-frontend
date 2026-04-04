@@ -5,10 +5,10 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/waitDialog.dart';
+import 'waitDialog.dart';
 import 'HttpService.dart';
 import 'DataStore.dart';
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 import 'sms_launcher.dart';
 
 

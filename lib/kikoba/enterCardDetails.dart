@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:progress_indicators/progress_indicators.dart';
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 import '../Constants.dart';
 import '../HttpService.dart';
@@ -10,7 +10,7 @@ import '../waitDialog.dart';
 import 'credit_card_form.dart';
 import 'credit_card_model.dart';
 import 'credit_card_widget.dart';
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 
 
 class enterCardDetails extends StatefulWidget {

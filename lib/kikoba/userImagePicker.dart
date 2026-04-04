@@ -10,9 +10,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/profileImage.dart';
-import 'package:vicoba/tabshome.dart';
-import 'package:vicoba/waitDialog.dart';
+import 'profileImage.dart';
+import 'tabshome.dart';
+import 'waitDialog.dart';
 import 'package:video_player/video_player.dart';
 
 import 'HttpService.dart';

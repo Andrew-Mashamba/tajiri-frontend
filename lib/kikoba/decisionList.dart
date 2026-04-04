@@ -3,8 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:vicoba/HttpService.dart';
-import 'package:vicoba/DataStore.dart';
+import 'HttpService.dart';
+import 'DataStore.dart';
 
 import 'getKikobaData.dart';
 import 'majukumu.dart';

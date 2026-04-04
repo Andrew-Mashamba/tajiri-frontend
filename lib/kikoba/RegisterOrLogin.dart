@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:vicoba/login.dart';
-import 'package:vicoba/registerMobileNumber.dart';
+import 'login.dart';
+import 'registerMobileNumber.dart';
 import 'mwalikwaLogin.dart';
 
 class RegisterOrLogin extends StatefulWidget {

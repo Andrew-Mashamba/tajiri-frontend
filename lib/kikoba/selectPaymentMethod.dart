@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 import '../HttpService.dart';
 import '../chooseBank.dart';

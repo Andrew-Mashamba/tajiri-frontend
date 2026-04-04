@@ -1,12 +1,12 @@
-import 'package:vicoba/main.dart';
-import 'package:vicoba/vicobaList.dart';
+import 'main.dart';
+import 'vicobaList.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:sms_autofill/sms_autofill.dart';
-import 'package:vicoba/start.dart';
-import 'package:vicoba/appColor.dart';
+import 'start.dart';
+import 'appColor.dart';
 
 import 'HttpService.dart';
 import 'DataStore.dart';

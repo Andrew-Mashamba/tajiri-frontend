@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/HttpService.dart';
+import '../DataStore.dart';
+import '../HttpService.dart';
 import '../models/chat/chat_models.dart';
 import 'chat_page.dart';
 

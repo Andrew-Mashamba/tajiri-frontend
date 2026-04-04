@@ -1,8 +1,8 @@
 
 import 'package:flutter/material.dart';
-import 'package:vicoba/sajiriKikoba.dart';
-import 'package:vicoba/searchForKikoba.dart';
-import 'package:vicoba/login.dart';
+import 'sajiriKikoba.dart';
+import 'searchForKikoba.dart';
+import 'login.dart';
 
 class searchOrcreate extends StatefulWidget {
   final String? message;

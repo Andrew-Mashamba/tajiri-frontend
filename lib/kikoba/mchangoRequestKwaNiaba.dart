@@ -4,8 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/intl.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/waitDialog.dart';
+import 'DataStore.dart';
+import 'waitDialog.dart';
 
 import 'HttpService.dart';
 import 'loanRequested.dart';

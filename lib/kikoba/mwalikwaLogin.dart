@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:vicoba/waitDialog.dart';
+import 'waitDialog.dart';
 
 import 'HttpService.dart';
 import 'OfflineDatabase.dart';

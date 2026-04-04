@@ -1,5 +1,5 @@
-import 'package:vicoba/main.dart';
-import 'package:vicoba/vicobaList.dart';
+import 'main.dart';
+import 'vicobaList.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -12,9 +12,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/start.dart';
+import 'start.dart';
 
-import 'package:vicoba/waitDialog.dart';
+import 'waitDialog.dart';
 import 'HttpService.dart';
 import 'contacts_list.dart';
 import 'contacts_picker.dart';

@@ -12,11 +12,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/mchangoRequestKwaNiaba.dart';
-import 'package:vicoba/paymentStatus.dart';
-import 'package:vicoba/selectPaymentMethod.dart';
-import 'package:vicoba/userImagePicker.dart';
+import 'DataStore.dart';
+import 'mchangoRequestKwaNiaba.dart';
+import 'paymentStatus.dart';
+import 'selectPaymentMethod.dart';
+import 'userImagePicker.dart';
 
 import 'pages/MikopoPage.dart';
 import 'HttpService.dart';
@@ -24,7 +24,7 @@ import 'adapaymentModal.dart';
 import 'mchangoModal.dart';
 import 'membersModal.dart';
 import 'networkError.dart';
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 import 'widgets/FinancialSummarySection.dart';
 import 'services/dashboard_cache_service.dart';
 

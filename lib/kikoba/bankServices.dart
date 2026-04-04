@@ -1,8 +1,8 @@
 
 import 'package:flutter/material.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/vicoba.dart';
-import 'package:vicoba/HttpService.dart';
+import 'DataStore.dart';
+import 'vicoba.dart';
+import 'HttpService.dart';
 
 import 'bankServicesModal.dart';
 import 'getKikobaData.dart';

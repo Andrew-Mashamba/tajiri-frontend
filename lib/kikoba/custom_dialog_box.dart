@@ -1,6 +1,6 @@
 
 import 'package:flutter/material.dart';
-import 'package:vicoba/constants.dart';
+import 'constants.dart';
 
 class CustomDialogBox extends StatefulWidget {
   final String title, descriptions, text;

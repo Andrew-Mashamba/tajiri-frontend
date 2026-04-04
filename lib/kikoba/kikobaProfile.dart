@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/vicobaList.dart';
+import 'DataStore.dart';
+import 'vicobaList.dart';
 import 'HttpService.dart';
 
 // Design Guidelines Colors (Monochrome)

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter/services.dart';
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 
 import 'CurrencyTextInputFormatter.dart';
 import 'DataStore.dart';

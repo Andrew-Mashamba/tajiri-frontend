@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/vicobaList.dart';
-import 'package:vicoba/HttpService.dart';
+import 'DataStore.dart';
+import 'vicobaList.dart';
+import 'HttpService.dart';
 import 'kikobaProfile.dart';
 
 // Design Guidelines Colors (Monochrome)

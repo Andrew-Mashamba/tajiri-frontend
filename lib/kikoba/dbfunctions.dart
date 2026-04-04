@@ -1,7 +1,7 @@
 // Define a function that inserts dogs into the database
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:vicoba/user.dart';
+import 'user.dart';
 
 
 

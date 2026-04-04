@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/paymentStatus.dart';
-import 'package:vicoba/waitDialog.dart';
-import 'package:vicoba/appColor.dart';
+import 'DataStore.dart';
+import 'paymentStatus.dart';
+import 'waitDialog.dart';
+import 'appColor.dart';
 
 
 import 'HttpService.dart';

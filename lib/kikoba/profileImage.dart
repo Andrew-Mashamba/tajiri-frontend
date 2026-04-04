@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/waitDialog.dart';
+import 'waitDialog.dart';
 import 'package:video_player/video_player.dart';
 
 import 'HttpService.dart';

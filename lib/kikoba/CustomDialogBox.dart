@@ -1,6 +1,6 @@
 
 import 'package:flutter/material.dart';
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 import 'Constants.dart';
 

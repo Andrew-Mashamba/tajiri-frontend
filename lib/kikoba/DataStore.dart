@@ -1,5 +1,5 @@
 
-import 'package:vicoba/vicoba.dart';
+import 'vicoba.dart';
 
 class DataStore {
   static int defaultTab = 0;

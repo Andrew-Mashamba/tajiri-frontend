@@ -7,9 +7,9 @@ import 'package:passcode_screen/circle.dart';
 import 'package:passcode_screen/keyboard.dart';
 import 'package:passcode_screen/passcode_screen.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
-import 'package:vicoba/main.dart';
-import 'package:vicoba/vicobaList.dart';
-import 'package:vicoba/appColor.dart';
+import 'main.dart';
+import 'vicobaList.dart';
+import 'appColor.dart';
 
 
 import 'HttpService.dart';

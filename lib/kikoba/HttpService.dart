@@ -9,10 +9,10 @@ import 'package:http/http.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/paymentModal.dart';
-import 'package:vicoba/bankServicesModal.dart';
-import 'package:vicoba/vicoba.dart';
+import 'DataStore.dart';
+import 'paymentModal.dart';
+import 'bankServicesModal.dart';
+import 'vicoba.dart';
 import 'KatibaModal.dart';
 import 'kikoba.dart';
 

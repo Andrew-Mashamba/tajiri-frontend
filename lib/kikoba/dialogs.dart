@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vicoba/custom_dialog_box.dart';
+import 'custom_dialog_box.dart';
 
 class Dialogs extends StatefulWidget {
   const Dialogs({super.key});

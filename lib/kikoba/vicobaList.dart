@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/HttpService.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/sajiriKikoba.dart';
-import 'package:vicoba/searchForKikoba.dart';
-import 'package:vicoba/searchOrCreatekikoba.dart';
-import 'package:vicoba/vicoba.dart';
-import 'package:vicoba/waitDialog.dart';
-import 'package:vicoba/services/vikoba_list_cache_service.dart';
+import 'HttpService.dart';
+import 'DataStore.dart';
+import 'sajiriKikoba.dart';
+import 'searchForKikoba.dart';
+import 'searchOrCreatekikoba.dart';
+import 'vicoba.dart';
+import 'waitDialog.dart';
+import 'services/vikoba_list_cache_service.dart';
 import 'getKikobaData.dart';
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 
 
 

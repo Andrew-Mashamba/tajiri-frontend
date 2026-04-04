@@ -1,4 +1,4 @@
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 class ChatModel {
   final String name;

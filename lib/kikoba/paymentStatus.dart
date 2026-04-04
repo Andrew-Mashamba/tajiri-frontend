@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 // Design Guidelines Colors (Monochrome)
 const _primaryBg = Color(0xFFFAFAFA);

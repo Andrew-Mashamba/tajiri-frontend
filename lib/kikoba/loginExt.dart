@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:steel_crypt/steel_crypt.dart';
-import 'package:vicoba/appColor.dart';
-import 'package:vicoba/main.dart';
-import 'package:vicoba/vicobaList.dart';
+import 'appColor.dart';
+import 'main.dart';
+import 'vicobaList.dart';
 
 import 'profileImage.dart';
 import 'OfflineDatabase.dart';

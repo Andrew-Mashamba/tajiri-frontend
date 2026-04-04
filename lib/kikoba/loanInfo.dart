@@ -7,8 +7,8 @@ import 'dart:convert';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/appColor.dart';
+import 'DataStore.dart';
+import 'appColor.dart';
 
 import 'HttpService.dart';
 

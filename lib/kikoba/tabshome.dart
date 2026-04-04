@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/vicobaList.dart';
+import 'DataStore.dart';
+import 'vicobaList.dart';
 
 import 'HttpService.dart';
 import 'bankServices.dart';
@@ -27,7 +27,7 @@ import 'OfflineDatabase.dart';
 import 'RegisterOrLogin.dart';
 import 'utils/retry_helper.dart';
 
-import 'package:vicoba/appColor.dart';
+import 'appColor.dart';
 
 
 class tabshome extends StatefulWidget {

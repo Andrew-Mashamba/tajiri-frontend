@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vicoba/tabshome.dart';
+import 'tabshome.dart';
 import 'package:video_player/video_player.dart';
 
 import 'DataStore.dart';

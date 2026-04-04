@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:vicoba/tabshome.dart';
-import 'package:vicoba/appColor.dart';
-import 'package:vicoba/typography.dart';
+import 'tabshome.dart';
+import 'appColor.dart';
+import 'typography.dart';
 
 List<CameraDescription> cameras = List.empty();
 

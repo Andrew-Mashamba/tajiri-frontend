@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:vicoba/DataStore.dart';
-import 'package:vicoba/HttpService.dart';
+import '../DataStore.dart';
+import '../HttpService.dart';
 import '../models/chat/chat_models.dart';
 import '../services/firebase_chat_service.dart';
 

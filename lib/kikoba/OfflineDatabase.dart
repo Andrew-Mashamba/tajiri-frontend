@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
-import 'package:vicoba/DataStore.dart';
+import 'DataStore.dart';
 
 import 'Bank.dart';
 import 'Device.dart';
