@@ -118,9 +118,9 @@ class HttpService {
 
 
   // Base URL configuration
-  static const String _baseUrl = "https://zima-uat.site:8001/api/";
-  static const String _esbBaseUrl = "https://zima.services/esb/public/api/";
-  static const String baseUrl = "https://zima-uat.site:8001/api/";
+  static const String _baseUrl = "https://vicoba.zimasystems.com/api/";
+  // ESB base URL removed — not needed in TAJIRI context
+  static const String baseUrl = "https://vicoba.zimasystems.com/api/";
 
   /// Extract numeric value from either a plain value or an object like {amount: 5000}
   static String _extractNumericValue(dynamic value) {
@@ -458,7 +458,7 @@ class HttpService {
   static Future<String> bankAuthorization(String userNumber) async {
     _logger.i('Requesting bank authorization...');
     try {
-      final url = "${_esbBaseUrl}auth-request?userNumber=$userNumber&oauthcallback=https://zima.services/esb/public/api/nmb-oauth-callback";
+      final url = "${_baseUrl}auth-request?userNumber=$userNumber&oauthcallback=${_baseUrl}nmb-oauth-callback";
 
       _logger.d('Authorization URL: $url');
       final response = await http.get(
