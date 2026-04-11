@@ -359,7 +359,7 @@ class _NewsListPageState extends State<majukumu> {
     //DataStore.currentKikobaName = article.kikobaname;
 
 
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => getKikobaData()), (Route<dynamic> route) => false);
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => getKikobaData()));
     //Navigator.of(context).push(MaterialPageRoute(builder: (BuildContext context) => tabshome(cameras: [],)));
   }
 

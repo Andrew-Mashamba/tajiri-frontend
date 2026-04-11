@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/wallet_models.dart';
 import '../config/api_config.dart';
+import 'income_service.dart';
+import 'expenditure_service.dart';
+import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -111,9 +114,24 @@ class WalletService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final txn = WalletTransaction.fromJson(data['data']);
+        // Fire-and-forget: record income for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            IncomeService.recordIncome(
+              token: token,
+              amount: amount,
+              source: 'top_up',
+              description: 'Top up via $provider',
+              referenceId: 'wallet_deposit_${txn.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return TransactionResult(
           success: true,
-          transaction: WalletTransaction.fromJson(data['data']),
+          transaction: txn,
         );
       }
       return TransactionResult(success: false, message: data['message'] ?? 'Imeshindwa kuingiza pesa');
@@ -145,9 +163,24 @@ class WalletService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final txn = WalletTransaction.fromJson(data['data']);
+        // Fire-and-forget: record expenditure for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: 'withdrawal',
+              description: 'Withdraw to $provider',
+              referenceId: 'wallet_withdraw_${txn.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return TransactionResult(
           success: true,
-          transaction: WalletTransaction.fromJson(data['data']),
+          transaction: txn,
         );
       }
       return TransactionResult(success: false, message: data['message'] ?? 'Imeshindwa kutoa pesa');
@@ -165,6 +198,7 @@ class WalletService {
     required double amount,
     required String pin,
     String? description,
+    String? budgetCategory,
   }) async {
     assert(
       (recipientId != null) != (recipientPhone != null && recipientPhone.isNotEmpty),
@@ -191,9 +225,24 @@ class WalletService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final txn = WalletTransaction.fromJson(data['data']);
+        // Fire-and-forget: record expenditure for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: budgetCategory ?? 'other',
+              description: description ?? 'Transfer',
+              referenceId: 'wallet_transfer_${txn.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return TransactionResult(
           success: true,
-          transaction: WalletTransaction.fromJson(data['data']),
+          transaction: txn,
         );
       }
       return TransactionResult(success: false, message: data['message'] ?? 'Imeshindwa kutuma pesa');
@@ -368,6 +417,7 @@ class WalletService {
     required int userId,
     required String requestId,
     required String pin,
+    String? budgetCategory,
   }) async {
     try {
       final response = await http.post(
@@ -382,9 +432,24 @@ class WalletService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final txn = WalletTransaction.fromJson(data['data']);
+        // Fire-and-forget: record expenditure for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: txn.amount,
+              category: budgetCategory ?? 'other',
+              description: 'Payment request #$requestId',
+              referenceId: 'wallet_payreq_$requestId',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return TransactionResult(
           success: true,
-          transaction: WalletTransaction.fromJson(data['data']),
+          transaction: txn,
         );
       }
       return TransactionResult(success: false, message: data['message'] ?? 'Imeshindwa kulipa');

@@ -565,8 +565,7 @@ class _UpdateContactsPageState extends State<UpdateContactsPage> {
                   _contact.addresses.add(_address as Address);
                 }
                 await FlutterContacts.updateContact(_contact);
-                Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (context) => ContactListPage()));
+                Navigator.pop(context);
               }
             },
           ),

@@ -14,14 +14,7 @@ class choosebank extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFEFEFEF),
-        primarySwatch: Colors.blue,
-      ),
-      debugShowCheckedModeBanner: false,
-      home: PopMenu(),
-    );
+    return const PopMenu();
   }
 }
 
@@ -308,19 +301,27 @@ class _PopMenuState extends State<PopMenu> {
 
                         try {
 
-                          var cc = await HttpService.createPaymentIntentFromBankAcc("500","TZS");
-                          print(cc);
-                          Navigator.of(context, rootNavigator: true).pop('dialog');
-                          //Navigator.pop(context);
-                          //Navigator.of(context).pop();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => paymentStatus()),
+                          var cc = await HttpService.createPaymentIntentFromBankAcc(
+                            DataStore.paymentAmount.toString(),
+                            "TZS",
                           );
-
+                          print(cc);
+                          if (context.mounted) {
+                            Navigator.of(context, rootNavigator: true).pop('dialog');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => paymentStatus()),
+                            );
+                          }
 
                         } on Exception catch (ex) {
                           print('Query error: $ex');
+                          if (context.mounted) {
+                            Navigator.of(context, rootNavigator: true).pop('dialog');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Payment failed: $ex')),
+                            );
+                          }
                         }
 
 

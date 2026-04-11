@@ -32,14 +32,7 @@ class MySampleState extends State<enterCardDetails> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Vikundi',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFEFEFEF),
-        primarySwatch: Colors.blue,
-      ),
-      home: Scaffold(
+    return Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: Text('Malipo kwa kadi'),
@@ -160,19 +153,31 @@ class MySampleState extends State<enterCardDetails> {
                           );
 
                           try {
-                            var cc = await HttpService.createPaymentIntent("500","TZS",cardNumber, expiryDate,cardHolderName,cvvCode);
-                            print(cc);
-                            Navigator.of(context, rootNavigator: true).pop('dialog');
-                            //Navigator.pop(context);
-                            //Navigator.of(context).pop();
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => paymentStatus()),
+                            var cc = await HttpService.createPaymentIntent(
+                              DataStore.paymentAmount.toString(),
+                              "TZS",
+                              cardNumber,
+                              expiryDate,
+                              cardHolderName,
+                              cvvCode,
                             );
-
+                            print(cc);
+                            if (context.mounted) {
+                              Navigator.of(context, rootNavigator: true).pop('dialog');
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => paymentStatus()),
+                              );
+                            }
 
                           } on Exception catch (ex) {
                             print('Query error: $ex');
+                            if (context.mounted) {
+                              Navigator.of(context, rootNavigator: true).pop('dialog');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Payment failed: $ex')),
+                              );
+                            }
                           }
 
                         },
@@ -185,7 +190,6 @@ class MySampleState extends State<enterCardDetails> {
             ],
           ),
         ),
-      ),
     );
   }
 

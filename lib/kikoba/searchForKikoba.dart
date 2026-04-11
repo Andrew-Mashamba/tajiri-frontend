@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'DataStore.dart';
-import 'vicobaList.dart';
+
 import 'HttpService.dart';
 import 'kikobaProfile.dart';
 
@@ -139,10 +139,7 @@ class _SearchBarxState extends State<SearchBarx> {
 
   void _navigateBack() {
     _logger.d('Navigating back to VikobaListPage');
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const VikobaListPage()),
-    );
+    Navigator.pop(context);
   }
 
   @override

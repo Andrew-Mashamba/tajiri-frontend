@@ -20,6 +20,7 @@ import 'contacts_list.dart';
 import 'contacts_picker.dart';
 import 'DataStore.dart';
 import 'sms_launcher.dart';
+import '../services/local_storage_service.dart';
 
 import 'package:permission_handler/permission_handler.dart';
 
@@ -36,14 +37,7 @@ class addMjumbe extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'VIKUNDI',
-      theme: ThemeData(
-        scaffoldBackgroundColor: _primaryBg,
-        fontFamily: 'Roboto',
-      ),
-      home: const MyHomePage(title: 'Ongeza Mwanachama'),
-    );
+    return const MyHomePage(title: 'Ongeza Mwanachama');
   }
 }
 
@@ -57,6 +51,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with CodeAutoFill  {
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
 
 
@@ -348,7 +344,7 @@ class _MyHomePageState extends State<MyHomePage> with CodeAutoFill  {
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-                Navigator.of(context).pushReplacement(_routeTocontactList());
+                Navigator.of(context).push(_routeTocontactList());
               },
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -383,6 +379,80 @@ class _MyHomePageState extends State<MyHomePage> with CodeAutoFill  {
                           Text(
                             "Bonyeza hapa kuchagua mtu kutoka simu yako",
                             style: TextStyle(
+                              fontSize: 13,
+                              color: _secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _accentColor,
+                      size: 24,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Search TAJIRI card
+        Container(
+          decoration: BoxDecoration(
+            color: _cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: _showTajiriSearchSheet,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _iconBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.search_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isSwahili ? "Tafuta kwenye TAJIRI" : "Search TAJIRI Users",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: _primaryText,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _isSwahili
+                                ? "Tafuta mtumiaji wa TAJIRI kwa jina au namba"
+                                : "Find a TAJIRI user by name or phone number",
+                            style: const TextStyle(
                               fontSize: 13,
                               color: _secondaryText,
                             ),
@@ -1006,6 +1076,165 @@ class _MyHomePageState extends State<MyHomePage> with CodeAutoFill  {
     );
 
 
+  }
+
+  void _showTajiriSearchSheet() {
+    final searchController = TextEditingController();
+    List<Map<String, dynamic>> results = [];
+    bool isSearching = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _isSwahili ? 'Tafuta Mtumiaji wa TAJIRI' : 'Search TAJIRI User',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Search field
+              TextField(
+                controller: searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: _isSwahili
+                      ? 'Jina, simu, au jina la mtumiaji...'
+                      : 'Name, phone, or username...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFFAFAFA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (q) async {
+                  if (q.length < 2) {
+                    setSheetState(() => results = []);
+                    return;
+                  }
+                  setSheetState(() => isSearching = true);
+                  final r = await HttpService.searchTajiriUsers(q);
+                  setSheetState(() {
+                    results = r;
+                    isSearching = false;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              // Results
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: results.length,
+                  itemBuilder: (ctx, i) {
+                    final user = results[i];
+                    final photo = user['profile_photo'] as String?;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 22,
+                        backgroundImage: (photo != null && photo.isNotEmpty)
+                            ? NetworkImage(photo)
+                            : null,
+                        child: (photo == null || photo.isEmpty)
+                            ? Text((user['name'] ?? '?')[0].toUpperCase())
+                            : null,
+                      ),
+                      title: Text(
+                        user['name'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      subtitle: Text(
+                        user['phone'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF666666),
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx); // close sheet
+                        // Pre-fill the name and phone fields
+                        setState(() {
+                          jinaController.text = user['name'] ?? '';
+                          // Extract last 9 digits from phone for the number field
+                          final phone = (user['phone'] ?? '')
+                              .replaceAll('+', '')
+                              .replaceAll(' ', '');
+                          if (phone.length >= 9) {
+                            numberController.text =
+                                phone.substring(phone.length - 9);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              if (results.isEmpty &&
+                  searchController.text.length >= 2 &&
+                  !isSearching)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _isSwahili ? 'Hakuna matokeo' : 'No results',
+                    style: const TextStyle(color: Color(0xFF999999)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
 void sendNotifications(String postComment, String namba){

@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import '../../models/loan_models.dart';
 import '../../services/loan_service.dart';
+import '../../DataStore.dart';
+import '../../selectPaymentMethod.dart';
 import 'package:intl/intl.dart';
 
 class PaymentScheduleScreen extends StatefulWidget {
@@ -230,9 +232,25 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen>
   }
 
   void _showPaymentDialog() {
-    // TODO: Implement payment dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Huduma ya malipo itakuja hivi karibuni')),
+    // Calculate overdue amount from arrears or use first unpaid installment
+    double paymentAmount = 0;
+    if (_payments != null && _payments!.isNotEmpty) {
+      final unpaid = _payments!.where((p) => p.status != 'paid').toList();
+      if (unpaid.isNotEmpty) {
+        paymentAmount = unpaid.first.amount;
+      }
+    }
+
+    DataStore.paymentService = "rejesho";
+    DataStore.paymentAmount = paymentAmount;
+    DataStore.paidServiceId = widget.applicationId;
+    DataStore.personPaidId = DataStore.currentUserId ?? '';
+    DataStore.maelezoYaMalipo =
+        "${DataStore.currentUserName} amelipa rejesho la mkopo, kiasi cha TZS ${paymentAmount.toStringAsFixed(0)}";
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const selectPaymentMethode()),
     );
   }
 }

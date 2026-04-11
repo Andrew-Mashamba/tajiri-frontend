@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'sajiriKikoba.dart';
 import 'searchForKikoba.dart';
+import '../services/local_storage_service.dart';
 // import 'login.dart'; // removed — auth handled by TAJIRI bridge
 
 class searchOrcreate extends StatefulWidget {
@@ -15,6 +16,9 @@ class searchOrcreate extends StatefulWidget {
 
 class _SearchOrCreateState extends State<searchOrcreate>
     with SingleTickerProviderStateMixin {
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
+
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
 
@@ -64,9 +68,9 @@ class _SearchOrCreateState extends State<searchOrcreate>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      "Chagua hatua yako ya kwanza",
-                      style: TextStyle(
+                    Text(
+                      _isSwahili ? "Chagua hatua yako ya kwanza" : "Choose your first step",
+                      style: const TextStyle(
                         fontSize: 16,
                         color: Color(0xFF666666),
                         fontWeight: FontWeight.w400,
@@ -121,8 +125,8 @@ class _SearchOrCreateState extends State<searchOrcreate>
                         opacity: _fadeAnimation,
                         child: _buildMinimalButton(
                           icon: Icons.add_business_rounded,
-                          title: "Sajiri kikoba kipya",
-                          subtitle: "Anza kikoba chako cha kwanza",
+                          title: _isSwahili ? "Sajiri kikoba kipya" : "Register new group",
+                          subtitle: _isSwahili ? "Anza kikoba chako cha kwanza" : "Start your first savings group",
                           onPressed: () => _navigateToPage(sajiriKikoba()),
                         ),
                       ),
@@ -131,8 +135,8 @@ class _SearchOrCreateState extends State<searchOrcreate>
                         opacity: _fadeAnimation,
                         child: _buildMinimalButton(
                           icon: Icons.search_rounded,
-                          title: "Tafuta kikoba",
-                          subtitle: "Jiunge na kikoba kilichopo",
+                          title: _isSwahili ? "Tafuta kikoba" : "Find a group",
+                          subtitle: _isSwahili ? "Jiunge na kikoba kilichopo" : "Join an existing savings group",
                           onPressed: () => _navigateToPage(const SearchBarx()),
                         ),
                       ),
@@ -141,8 +145,8 @@ class _SearchOrCreateState extends State<searchOrcreate>
                         opacity: _fadeAnimation,
                         child: _buildMinimalButton(
                           icon: Icons.login_rounded,
-                          title: "Ingia",
-                          subtitle: "Ingia kwenye akaunti yako",
+                          title: _isSwahili ? "Ingia" : "Sign In",
+                          subtitle: _isSwahili ? "Ingia kwenye akaunti yako" : "Sign in to your account",
                           onPressed: () { if (Navigator.of(context).canPop()) Navigator.of(context).pop(); },
                         ),
                       ),
@@ -238,7 +242,7 @@ class _SearchOrCreateState extends State<searchOrcreate>
 
   void _navigateToPage(Widget page) {
     if (mounted) {
-      Navigator.pushReplacement(
+      Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => page),
       );

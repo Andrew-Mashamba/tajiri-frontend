@@ -15,6 +15,7 @@ import 'waitDialog.dart';
 import 'services/vikoba_list_cache_service.dart';
 import 'getKikobaData.dart';
 import 'appColor.dart';
+import '../services/local_storage_service.dart';
 
 
 
@@ -29,6 +30,9 @@ class _NewsListPageState extends State<VikobaListPage>
     with AutomaticKeepAliveClientMixin<VikobaListPage> {
   final Logger _logger = Logger();
   bool isSelected = false;
+
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
   // Loading and caching state
   bool _isInitialLoading = true;
@@ -202,14 +206,16 @@ class _NewsListPageState extends State<VikobaListPage>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(
+        content: Row(
           children: [
-            Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 12),
+            const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Hakuna mtandao. Unaona data iliyohifadhiwa.',
-                style: TextStyle(fontSize: 13),
+                _isSwahili
+                    ? 'Hakuna mtandao. Unaona data iliyohifadhiwa.'
+                    : 'No internet. Showing cached data.',
+                style: const TextStyle(fontSize: 13),
               ),
             ),
           ],
@@ -269,9 +275,9 @@ class _NewsListPageState extends State<VikobaListPage>
               children: [
                 Icon(Icons.mail_outline, size: 16, color: primaryColor),
                 const SizedBox(width: 8),
-                const Text(
-                  'Mwaliko wa Kujiunga',
-                  style: TextStyle(
+                Text(
+                  _isSwahili ? 'Mwaliko wa Kujiunga' : 'Invitation to Join',
+                  style: const TextStyle(
                     fontSize: 13.0,
                     color: textColor,
                     fontWeight: FontWeight.w600,
@@ -321,10 +327,10 @@ class _NewsListPageState extends State<VikobaListPage>
               children: [
                 Icon(Icons.hourglass_empty, size: 16, color: accentColor),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Ombi lako linasubiri kuidhinishwa',
-                    style: TextStyle(
+                    _isSwahili ? 'Ombi lako linasubiri kuidhinishwa' : 'Your request is pending approval',
+                    style: const TextStyle(
                       fontSize: 13.0,
                       color: secondaryTextColor,
                       fontWeight: FontWeight.w500,
@@ -423,7 +429,7 @@ class _NewsListPageState extends State<VikobaListPage>
       children: [
         Expanded(
           child: _buildButton(
-            text: "Kataa",
+            text: _isSwahili ? "Kataa" : "Decline",
             isPrimary: false,
             onPressed: () => _handleRejectInvitation(kikoba.requestId, position),
           ),
@@ -431,7 +437,7 @@ class _NewsListPageState extends State<VikobaListPage>
         const SizedBox(width: 12),
         Expanded(
           child: _buildButton(
-            text: "Kubali",
+            text: _isSwahili ? "Kubali" : "Accept",
             isPrimary: true,
             onPressed: () => _handleAcceptInvitation(kikoba, position),
           ),
@@ -633,7 +639,7 @@ class _NewsListPageState extends State<VikobaListPage>
       _logger.i('Set group bank code: ${article.groupBankCode}');
     }
 
-    Navigator.of(context).pushReplacement(_createRouteToKikobaData());
+    Navigator.of(context).push(_createRouteToKikobaData());
   }
 
   Route _createRouteToKikobaData() {
@@ -680,9 +686,9 @@ class _NewsListPageState extends State<VikobaListPage>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          title: const Text(
-            'Kuna tatizo',
-            style: TextStyle(
+          title: Text(
+            _isSwahili ? 'Kuna tatizo' : 'Error',
+            style: const TextStyle(
               color: textColor,
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -702,9 +708,9 @@ class _NewsListPageState extends State<VikobaListPage>
               style: TextButton.styleFrom(
                 foregroundColor: primaryColor,
               ),
-              child: const Text(
-                'Sawa',
-                style: TextStyle(fontWeight: FontWeight.w500),
+              child: Text(
+                _isSwahili ? 'Sawa' : 'OK',
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -817,13 +823,12 @@ class _NewsListPageState extends State<VikobaListPage>
     _logger.i('No kikobas found, redirecting to search/create');
 
     Future.delayed(Duration.zero, () {
-      Navigator.of(context).pushAndRemoveUntil(
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => const searchOrcreate(
             message: "Huna kikoba kilichosajiliwa. Tafadhali sajili au tafuta kikoba.",
           ),
         ),
-        (Route<dynamic> route) => false,
       );
     });
 
@@ -838,42 +843,6 @@ class _NewsListPageState extends State<VikobaListPage>
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: cardColor,
-        elevation: 0.5,
-        title: const Text(
-          "Vikundi Vyangu",
-          style: TextStyle(
-            color: textColor,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          // AppBar refresh spinner
-          if (_isRefreshing)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: primaryColor,
-                  ),
-                ),
-              ),
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: dividerColor,
-            height: 1,
-          ),
-        ),
-      ),
       body: RefreshIndicator(
         onRefresh: _handleRefresh,
         color: primaryColor,
@@ -907,7 +876,7 @@ class _NewsListPageState extends State<VikobaListPage>
             children: [
               _buildBottomNavItem(
                 icon: Icons.search_rounded,
-                label: 'Tafuta',
+                label: _isSwahili ? 'Tafuta' : 'Search',
                 onPressed: () {
                   _logger.d('Search button pressed');
                   Navigator.push(
@@ -918,7 +887,7 @@ class _NewsListPageState extends State<VikobaListPage>
               ),
               _buildBottomNavItem(
                 icon: Icons.add_circle_outline_rounded,
-                label: 'Ongeza',
+                label: _isSwahili ? 'Ongeza' : 'Create',
                 onPressed: () {
                   _logger.d('Add kikoba button pressed');
                   Navigator.push(

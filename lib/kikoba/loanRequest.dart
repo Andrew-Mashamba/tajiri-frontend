@@ -338,7 +338,7 @@ class _FormWidgetsDemoState extends State<loanRequest> {
 
 
                                   Navigator.of(context, rootNavigator: true).pop('dialog');
-                                  Navigator.of(context).pushReplacement(_routeTopaymentStatus());
+                                  Navigator.of(context).push(_routeTopaymentStatus());
 
 
 

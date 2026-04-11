@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/subscription_models.dart';
 import '../config/api_config.dart';
+import 'expenditure_service.dart';
+import 'income_service.dart';
+import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -148,9 +151,25 @@ class SubscriptionService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
+        final subscription = Subscription.fromJson(data['data']);
+        // Fire-and-forget: record expenditure for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: subscription.amountPaid,
+              category: 'burudani',
+              description: 'Subscription: ${subscription.tier?.name ?? "Tier #$tierId"}',
+              referenceId: 'sub_${subscription.id}',
+              sourceModule: 'subscription',
+              isRecurring: true,
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return SubscriptionResult(
           success: true,
-          subscription: Subscription.fromJson(data['data']),
+          subscription: subscription,
         );
       }
       return SubscriptionResult(success: false, message: data['message'] ?? 'Imeshindwa kujisajili');
@@ -301,6 +320,35 @@ class SubscriptionService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
+        // Fire-and-forget: record expenditure for budget tracking (tipper side)
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            final tipId = data['data']?['id'] ?? DateTime.now().millisecondsSinceEpoch;
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: 'burudani',
+              description: 'Tip to creator',
+              referenceId: 'tip_$tipId',
+              sourceModule: 'subscription',
+            ).catchError((_) => null);
+
+            // Record creator's income (fire-and-forget).
+            // NOTE: This uses the tipper's auth token. The backend should
+            // ideally handle creator income recording server-side to avoid
+            // auth issues. This call may fail if the backend enforces that
+            // only the creator's own token can record their income.
+            IncomeService.recordIncome(
+              token: token,
+              amount: amount,
+              source: 'creator_tip',
+              description: 'Tip received',
+              referenceId: 'tip_income_$tipId',
+              sourceModule: 'subscription',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return TipResult(success: true, message: 'Tuzo imetumwa!');
       }
       return TipResult(success: false, message: data['message'] ?? 'Imeshindwa kutuma tuzo');

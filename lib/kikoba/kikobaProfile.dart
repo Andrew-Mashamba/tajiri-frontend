@@ -393,10 +393,7 @@ class _KikobaProfilePageState extends State<KikobaProfilePage> {
                   Navigator.of(context).pop();
                   if (isSuccess) {
                     // Navigate to VicobaListPage and clear stack
-                    Navigator.of(this.context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (context) => const VikobaListPage()),
-                      (Route<dynamic> route) => false,
-                    );
+                    Navigator.of(this.context).pop();
                   }
                 },
                 borderRadius: BorderRadius.circular(12),

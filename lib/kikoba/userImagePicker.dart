@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'profileImage.dart';
-import 'tabshome.dart';
+
 import 'waitDialog.dart';
 import 'package:video_player/video_player.dart';
 
@@ -24,13 +24,7 @@ class userImagePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var materialKey;
-
-
-    return MaterialApp(
-      title: '',
-      home: MyHomePage(title: 'Chagua au piga picha'),
-    );
+    return const MyHomePage(title: 'Chagua au piga picha');
   }
 }
 
@@ -484,27 +478,10 @@ class _MyHomePageState extends State<MyHomePage> {
     print(data);
     DataStore.defaultTab = 1;
     //Navigator.of(context).push(MaterialPageRoute(builder: (BuildContext context) => tabshome()));
-    Navigator.of(context).pushReplacement(_routeTotabshome());
+    Navigator.of(context).pop();
   }
 
-  Route _routeTotabshome() {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => tabshome(),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        var begin = Offset(-1.0, 0.0);
-        var end = Offset.zero;
-        var curve = Curves.ease;
-
-        var tween =
-        Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-
-        return SlideTransition(
-          position: animation.drive(tween),
-          child: child,
-        );
-      },
-    );
-  }
+  // _routeTotabshome removed — navigation now uses pop()
 
 
 

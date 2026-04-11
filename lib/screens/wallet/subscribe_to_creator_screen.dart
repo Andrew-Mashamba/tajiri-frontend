@@ -5,6 +5,7 @@ import '../../models/wallet_models.dart';
 import '../../services/biometric_service.dart';
 import '../../services/subscription_service.dart';
 import '../../services/wallet_service.dart';
+import '../../widgets/budget_context_banner.dart';
 
 class SubscribeToCreatorScreen extends StatefulWidget {
   final int creatorId;
@@ -206,7 +207,13 @@ class _SubscribeToCreatorScreenState extends State<SubscribeToCreatorScreen> {
                     border: const OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                BudgetContextBanner(
+                  category: 'burudani',
+                  paymentAmount: _selectedTier!.price,
+                  isSwahili: dialogS?.isSwahili ?? false,
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
                   height: 56,
                   child: Material(

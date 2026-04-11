@@ -9,8 +9,23 @@ import '../models/shop_models.dart';
 import '../config/api_config.dart';
 import 'shop_database.dart';
 import 'perf_logger.dart';
+import 'expenditure_service.dart';
+import 'income_service.dart';
+import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
+
+/// Maps a shop product category name to a budget envelope key.
+String _shopCategoryToBudget(String? productCategory) {
+  if (productCategory == null) return 'ununuzi';
+  final lower = productCategory.toLowerCase();
+  if (lower.contains('cloth') || lower.contains('fashion') || lower.contains('shoe') || lower.contains('nguo') || lower.contains('viatu')) return 'mavazi';
+  if (lower.contains('food') || lower.contains('grocer') || lower.contains('chakula')) return 'chakula';
+  if (lower.contains('health') || lower.contains('medic') || lower.contains('afya')) return 'afya';
+  if (lower.contains('electron') || lower.contains('phone') || lower.contains('simu')) return 'simu_intaneti';
+  if (lower.contains('beauty') || lower.contains('cosmetic') || lower.contains('urembo')) return 'urembo';
+  return 'ununuzi'; // default for uncategorizable products
+}
 
 // ============================================================================
 // LOGGING UTILITIES
@@ -921,8 +936,8 @@ class ShopService {
         _log('Added product #$productId to cart (qty: $quantity)');
         return CartResult(
           success: true,
-          cart: Cart.fromJson(data['data']),
-          message: 'Imeongezwa kwenye kikapu',
+          cart: data['data'] != null ? Cart.fromJson(data['data']) : null,
+          message: data['message'] ?? 'Imeongezwa kwenye kikapu',
         );
       }
       _handleServerError(data, response.statusCode);
@@ -1062,6 +1077,20 @@ class ShopService {
       if (response.statusCode == 201 && data['success'] == true) {
         final order = Order.fromJson(data['data']);
         _log('Order created: #${order.orderNumber} for product #$productId');
+        // Fire-and-forget: record expenditure for budget tracking
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: order.totalAmount,
+              category: _shopCategoryToBudget(order.product?.category?.name),
+              description: 'Shop: ${order.product?.title ?? "Order #${order.id}"}',
+              referenceId: 'shop_order_${order.id}',
+              sourceModule: 'shop',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
         return OrderResult(
           success: true,
           order: order,
@@ -1108,6 +1137,22 @@ class ShopService {
         final orders = (data['data'] as List)
             .map((o) => Order.fromJson(o))
             .toList();
+        // Fire-and-forget: record expenditure for each order in budget
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            for (final order in orders) {
+              ExpenditureService.recordExpenditure(
+                token: token,
+                amount: order.totalAmount,
+                category: _shopCategoryToBudget(order.product?.category?.name),
+                description: 'Shop: ${order.product?.title ?? "Order #${order.id}"}',
+                referenceId: 'shop_order_${order.id}',
+                sourceModule: 'shop',
+              ).catchError((_) => null);
+            }
+          }
+        }).catchError((_) => null);
         return OrderListResult(
           success: true,
           orders: orders,
@@ -1393,9 +1438,26 @@ class ShopService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final order = Order.fromJson(data['data']);
+        // Fire-and-forget: record seller income for budget tracking
+        if (order.sellerId > 0) {
+          LocalStorageService.getInstance().then((storage) {
+            final token = storage.getAuthToken();
+            if (token != null) {
+              IncomeService.recordIncome(
+                token: token,
+                amount: order.totalAmount,
+                source: 'shop_sale',
+                description: 'Sale: ${order.product?.title ?? "Order #${order.id}"}',
+                referenceId: 'shop_sale_${order.id}',
+                sourceModule: 'shop',
+              ).catchError((_) => null);
+            }
+          }).catchError((_) => null);
+        }
         return OrderResult(
           success: true,
-          order: Order.fromJson(data['data']),
+          order: order,
         );
       }
       return OrderResult(
@@ -1533,14 +1595,17 @@ class ShopService {
         }
       }
 
+      _logRequest('POST', '$_baseUrl/shop/products/$productId/reviews', body: request.fields);
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
+      _logResponse(response.statusCode, response.body);
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 201 && data['success'] == true) {
+      if ((response.statusCode == 200 || response.statusCode == 201) && data['success'] == true) {
         return ReviewResult(
           success: true,
-          review: Review.fromJson(data['data']),
+          review: data['data'] != null ? Review.fromJson(data['data']) : null,
+          message: data['message'],
         );
       }
       return ReviewResult(

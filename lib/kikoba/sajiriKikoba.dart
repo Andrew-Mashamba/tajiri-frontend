@@ -299,10 +299,7 @@ class _SajiriKikobaState extends State<sajiriKikoba> {
         DataStore.defaultTab = 4;
 
         Future.delayed(Duration.zero, () {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const VikobaListPage()),
-                (Route<dynamic> route) => false,
-          );
+          Navigator.of(context).pop();
         });
       } else if (result.contains("error")) {
         _logger.w('Kikoba creation failed with error response');

@@ -8,6 +8,7 @@ import '../../models/wallet_models.dart';
 import '../../services/biometric_service.dart';
 import '../../services/subscription_service.dart';
 import '../../services/wallet_service.dart';
+import '../../widgets/budget_context_banner.dart';
 
 class SendTipScreen extends StatefulWidget {
   final int creatorId;
@@ -213,7 +214,13 @@ class _SendTipScreenState extends State<SendTipScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              BudgetContextBanner(
+                category: 'burudani',
+                paymentAmount: amount,
+                isSwahili: false,
+              ),
+              const SizedBox(height: 12),
               SizedBox(
                 height: 56,
                 child: Material(

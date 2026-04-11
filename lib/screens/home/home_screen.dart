@@ -161,14 +161,14 @@ class _HomeScreenState extends State<HomeScreen> {
         child: LazyIndexedStack(
           index: _currentIndex,
           builders: [
-            () => _screens[0],
-            () => _screens[1],
+            () => _screens[0](),
+            () => _screens[1](),
             () => FriendsScreen(
               currentUserId: widget.currentUserId,
               isCurrentTab: _currentIndex == 2,
             ),
-            () => _screens[3],
-            () => _screens[4],
+            () => _screens[3](),
+            () => _screens[4](),
           ],
         ),
       ),

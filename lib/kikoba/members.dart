@@ -7,6 +7,7 @@ import 'package:logger/logger.dart';
 import 'DataStore.dart';
 import 'HttpService.dart';
 import 'addMjumbe.dart';
+import '../services/local_storage_service.dart';
 import 'pages/conversations_page.dart';
 import 'pages/chat_page.dart';
 import 'services/members_cache_service.dart';
@@ -34,6 +35,9 @@ class _membersScreenState extends State<membersScreen>
     with AutomaticKeepAliveClientMixin<membersScreen>, SingleTickerProviderStateMixin {
   @override
   bool get wantKeepAlive => true;
+
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
   // Data
   Map<String, dynamic>? _membersData;
@@ -1001,14 +1005,21 @@ class _membersScreenState extends State<membersScreen>
                             CircleAvatar(
                               radius: 24,
                               backgroundColor: const Color(0xFFF0F0F0),
-                              child: Text(
-                                _getInitials(member['name'] ?? ''),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryColor,
-                                ),
-                              ),
+                              backgroundImage: (member['tajiri_profile_photo'] != null &&
+                                  member['tajiri_profile_photo'].toString().isNotEmpty)
+                                  ? NetworkImage(member['tajiri_profile_photo'].toString())
+                                  : null,
+                              child: (member['tajiri_profile_photo'] == null ||
+                                  member['tajiri_profile_photo'].toString().isEmpty)
+                                  ? Text(
+                                      _getInitials(member['name'] ?? ''),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: primaryColor,
+                                      ),
+                                    )
+                                  : null,
                             ),
                             Positioned(
                               right: 0,
@@ -1395,14 +1406,21 @@ class _membersScreenState extends State<membersScreen>
                         CircleAvatar(
                           radius: 32,
                           backgroundColor: const Color(0xFFF0F0F0),
-                          child: Text(
-                            _getInitials(member['name'] ?? ''),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: primaryColor,
-                            ),
-                          ),
+                          backgroundImage: (member['tajiri_profile_photo'] != null &&
+                              member['tajiri_profile_photo'].toString().isNotEmpty)
+                              ? NetworkImage(member['tajiri_profile_photo'].toString())
+                              : null,
+                          child: (member['tajiri_profile_photo'] == null ||
+                              member['tajiri_profile_photo'].toString().isEmpty)
+                              ? Text(
+                                  _getInitials(member['name'] ?? ''),
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryColor,
+                                  ),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -1504,6 +1522,32 @@ class _membersScreenState extends State<membersScreen>
                   ],
                 ),
               ),
+              // View TAJIRI Profile button
+              if (member['tajiri_user_id'] != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // close bottom sheet
+                        Navigator.pushNamed(context, '/profile/${member['tajiri_user_id']}');
+                      },
+                      icon: const Icon(Icons.person_rounded, size: 18),
+                      label: Text(
+                        _isSwahili ? 'Angalia Wasifu wa TAJIRI' : 'View TAJIRI Profile',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1A1A1A),
+                        side: const BorderSide(color: Color(0xFF1A1A1A)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               // Content
               Expanded(
                 child: SingleChildScrollView(

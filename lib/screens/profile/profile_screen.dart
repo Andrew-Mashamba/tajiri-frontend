@@ -27,7 +27,6 @@ import '../feed/livegallerywidget_screen.dart';
 import '../michangogallerywidget_screen.dart';
 import '../campaigns/create_campaign_screen.dart';
 import '../settings/settings_screen.dart';
-import '../wallet/wallet_screen.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
 import '../messages/callhistory_screen.dart';
 import '../feed/create_post_screen.dart';
@@ -47,8 +46,135 @@ import 'edit_profile_screen.dart';
 import '../../services/creator_service.dart';
 import '../../models/flywheel_models.dart';
 import '../../utils/face_validator.dart';
-import '../budget/budget_home_screen.dart';
+import '../../budget/budget_module.dart';
 import '../../kikoba/kikoba_module.dart';
+import '../../my_wallet/my_wallet_module.dart';
+import '../../investments/investments_module.dart';
+import '../../loans/loans_module.dart';
+import '../../doctor/doctor_module.dart';
+import '../../pharmacy/pharmacy_module.dart';
+import '../../insurance/insurance_module.dart';
+import '../../government/government_module.dart';
+import '../../lawyer/lawyer_module.dart';
+import '../../fitness/fitness_module.dart';
+import '../../my_circle/my_circle_module.dart';
+import '../../my_family/my_family_module.dart';
+import '../../my_pregnancy/my_pregnancy_module.dart';
+import '../../my_baby/my_baby_module.dart';
+import '../../skincare/skincare_module.dart';
+import '../../hair_nails/hair_nails_module.dart';
+import '../../business/business_module.dart';
+import '../../business/biz_tab_wrapper.dart';
+import '../../business/pages/business_documents_page.dart';
+import '../../business/pages/email/email_client_page.dart';
+import '../../business/pages/business_card_page.dart';
+import '../../business/pages/quotes_page.dart';
+import '../../business/pages/invoices_page.dart';
+import '../../business/pages/recurring_invoices_page.dart';
+import '../../business/pages/vfd_page.dart';
+import '../../business/pages/customers_page.dart';
+import '../../business/pages/debts_page.dart';
+import '../../business/pages/reminder_settings_page.dart';
+import '../../business/pages/expenses_page.dart';
+import '../../business/pages/tax_page.dart';
+import '../../business/pages/credit_report_page.dart';
+import '../../business/pages/employees_page.dart';
+import '../../business/pages/payroll_page.dart';
+import '../../business/pages/suppliers_page.dart';
+import '../../business/pages/purchase_orders_page.dart';
+import '../../business/pages/appointments_page.dart';
+import '../../tenders/tenders_module.dart';
+import '../../housing/housing_module.dart';
+import '../../bills/bills_module.dart';
+import '../../vehicle/vehicle_module.dart';
+import '../../food/food_module.dart';
+import '../../transport/transport_module.dart';
+import '../../fundi/fundi_module.dart';
+import '../../calendar/calendar_module.dart';
+import '../../notes/notes_module.dart';
+import '../../faith/faith_module.dart';
+import '../../community/community_module.dart';
+import '../../events/events_module.dart';
+import '../../travel/travel_module.dart';
+import '../../games/games_module.dart';
+import '../../barozi_wangu/barozi_wangu_module.dart';
+import '../../ofisi_mtaa/ofisi_mtaa_module.dart';
+import '../../dc/dc_module.dart';
+import '../../rc/rc_module.dart';
+import '../../katiba/katiba_module.dart';
+import '../../legal_gpt/legal_gpt_module.dart';
+import '../../nida/nida_module.dart';
+import '../../rita/rita_module.dart';
+import '../../tra/tra_module.dart';
+import '../../brela/brela_module.dart';
+import '../../passport/passport_module.dart';
+import '../../driving_licence/driving_licence_module.dart';
+import '../../land_office/land_office_module.dart';
+import '../../nhif/nhif_module.dart';
+import '../../nssf/nssf_module.dart';
+import '../../tanesco/tanesco_module.dart';
+import '../../dawasco/dawasco_module.dart';
+// My Cars
+import '../../my_cars/my_cars_module.dart';
+import '../../car_insurance/car_insurance_module.dart';
+import '../../buy_car/buy_car_module.dart';
+import '../../fuel_delivery/fuel_delivery_module.dart';
+import '../../service_garage/service_garage_module.dart';
+import '../../sell_car/sell_car_module.dart';
+import '../../rent_car/rent_car_module.dart';
+import '../../owners_club/owners_club_module.dart';
+import '../../spare_parts/spare_parts_module.dart';
+// Commerce + Health
+import '../../tajirika/tajirika_module.dart';
+import '../../ambulance/ambulance_module.dart';
+// Govt extra
+import '../../latra/latra_module.dart';
+import '../../tira/tira_module.dart';
+import '../../ewura/ewura_module.dart';
+import '../../heslb/heslb_module.dart';
+import '../../necta/necta_module.dart';
+// Faith
+import '../../my_faith/my_faith_module.dart';
+import '../../biblia/biblia_module.dart';
+import '../../sala/sala_module.dart';
+import '../../fungu_la_kumi/fungu_la_kumi_module.dart';
+import '../../kanisa_langu/kanisa_langu_module.dart';
+import '../../huduma/huduma_module.dart';
+import '../../jumuiya/jumuiya_module.dart';
+import '../../ibada/ibada_module.dart';
+import '../../shule_ya_jumapili/shule_ya_jumapili_module.dart';
+import '../../tafuta_kanisa/tafuta_kanisa_module.dart';
+import '../../wakati_wa_sala/wakati_wa_sala_module.dart';
+import '../../qibla/qibla_module.dart';
+import '../../quran/quran_module.dart';
+import '../../kalenda_hijri/kalenda_hijri_module.dart';
+import '../../ramadan/ramadan_module.dart';
+import '../../zaka/zaka_module.dart';
+import '../../dua/dua_module.dart';
+import '../../hadith/hadith_module.dart';
+import '../../tafuta_msikiti/tafuta_msikiti_module.dart';
+import '../../maulid/maulid_module.dart';
+// Security + Lifestyle
+import '../../police/police_module.dart';
+import '../../traffic/traffic_module.dart';
+import '../../neighbourhood_watch/neighbourhood_watch_module.dart';
+import '../../alerts/alerts_module.dart';
+import '../../nightlife/nightlife_module.dart';
+// Education
+import '../../my_class/my_class_module.dart';
+import '../../timetable/timetable_module.dart';
+import '../../assignments/assignments_module.dart';
+import '../../class_chat/class_chat_module.dart';
+import '../../class_notes/class_notes_module.dart';
+import '../../exam_prep/exam_prep_module.dart';
+import '../../past_papers/past_papers_module.dart';
+import '../../newton/newton_module.dart';
+import '../../results/results_module.dart';
+import '../../fee_status/fee_status_module.dart';
+import '../../library/library_module.dart';
+import '../../campus_news/campus_news_module.dart';
+import '../../study_groups/study_groups_module.dart';
+import '../../career/career_module.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -736,7 +862,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => WalletScreen(currentUserId: _currentUserId),
+                      builder: (_) => MyWalletModule(userId: _currentUserId),
                     ),
                   );
                   break;
@@ -1018,6 +1144,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'group': return Icons.group_outlined;
       case 'folder': return Icons.folder_outlined;
       case 'storefront': return Icons.storefront_outlined;
+      case 'handshake': return Icons.handshake_outlined;
       case 'people': return Icons.people_outlined;
       case 'info': return Icons.info_outlined;
       // Finance
@@ -1052,13 +1179,89 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Government & Legal
       case 'assured_workload': return Icons.assured_workload_outlined;
       case 'gavel': return Icons.gavel_outlined;
+      case 'person_pin': return Icons.person_pin_outlined;
+      case 'location_city': return Icons.location_city_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'domain': return Icons.domain_outlined;
+      case 'description': return Icons.description_outlined;
+      case 'business': return Icons.business_outlined;
+      case 'card_travel': return Icons.card_travel_outlined;
+      case 'credit_card': return Icons.credit_card_outlined;
+      case 'landscape': return Icons.landscape_outlined;
+      case 'security': return Icons.security_outlined;
+      case 'bolt': return Icons.bolt_outlined;
+      case 'water_drop': return Icons.water_drop_outlined;
+      case 'directions_bus': return Icons.directions_bus_outlined;
+      case 'policy': return Icons.policy_outlined;
+      case 'gas_meter': return Icons.gas_meter_outlined;
+      case 'grading': return Icons.grading_outlined;
       // Community & Lifestyle
       case 'mosque': return Icons.mosque_outlined;
       case 'diversity_3': return Icons.diversity_3_outlined;
+      case 'nightlife': return Icons.nightlife_outlined;
       case 'event': return Icons.event_outlined;
       case 'flight': return Icons.flight_outlined;
-      case 'newspaper': return Icons.newspaper_outlined;
       case 'sports_esports': return Icons.sports_esports_outlined;
+      // Women & Family Care
+      case 'spa': return Icons.spa_outlined;
+      case 'face': return Icons.face_outlined;
+      case 'content_cut': return Icons.content_cut_outlined;
+      // Business
+      case 'email': return Icons.email_outlined;
+      case 'app_registration': return Icons.app_registration_outlined;
+      case 'qr_code_2': return Icons.qr_code_2_rounded;
+      case 'repeat': return Icons.repeat_rounded;
+      case 'verified': return Icons.verified_outlined;
+      case 'notifications_active': return Icons.notifications_active_outlined;
+      case 'money_off': return Icons.money_off_csred_outlined;
+      case 'calculate': return Icons.calculate_outlined;
+      case 'credit_score': return Icons.credit_score_outlined;
+      case 'badge': return Icons.badge_outlined;
+      case 'payments': return Icons.payments_outlined;
+      case 'local_shipping': return Icons.local_shipping_outlined;
+      case 'shopping_cart': return Icons.shopping_cart_outlined;
+      // Health (new)
+      case 'emergency': return Icons.emergency_outlined;
+      // My Cars
+      case 'directions_car_filled': return Icons.directions_car_filled_outlined;
+      case 'verified_user': return Icons.verified_user_outlined;
+      case 'time_to_leave': return Icons.time_to_leave_outlined;
+      case 'local_gas_station': return Icons.local_gas_station_outlined;
+      case 'car_repair': return Icons.car_repair_outlined;
+      case 'car_rental': return Icons.car_rental_outlined;
+      case 'groups': return Icons.groups_outlined;
+      case 'handyman': return Icons.handyman_outlined;
+      // Faith — shared
+      case 'favorite': return Icons.favorite_outlined;
+      // Faith — Christian
+      case 'back_hand': return Icons.back_hand_outlined;
+      case 'church': return Icons.church_outlined;
+      case 'record_voice_over': return Icons.record_voice_over_outlined;
+      case 'location_on': return Icons.location_on_outlined;
+      // Faith — Islamic
+      case 'schedule': return Icons.schedule_outlined;
+      case 'explore': return Icons.explore_outlined;
+      case 'auto_stories': return Icons.auto_stories_outlined;
+      case 'dark_mode': return Icons.dark_mode_outlined;
+      case 'self_improvement': return Icons.self_improvement_outlined;
+      case 'format_quote': return Icons.format_quote_outlined;
+      case 'celebration': return Icons.celebration_outlined;
+      // Education
+      case 'calendar_today': return Icons.calendar_today_outlined;
+      case 'assignment': return Icons.assignment_outlined;
+      case 'forum': return Icons.forum_outlined;
+      case 'note_alt': return Icons.note_alt_outlined;
+      case 'quiz': return Icons.quiz_outlined;
+      case 'grade': return Icons.grade_outlined;
+      case 'local_library': return Icons.local_library_outlined;
+      case 'campaign': return Icons.campaign_outlined;
+      case 'work_outline': return Icons.work_outline;
+      case 'history_edu': return Icons.history_edu_outlined;
+      case 'psychology': return Icons.psychology_outlined;
+      // Security
+      case 'local_police': return Icons.local_police_outlined;
+      case 'traffic': return Icons.traffic_outlined;
+      case 'shield': return Icons.shield_outlined;
       default: return Icons.circle_outlined;
     }
   }
@@ -1194,12 +1397,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
               Expanded(
                 child: _MeQuickLink(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: AppStringsScope.of(context)?.wallet ?? 'Wallet',
+                  icon: Icons.payments_rounded,
+                  label: 'Tajiri Pay',
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => WalletScreen(currentUserId: _currentUserId),
+                      builder: (_) => MyWalletModule(userId: _currentUserId),
                     ),
                   ),
                 ),
@@ -1871,226 +2074,228 @@ class _ProfileTabPage extends StatelessWidget {
         );
       // ── Finance & Money ──────────────────────────────────────────
       case 'budget':
-        return BudgetHomeScreen(userId: userId);
+        return BudgetModule(userId: userId);
       case 'kikoba':
         return KikobaModule(userId: userId);
       case 'banking':
-        return _ComingSoonTab(
-          icon: Icons.account_balance_outlined,
-          title: 'Benki Yangu',
-          subtitle: 'My Bank',
-          description: 'Akaunti za benki, M-Pesa, tuma na pokea pesa, taarifa za akaunti.',
-        );
+        return MyWalletModule(userId: userId);
       case 'investments':
-        return _ComingSoonTab(
-          icon: Icons.trending_up_rounded,
-          title: 'Uwekezaji',
-          subtitle: 'Investments',
-          description: 'Hisa, bondi, unit trust, na uwekezaji wa ardhi — kwa mustakabali wako.',
-        );
+        return InvestmentsModule(userId: userId);
       case 'loans':
-        return _ComingSoonTab(
-          icon: Icons.request_quote_outlined,
-          title: 'Mikopo',
-          subtitle: 'Loans',
-          description: 'Omba mkopo, fuatilia malipo, na linganisha viwango vya riba.',
-        );
+        return LoansModule(userId: userId);
 
       // ── Health & Wellness ─────────────────────────────────────────
       case 'doctor':
-        return _ComingSoonTab(
-          icon: Icons.medical_services_outlined,
-          title: 'Daktari Wangu',
-          subtitle: 'My Doctor',
-          description: 'Pata ushauri wa daktari, rekodi za afya, na miadi yako yote sehemu moja.',
-        );
+        return DoctorModule(userId: userId);
       case 'pharmacy':
-        return _ComingSoonTab(
-          icon: Icons.local_pharmacy_outlined,
-          title: 'Duka la Dawa',
-          subtitle: 'Pharmacy',
-          description: 'Agiza dawa, fuatilia maagizo yako, na pata dawa karibu nawe.',
-        );
+        return PharmacyModule(userId: userId);
       case 'insurance':
-        return _ComingSoonTab(
-          icon: Icons.health_and_safety_outlined,
-          title: 'Bima Yangu',
-          subtitle: 'My Insurance',
-          description: 'Bima ya afya, maisha, na gari — angalia, dai fidia, na pata mipango.',
-        );
+        return InsuranceModule(userId: userId);
       case 'fitness':
-        return _ComingSoonTab(
-          icon: Icons.fitness_center_outlined,
-          title: 'Afya Yangu',
-          subtitle: 'My Fitness',
-          description: 'Hatua za kutembea, mazoezi, uzito, na maji — fuatilia afya yako ya kila siku.',
-        );
+        return FitnessModule(userId: userId);
 
-      // ── Family & Education ────────────────────────────────────────
+      // ── Women & Family Care ──────────────────────────────────────
+      case 'my_circle':
+        if (!isOwnProfile) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text('This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyCircleModule(userId: userId);
+      case 'my_pregnancy':
+        if (!isOwnProfile) {
+          final isSw = LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyPregnancyModule(userId: userId);
+      case 'my_baby':
+        if (!isOwnProfile) {
+          final isSw = LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyBabyModule(userId: userId);
       case 'family':
-        return _ComingSoonTab(
-          icon: Icons.family_restroom_outlined,
-          title: 'Familia Yangu',
-          subtitle: 'My Family',
-          description: 'Mti wa familia, kalenda ya pamoja, kazi za nyumbani, na mawasiliano ya dharura.',
-        );
-      case 'school':
-        return _ComingSoonTab(
-          icon: Icons.school_outlined,
-          title: 'Shule',
-          subtitle: 'School',
-          description: 'Alama, ada, kazi za nyumbani, mawasiliano na walimu, na ripoti za watoto.',
-        );
-      case 'childcare':
-        return _ComingSoonTab(
-          icon: Icons.child_care_outlined,
-          title: 'Malezi',
-          subtitle: 'Childcare',
-          description: 'Hatua za ukuaji wa mtoto, chanjo, na kupata mlezi wa kuaminika.',
-        );
-      case 'learning':
-        return _ComingSoonTab(
-          icon: Icons.menu_book_outlined,
-          title: 'Masomo',
-          subtitle: 'Learning',
-          description: 'Kozi, vyeti, mafunzo ya ujuzi, na mafunzo ya mtandaoni.',
-        );
+        return MyFamilyModule(userId: userId);
+      case 'skincare':
+        return SkincareModule(userId: userId);
+      case 'hair_nails':
+        return HairNailsModule(userId: userId);
 
-      // ── Work & Career ─────────────────────────────────────────────
-      case 'jobs':
-        return _ComingSoonTab(
-          icon: Icons.work_outline,
-          title: 'Kazi Zangu',
-          subtitle: 'My Jobs',
-          description: 'Tafuta kazi, tengeneza CV, kazi za muda mfupi, na maandalizi ya mahojiano.',
-        );
-      case 'business':
-        return _ComingSoonTab(
-          icon: Icons.business_center_outlined,
-          title: 'Biashara Yangu',
-          subtitle: 'My Business',
-          description: 'Sajili biashara, ankara, hesabu ya bidhaa, POS, na mishahara.',
-        );
+      // ── Business (flat tabs) ────────────────────────────────────
+      // Each feature gets ALL businesses. Pages that currently take a single
+      // businessId receive the first one; they can be updated later to iterate
+      // all businesses with BusinessSectionHeader dividers.
+      case 'biz_profile':
+        return BusinessModule(userId: userId);
+      case 'biz_docs':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            BusinessDocumentsPage(userId: uid, businesses: all));
+      case 'biz_email':
+        return const EmailClientPage();
+      case 'biz_card':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            first != null ? BusinessCardPage(business: first) : const SizedBox.shrink());
+      case 'biz_quotes':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? QuotesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_invoices':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? InvoicesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_recurring':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? RecurringInvoicesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_vfd':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? VfdPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_customers':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? CustomersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_debts':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? DebtsPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_reminders':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? ReminderSettingsPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_expenses':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? ExpensesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_tax':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? TaxPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_credit':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? CreditReportPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_employees':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? EmployeesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_payroll':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? PayrollPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_suppliers':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? SuppliersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_po':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? PurchaseOrdersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_tenders':
+        return TendersModule(userId: userId);
+      case 'biz_appointments':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? AppointmentsPage(businessId: fId) : const SizedBox.shrink());
 
       // ── Daily Life & Home ─────────────────────────────────────────
       case 'food':
-        return _ComingSoonTab(
-          icon: Icons.restaurant_outlined,
-          title: 'Chakula',
-          subtitle: 'Food',
-          description: 'Mapishi, mpango wa milo, agiza chakula, na gundua mikahawa.',
-        );
+        return FoodModule(userId: userId);
       case 'transport':
-        return _ComingSoonTab(
-          icon: Icons.directions_car_outlined,
-          title: 'Usafiri',
-          subtitle: 'Transport',
-          description: 'Piga teksi, njia za basi, bei za mafuta, na mipango ya safari.',
-        );
+        return TransportModule(userId: userId);
       case 'services':
-        return _ComingSoonTab(
-          icon: Icons.home_repair_service_outlined,
-          title: 'Fundi',
-          subtitle: 'Home Services',
-          description: 'Fundi bomba, umeme, usafi, seremala — pata na kadiria mafundi.',
-        );
+        return FundiModule(userId: userId);
       case 'housing':
-        return _ComingSoonTab(
-          icon: Icons.home_outlined,
-          title: 'Nyumba Yangu',
-          subtitle: 'My Home',
-          description: 'Panga au nunua nyumba, lipa kodi, na zana za mmiliki.',
-        );
+        return HousingModule(userId: userId);
       case 'bills':
-        return _ComingSoonTab(
-          icon: Icons.receipt_long_outlined,
-          title: 'Bili Zangu',
-          subtitle: 'My Bills',
-          description: 'Maji, umeme, intaneti, TV — lipa na fuatilia bili zako zote.',
-        );
+        return BillsModule(userId: userId);
       case 'vehicle':
-        return _ComingSoonTab(
-          icon: Icons.two_wheeler_outlined,
-          title: 'Gari Langu',
-          subtitle: 'My Vehicle',
-          description: 'Bima ya gari, ukaguzi, mafuta, na kumbukumbu za matengenezo.',
-        );
+        return VehicleModule(userId: userId);
 
       // ── Planning & Productivity ───────────────────────────────────
       case 'calendar':
-        return _ComingSoonTab(
-          icon: Icons.calendar_month_outlined,
-          title: 'Kalenda',
-          subtitle: 'Calendar',
-          description: 'Matukio, vikumbusho, ratiba ya familia, na miadi yako.',
-        );
+        return CalendarModule(userId: userId);
       case 'notes':
-        return _ComingSoonTab(
-          icon: Icons.edit_note_outlined,
-          title: 'Kumbukumbu',
-          subtitle: 'Notes',
-          description: 'Maandishi binafsi, orodha, na sauti za kumbukumbu.',
-        );
+        return NotesModule(userId: userId);
 
       // ── Government & Legal ────────────────────────────────────────
       case 'government':
-        return _ComingSoonTab(
-          icon: Icons.assured_workload_outlined,
-          title: 'Serikali',
-          subtitle: 'Government',
-          description: 'Kitambulisho, pasipoti, vibali, TRA, NIDA, na usajili wa kupiga kura.',
-        );
+        return GovernmentModule(userId: userId);
       case 'lawyer':
-        return _ComingSoonTab(
-          icon: Icons.gavel_outlined,
-          title: 'Wakili Wangu',
-          subtitle: 'My Lawyer',
-          description: 'Ushauri wa kisheria, mikataba, migogoro ya ardhi, na wosia.',
-        );
+        return LawyerModule(userId: userId);
+      // Leadership
+      case 'barozi_wangu':
+        return BaroziWanguModule(userId: userId, wardId: 0);
+      case 'ofisi_mtaa':
+        return OfisiMtaaModule(userId: userId, mtaaId: 0);
+      case 'dc':
+        return DcModule(userId: userId, districtId: 0);
+      case 'rc':
+        return RcModule(userId: userId, regionId: 0);
+      case 'katiba':
+        return KatibaModule(userId: userId);
+      case 'legal_gpt':
+        return LegalGptModule(userId: userId);
+      // Government services
+      case 'nida':
+        return NidaModule(userId: userId);
+      case 'rita':
+        return RitaModule(userId: userId);
+      case 'tra':
+        return TraModule(userId: userId);
+      case 'brela':
+        return BrelaModule(userId: userId);
+      case 'passport':
+        return PassportModule(userId: userId);
+      case 'driving_licence':
+        return DrivingLicenceModule(userId: userId);
+      case 'land_office':
+        return LandOfficeModule(userId: userId);
+      case 'nhif':
+        return NhifModule(userId: userId);
+      case 'nssf':
+        return NssfModule(userId: userId);
+      case 'tanesco':
+        return TanescoModule(userId: userId);
+      case 'dawasco':
+        return DawascoModule(userId: userId);
 
       // ── Community & Lifestyle ─────────────────────────────────────
       case 'faith':
-        return _ComingSoonTab(
-          icon: Icons.mosque_outlined,
-          title: 'Imani Yangu',
-          subtitle: 'My Faith',
-          description: 'Kanisa au msikiti, mahubiri, zaka na sadaka, na nyakati za sala.',
-        );
+        return FaithModule(userId: userId);
       case 'community':
-        return _ComingSoonTab(
-          icon: Icons.diversity_3_outlined,
-          title: 'Jamii Yangu',
-          subtitle: 'My Community',
-          description: 'Jirani, matukio ya mtaa, kujitolea, na arifa za dharura.',
-        );
+        return CommunityModule(userId: userId);
       case 'events':
-        return _ComingSoonTab(
-          icon: Icons.event_outlined,
-          title: 'Matukio',
-          subtitle: 'Events',
-          description: 'Tamasha, harusi, mazishi, mikutano — gundua na panga.',
-        );
+        return EventsModule(userId: userId);
       case 'travel':
-        return _ComingSoonTab(
-          icon: Icons.flight_outlined,
-          title: 'Safari',
-          subtitle: 'Travel',
-          description: 'Ndege, hoteli, vifurushi vya utalii, visa, na bima ya safari.',
-        );
-      case 'news':
-        return _ComingSoonTab(
-          icon: Icons.newspaper_outlined,
-          title: 'Habari',
-          subtitle: 'News',
-          description: 'Habari za ndani na nje, mipasho binafsi, na arifa muhimu.',
-        );
+        return TravelModule(userId: userId);
       case 'games':
-        return _ComingSoonTab(
-          icon: Icons.sports_esports_outlined,
-          title: 'Michezo',
-          subtitle: 'Games',
-          description: 'Michezo ya burudani, fantasy sports, na mashindano na marafiki.',
-        );
+        return GamesModule(userId: userId);
 
       case 'friends':
         return _ProfileFriendsPage(
@@ -2102,6 +2307,128 @@ class _ProfileTabPage extends StatelessWidget {
           profile: profile,
           isOwnProfile: isOwnProfile,
         );
+      // ── My Cars ──
+      case 'my_cars':
+        return MyCarsModule(userId: userId);
+      case 'car_insurance':
+        return CarInsuranceModule(userId: userId);
+      case 'buy_car':
+        return BuyCarModule(userId: userId);
+      case 'fuel_delivery':
+        return FuelDeliveryModule(userId: userId);
+      case 'service_garage':
+        return ServiceGarageModule(userId: userId);
+      case 'sell_car':
+        return SellCarModule(userId: userId);
+      case 'rent_car':
+        return RentCarModule(userId: userId);
+      case 'owners_club':
+        return OwnersClubModule(userId: userId);
+      case 'spare_parts':
+        return SparePartsModule(userId: userId);
+
+      // ── Commerce + Health ──
+      case 'tajirika':
+        return TajirikaModule(userId: userId);
+      case 'ambulance':
+        return AmbulanceModule(userId: userId);
+
+      // ── Govt extra ──
+      case 'latra':
+        return LatraModule(userId: userId);
+      case 'tira':
+        return TiraModule(userId: userId);
+      case 'ewura':
+        return EwuraModule(userId: userId);
+      case 'heslb':
+        return HeslbModule(userId: userId);
+      case 'necta':
+        return NectaModule(userId: userId);
+
+      // ── Faith ──
+      case 'my_faith':
+        return MyFaithModule(userId: userId);
+      case 'biblia':
+        return BibliaModule(userId: userId);
+      case 'sala':
+        return SalaModule(userId: userId);
+      case 'fungu_la_kumi':
+        return FunguLaKumiModule(userId: userId);
+      case 'kanisa_langu':
+        return KanisaLanguModule(userId: userId);
+      case 'huduma':
+        return HudumaModule(userId: userId);
+      case 'jumuiya':
+        return JumuiyaModule(userId: userId);
+      case 'ibada':
+        return IbadaModule(userId: userId);
+      case 'shule_ya_jumapili':
+        return ShuleYaJumapiliModule(userId: userId);
+      case 'tafuta_kanisa':
+        return TafutaKanisaModule(userId: userId);
+      case 'wakati_wa_sala':
+        return WakatiWaSalaModule(userId: userId);
+      case 'qibla':
+        return QiblaModule(userId: userId);
+      case 'quran':
+        return QuranModule(userId: userId);
+      case 'kalenda_hijri':
+        return KalendaHijriModule(userId: userId);
+      case 'ramadan':
+        return RamadanModule(userId: userId);
+      case 'zaka':
+        return ZakaModule(userId: userId);
+      case 'dua':
+        return DuaModule(userId: userId);
+      case 'hadith':
+        return HadithModule(userId: userId);
+      case 'tafuta_msikiti':
+        return TafutaMsikitiModule(userId: userId);
+      case 'maulid':
+        return MaulidModule(userId: userId);
+
+      // ── Security + Lifestyle ──
+      case 'police':
+        return PoliceModule(userId: userId);
+      case 'traffic':
+        return TrafficModule(userId: userId);
+      case 'neighbourhood_watch':
+        return NeighbourhoodWatchModule(userId: userId);
+      case 'alerts':
+        return AlertsModule(userId: userId);
+      case 'nightlife':
+        return NightlifeModule(userId: userId);
+
+      // ── Education ──
+      case 'my_class':
+        return MyClassModule(userId: userId);
+      case 'timetable':
+        return TimetableModule(userId: userId);
+      case 'assignments':
+        return AssignmentsModule(userId: userId);
+      case 'class_chat':
+        return ClassChatModule(userId: userId);
+      case 'class_notes':
+        return ClassNotesModule(userId: userId);
+      case 'exam_prep':
+        return ExamPrepModule(userId: userId);
+      case 'past_papers':
+        return PastPapersModule(userId: userId);
+      case 'newton':
+        return NewtonModule(userId: userId);
+      case 'results':
+        return ResultsModule(userId: userId);
+      case 'fee_status':
+        return FeeStatusModule(userId: userId);
+      case 'library':
+        return LibraryModule(userId: userId);
+      case 'campus_news':
+        return CampusNewsModule(userId: userId);
+      case 'study_groups':
+        return StudyGroupsModule(userId: userId);
+      case 'career':
+        return CareerModule(userId: userId);
+
       default:
         return Center(
           child: Text('Tab not found: $tabId'),

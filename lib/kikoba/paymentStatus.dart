@@ -7,6 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'DataStore.dart';
+import '../services/local_storage_service.dart';
+
+bool get _isSwahili =>
+    LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
 // Design Guidelines Colors (Monochrome)
 const _primaryBg = Color(0xFFFAFAFA);
@@ -34,9 +38,9 @@ class _paymentStatusState extends State<paymentStatus> {
       appBar: AppBar(
         backgroundColor: _iconBg,
         elevation: 0,
-        title: const Text(
-          'Taarifa za malipo',
-          style: TextStyle(
+        title: Text(
+          _isSwahili ? 'Taarifa za malipo' : 'Payment Details',
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
             fontSize: 18,
@@ -89,9 +93,9 @@ class _paymentStatusState extends State<paymentStatus> {
               const SizedBox(height: 32),
 
               // Success Message
-              const Text(
-                "Malipo yamekamilika",
-                style: TextStyle(
+              Text(
+                _isSwahili ? "Malipo yamekamilika" : "Payment Complete",
+                style: const TextStyle(
                   color: _primaryText,
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -144,22 +148,22 @@ class _paymentStatusState extends State<paymentStatus> {
                 child: Column(
                   children: [
                     _buildDetailRow(
-                      "Kikundi",
+                      _isSwahili ? "Kikundi" : "Group",
                       DataStore.currentKikobaName ?? '-',
                     ),
                     const Divider(height: 24, color: _accentColor),
                     _buildDetailRow(
-                      "Aina ya malipo",
+                      _isSwahili ? "Aina ya malipo" : "Payment Type",
                       DataStore.paymentService ?? '-',
                     ),
                     const Divider(height: 24, color: _accentColor),
                     _buildDetailRow(
-                      "Njia ya malipo",
+                      _isSwahili ? "Njia ya malipo" : "Payment Method",
                       DataStore.paymentChanel ?? '-',
                     ),
                     const Divider(height: 24, color: _accentColor),
                     _buildDetailRow(
-                      "Taasisi",
+                      _isSwahili ? "Taasisi" : "Institution",
                       DataStore.paymentInstitution ?? '-',
                     ),
                   ],
@@ -182,9 +186,9 @@ class _paymentStatusState extends State<paymentStatus> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
-                          'Risiti',
-                          style: TextStyle(
+                        child: Text(
+                          _isSwahili ? 'Risiti' : 'Receipt',
+                          style: const TextStyle(
                             color: _primaryText,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -211,9 +215,9 @@ class _paymentStatusState extends State<paymentStatus> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
-                          'Maliza',
-                          style: TextStyle(
+                        child: Text(
+                          _isSwahili ? 'Maliza' : 'Done',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),

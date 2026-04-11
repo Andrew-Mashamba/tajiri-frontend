@@ -24,13 +24,7 @@ class profileImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var materialKey;
-
-
-    return MaterialApp(
-      title: '',
-      home: MyHomePage(title: 'Chagua picha'),
-    );
+    return const MyHomePage(title: 'Chagua picha');
   }
 }
 

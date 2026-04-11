@@ -6,16 +6,17 @@ class DataStore {
   static String? pendingVoteRequestId; // Set by notification click to show voting bottom sheet
   static bool showVotingSheetOnLoad = false; // Set to true to auto-open voting sheet on tabshome load
   static String otp ="";
-  static String userNumber ="255692410353";
-  static String userNumberMNO ="VODACOM";
-  static String userCheo ="Mwenyekiti";
+  static String userNumber ="";
+  static String userNumberMNO ="";
+  static String userCheo ="";
   static String? currentUserRole; // User's role: chairman, secretary, accountant, member
-  static String userAccountNumber ="001098786546";
-  static String currentKikobaId ="c267341695e84282976b5b6d9422d1ec";
-  static String currentKikobaName ="THE BOYS";
-  static String currentKikobaImage ="https://images.unsplash.com/photo-1547721064-da6cfb341d50";
-  static String currentUserName  ="Andrew Mashamba";
-  static String currentUserId ="b05b4efef01c4ae89ca7284193ba21c2";
+  static String userAccountNumber ="";
+  static String currentKikobaId ="";
+  static String currentKikobaName ="";
+  static String currentKikobaImage ="";
+  static String currentUserName  ="";
+  static String currentUserId ="";
+  static String currentUserProfilePhoto = "";
   static String? lastRegisteredUserId;
   static String visitedKikobaId ="";
   static Null theDatabase;

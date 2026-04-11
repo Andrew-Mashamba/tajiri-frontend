@@ -697,7 +697,7 @@ static const _headerColor = AppColors.primary;               // Green header
 
   goimagePicker(BuildContext appContext) {
     print("SEARCH IMAGES");
-    Navigator.of(context).pushReplacement(_routeTouserImagePicker());
+    Navigator.of(context).push(_routeTouserImagePicker());
   }
 
   Route _routeTouserImagePicker() {
@@ -1498,7 +1498,7 @@ static const _headerColor = AppColors.primary;               // Green header
                                   .replaceAll("\$", "")}, aliopewa tarehe $month, kwa muda wa miezi ${double.parse(tenure).toStringAsFixed(0)}, kwa riba ya asilimia $interest. Kiasi cha mkopo kilichokua kimebaki ni shilingi $ppmtz. Riba iliyo kua imebaki ni shilingi $ipmtz. Jumla ya kiasi alicho lipa ni shilingi $totalx";
                               DataStore.paymentAmount = totalx.toString();
 
-                              Navigator.of(context).pushReplacement(
+                              Navigator.of(context).push(
                                   _routeToselectPaymentMethode());
                             },
                           ),
@@ -1741,7 +1741,7 @@ static const _headerColor = AppColors.primary;               // Green header
                                   if (result == "done") {
                                     Navigator.of(context, rootNavigator: true)
                                         .pop('dialog');
-                                    Navigator.of(context).pushReplacement(
+                                    Navigator.of(context).push(
                                         _routeTopaymentStatus());
                                   } else {
                                     Navigator.push(

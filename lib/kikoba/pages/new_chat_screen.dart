@@ -129,7 +129,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
       // If conversation already exists, navigate directly
       if (member.hasConversation && member.conversationId != null) {
         if (!mounted) return;
-        Navigator.pushReplacement(
+        Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ChatPage(
@@ -152,7 +152,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
       if (!mounted) return;
 
       if (result != null && result['conversation_id'] != null) {
-        Navigator.pushReplacement(
+        Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ChatPage(

@@ -12,6 +12,9 @@ import '../config/api_config.dart';
 import 'local_storage_service.dart';
 import 'message_service.dart';
 import 'callkit_service.dart';
+import '../my_baby/my_baby_module.dart';
+import '../my_circle/my_circle_module.dart';
+import '../my_pregnancy/my_pregnancy_module.dart';
 import '../widgets/milestone_overlay.dart';
 
 class FcmService {
@@ -100,6 +103,41 @@ class FcmService {
         importance: Importance.defaultImportance,
       ),
       AndroidNotificationChannel(
+        'games',
+        'Michezo',
+        description: 'Changamoto na michezo',
+        importance: Importance.high,
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
+        'budget',
+        'Bajeti',
+        description: 'Arifa za bajeti na matumizi',
+        importance: Importance.high,
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
+        'kikoba',
+        'Kikoba',
+        description: 'Arifa za vikoba na vikundi vya akiba',
+        importance: Importance.high,
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
+        'circle',
+        'Duru Yangu',
+        description: 'Arifa za hedhi, rutuba, na uzazi wa mpango',
+        importance: Importance.high,
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
+        'baby',
+        'Mtoto Wangu',
+        description: 'Arifa za chanjo, kulisha, na maendeleo ya mtoto',
+        importance: Importance.high,
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
         'system',
         'Mfumo',
         description: 'Arifa za mfumo',
@@ -129,6 +167,36 @@ class FcmService {
         return 'calls';
       case 'call_missed':
         return 'missed_calls';
+      case 'game_challenge':
+        return 'games';
+      case 'budget_alert':
+      case 'budget_envelope_warning':
+      case 'budget_weekly_digest':
+      case 'budget_monthly_report':
+      case 'budget_goal_milestone':
+        return 'budget';
+      case 'vote':
+      case 'kikoba_vote':
+      case 'kikoba_loan_request':
+      case 'kikoba_membership':
+      case 'kikoba_meeting':
+        return 'kikoba';
+      case 'period_approaching':
+      case 'period_today':
+      case 'fertile_window':
+      case 'ovulation_day':
+      case 'contraception_due':
+      case 'contraception_overdue':
+        return 'circle';
+      case 'vaccination_overdue':
+      case 'vaccination_due':
+      case 'feeding_reminder':
+      case 'baby_milestone':
+        return 'baby';
+      case 'anc_reminder':
+      case 'pregnancy_week':
+      case 'kick_decrease':
+        return 'circle';
       case 'follow':
       case 'like':
       case 'comment':
@@ -149,8 +217,18 @@ class FcmService {
         return 'Simu';
       case 'missed_calls':
         return 'Simu zilizokosa';
+      case 'games':
+        return 'Michezo';
       case 'social':
         return 'Mitandao';
+      case 'budget':
+        return 'Bajeti';
+      case 'kikoba':
+        return 'Kikoba';
+      case 'circle':
+        return 'Duru Yangu';
+      case 'baby':
+        return 'Mtoto Wangu';
       default:
         return 'Mfumo';
     }
@@ -166,6 +244,8 @@ class FcmService {
         return data['caller_name'] as String? ?? 'Simu inayoingia';
       case 'call_missed':
         return data['caller_name'] as String? ?? 'Simu iliyokosa';
+      case 'game_challenge':
+        return data['challenger_name'] as String? ?? 'Changamoto ya mchezo';
       case 'follow':
         return 'Mfuasi mpya';
       case 'like':
@@ -174,6 +254,51 @@ class FcmService {
         return 'Maoni mapya';
       case 'reaction':
         return 'Reaction mpya';
+      case 'budget_alert':
+        return 'Tahadhari ya Bajeti';
+      case 'budget_envelope_warning':
+        return 'Bahasha Inakaribia Kikomo';
+      case 'budget_weekly_digest':
+        return 'Muhtasari wa Bajeti';
+      case 'budget_monthly_report':
+        return 'Ripoti ya Mwezi';
+      case 'budget_goal_milestone':
+        return 'Lengo la Akiba Limefikiwa';
+      case 'vaccination_overdue':
+        return 'Chanjo Imechelewa';
+      case 'vaccination_due':
+        return 'Kumbusho la Chanjo';
+      case 'feeding_reminder':
+        return 'Muda wa Kulisha';
+      case 'baby_milestone':
+        return 'Hatua ya Ukuaji';
+      case 'anc_reminder':
+        return 'Kumbusho la Kliniki';
+      case 'pregnancy_week':
+        return 'Wiki Mpya ya Ujauzito';
+      case 'kick_decrease':
+        return 'Tahadhari: Mateke Yamepungua';
+      case 'period_approaching':
+        return 'Hedhi inakaribia';
+      case 'period_today':
+        return 'Hedhi inatarajiwa leo';
+      case 'fertile_window':
+        return 'Kipindi cha rutuba kimeanza';
+      case 'ovulation_day':
+        return 'Siku ya ovulesheni';
+      case 'contraception_due':
+        return 'Kumbusho la uzazi wa mpango';
+      case 'contraception_overdue':
+        return 'Uzazi wa mpango umechelewa';
+      case 'vote':
+      case 'kikoba_vote':
+        return data['kikoba_name'] as String? ?? 'Kura ya Kikoba';
+      case 'kikoba_loan_request':
+        return data['kikoba_name'] as String? ?? 'Ombi la Mkopo';
+      case 'kikoba_membership':
+        return data['kikoba_name'] as String? ?? 'Uanachama wa Kikoba';
+      case 'kikoba_meeting':
+        return data['kikoba_name'] as String? ?? 'Mkutano wa Kikoba';
       default:
         return 'Tajiri';
     }
@@ -389,6 +514,70 @@ class FcmService {
       _openProfile(data, navigator);
       return;
     }
+    // Game challenge — navigate to accept screen or profile Games tab.
+    // Requires backend to send FCM with type='game_challenge' and session_id.
+    if (type == 'game_challenge') {
+      _openGameChallenge(data, navigator);
+      return;
+    }
+    // Kikoba notifications — navigate to profile (which has Kikoba tab)
+    if (type == 'vote' ||
+        type == 'kikoba_vote' ||
+        type == 'kikoba_loan_request' ||
+        type == 'kikoba_membership' ||
+        type == 'kikoba_meeting') {
+      _openProfile(data, navigator);
+      return;
+    }
+    // Pregnancy notifications — navigate to My Pregnancy module
+    if (type == 'anc_reminder' ||
+        type == 'pregnancy_week' ||
+        type == 'kick_decrease') {
+      _openMyPregnancy(data, navigator);
+      return;
+    }
+    // Circle notifications — navigate directly to My Circle module
+    if (type == 'period_approaching' ||
+        type == 'period_today' ||
+        type == 'fertile_window' ||
+        type == 'ovulation_day' ||
+        type == 'contraception_due' ||
+        type == 'contraception_overdue') {
+      _openMyCircle(data, navigator);
+      return;
+    }
+    // Baby notifications — navigate to My Baby module
+    if (type == 'vaccination_overdue' ||
+        type == 'vaccination_due' ||
+        type == 'feeding_reminder' ||
+        type == 'baby_milestone') {
+      _openMyBaby(data, navigator);
+      return;
+    }
+    // Budget notifications — navigate to home with budget tab hint
+    if (type == 'budget_alert' ||
+        type == 'budget_envelope_warning' ||
+        type == 'budget_weekly_digest' ||
+        type == 'budget_monthly_report' ||
+        type == 'budget_goal_milestone') {
+      _openBudget(data, navigator);
+      return;
+    }
+  }
+
+  /// Opens budget tab via home screen.
+  void _openBudget(Map<String, dynamic> data, NavigatorState navigator) {
+    if (navigator.mounted) {
+      navigator.pushNamed('/home', arguments: {'tab': 'budget'});
+    }
+  }
+
+  /// Opens game challenge accept route.
+  void _openGameChallenge(Map<String, dynamic> data, NavigatorState navigator) {
+    final sessionId = _intFrom(data, 'session_id');
+    if (sessionId != null && sessionId > 0 && navigator.mounted) {
+      navigator.pushNamed('/game/accept/$sessionId');
+    }
   }
 
   /// Opens new incoming call flow (IncomingCallFlowScreen + CallSignalingService).
@@ -480,6 +669,42 @@ class FcmService {
     final userId = await _currentUserId();
     if (userId != null && navigator.mounted) {
       navigator.pushNamed('/profile/$userId');
+    }
+  }
+
+  /// Opens My Baby module for baby-related notifications.
+  Future<void> _openMyBaby(Map<String, dynamic> data, NavigatorState navigator) async {
+    final userId = await _currentUserId();
+    if (userId != null && navigator.mounted) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => MyBabyModule(userId: userId),
+        ),
+      );
+    }
+  }
+
+  /// Opens My Pregnancy module for prenatal notifications.
+  Future<void> _openMyPregnancy(Map<String, dynamic> data, NavigatorState navigator) async {
+    final userId = await _currentUserId();
+    if (userId != null && navigator.mounted) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => MyPregnancyModule(userId: userId),
+        ),
+      );
+    }
+  }
+
+  /// Opens My Circle module directly for period/fertility/contraception notifications.
+  Future<void> _openMyCircle(Map<String, dynamic> data, NavigatorState navigator) async {
+    final userId = await _currentUserId();
+    if (userId != null && navigator.mounted) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => MyCircleModule(userId: userId),
+        ),
+      );
     }
   }
 

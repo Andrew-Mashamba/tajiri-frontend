@@ -1508,11 +1508,14 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
       if (!mounted) return;
       setState(() => _submitting = false);
 
-      if (result.success && result.review != null) {
-        widget.onSubmitted(result.review!);
-        Navigator.pop(context);
+      if (result.success) {
+        if (result.review != null) {
+          widget.onSubmitted(result.review!);
+        }
+        final messenger = ScaffoldMessenger.of(context);
         final s = AppStringsScope.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        Navigator.pop(context);
+        messenger.showSnackBar(
           SnackBar(
             content: Text(s?.reviewSubmitted ?? 'Review submitted'),
           ),

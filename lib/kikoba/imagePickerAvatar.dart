@@ -24,13 +24,7 @@ class imagePickerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var materialKey;
-
-
-    return MaterialApp(
-      title: '',
-      home: MyHomePage(title: 'Chagua picha au video'),
-    );
+    return const MyHomePage(title: 'Chagua picha au video');
   }
 }
 

@@ -28,6 +28,7 @@ import 'OfflineDatabase.dart';
 import 'utils/retry_helper.dart';
 
 import 'appColor.dart';
+import '../services/local_storage_service.dart';
 
 
 class tabshome extends StatefulWidget {
@@ -46,6 +47,9 @@ class _TabshomeState extends State<tabshome>
       printTime: true,
     ),
   );
+
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
   late FirebaseMessaging _messaging;
   late TabController _tabController;
@@ -326,15 +330,15 @@ class _TabshomeState extends State<tabshome>
                   ],
                 ),
               ),
-              const PopupMenuItem<String>(
+              PopupMenuItem<String>(
                 value: 'help',
                 child: Row(
                   children: [
-                    Icon(Icons.help_outline_rounded, size: 20, color: textColor),
-                    SizedBox(width: 12),
+                    const Icon(Icons.help_outline_rounded, size: 20, color: textColor),
+                    const SizedBox(width: 12),
                     Text(
-                      'Msaada',
-                      style: TextStyle(
+                      _isSwahili ? 'Msaada' : 'Help',
+                      style: const TextStyle(
                         color: textColor,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -344,15 +348,15 @@ class _TabshomeState extends State<tabshome>
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem<String>(
+              PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
                   children: [
-                    Icon(Icons.logout_rounded, size: 20, color: Colors.red),
-                    SizedBox(width: 12),
+                    const Icon(Icons.logout_rounded, size: 20, color: Colors.red),
+                    const SizedBox(width: 12),
                     Text(
-                      'Ondoka',
-                      style: TextStyle(
+                      _isSwahili ? 'Ondoka' : 'Leave Group',
+                      style: const TextStyle(
                         color: Colors.red,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -404,26 +408,26 @@ class _TabshomeState extends State<tabshome>
   }
 
   List<Widget> _buildTabItems() {
-    return const [
+    return [
       Tab(
         height: 60,
-        child: _TabIcon(icon: Icons.forum_rounded, index: 0, label: 'Baraza'),
+        child: _TabIcon(icon: Icons.forum_rounded, index: 0, label: _isSwahili ? 'Baraza' : 'Forum'),
       ),
       Tab(
         height: 60,
-        child: _TabIcon(icon: Icons.dashboard_rounded, index: 1, label: 'Mimi'),
+        child: _TabIcon(icon: Icons.dashboard_rounded, index: 1, label: _isSwahili ? 'Mimi' : 'Me'),
       ),
       Tab(
         height: 60,
-        child: _TabIcon(icon: Icons.account_balance_wallet_rounded, index: 2, label: 'Hesabu'),
+        child: _TabIcon(icon: Icons.account_balance_wallet_rounded, index: 2, label: _isSwahili ? 'Hesabu' : 'Accounts'),
       ),
       Tab(
         height: 60,
-        child: _TabIcon(icon: Icons.groups_rounded, index: 3, label: 'Wanachama'),
+        child: _TabIcon(icon: Icons.groups_rounded, index: 3, label: _isSwahili ? 'Wanachama' : 'Members'),
       ),
       Tab(
         height: 60,
-        child: _TabIcon(icon: Icons.menu_book_rounded, index: 4, label: 'Katiba'),
+        child: _TabIcon(icon: Icons.menu_book_rounded, index: 4, label: _isSwahili ? 'Katiba' : 'Rules'),
       ),
     ];
   }
@@ -2051,11 +2055,8 @@ class _TabshomeState extends State<tabshome>
   }
 
   void _navigateToVikobaList() {
-    _logger.d('Navigating to Vikoba list');
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const VikobaListPage()),
-    );
+    _logger.d('Navigating back to Vikoba list');
+    Navigator.pop(context);
   }
 
   void _navigateToBankServices() {

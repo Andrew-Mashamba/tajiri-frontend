@@ -223,7 +223,7 @@ class EventTrackingService with WidgetsBindingObserver {
     }
 
     try {
-      final url = Uri.parse('${ApiConfig.baseUrl}/events');
+      final url = Uri.parse('${ApiConfig.baseUrl}/tracking/events');
       final response = await http.post(
         url,
         headers: ApiConfig.authHeaders(token),

@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/contribution_models.dart';
 import '../config/api_config.dart';
+import 'income_service.dart';
+import 'expenditure_service.dart';
+import 'local_storage_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -366,9 +369,24 @@ class ContributionService {
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (data['success'] == true && data['data'] != null) {
+          final donation = Donation.fromJson(data['data']);
+          // Fire-and-forget: record donation as expenditure in budget system
+          LocalStorageService.getInstance().then((storage) {
+            final token = storage.getAuthToken();
+            if (token != null) {
+              ExpenditureService.recordExpenditure(
+                token: token,
+                amount: amount,
+                category: 'michango',
+                description: 'Michango: campaign #$campaignId',
+                referenceId: 'michango_donate_${donation.id}',
+                sourceModule: 'michango',
+              ).catchError((_) => null);
+            }
+          }).catchError((_) {});
           return DonationResult(
             success: true,
-            donation: Donation.fromJson(data['data']),
+            donation: donation,
             message: data['message'],
           );
         }
@@ -446,9 +464,24 @@ class ContributionService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 201 && data['success'] == true) {
+        final withdrawal = Withdrawal.fromJson(data['data']);
+        // Fire-and-forget: record withdrawal as income in budget system
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            IncomeService.recordIncome(
+              token: token,
+              amount: amount,
+              source: 'michango_withdrawal',
+              description: 'Michango withdrawal',
+              referenceId: 'michango_withdraw_${withdrawal.id}',
+              sourceModule: 'michango',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) {});
         return WithdrawalResult(
           success: true,
-          withdrawal: Withdrawal.fromJson(data['data']),
+          withdrawal: withdrawal,
         );
       }
       return WithdrawalResult(success: false, message: data['message'] ?? 'Imeshindwa');

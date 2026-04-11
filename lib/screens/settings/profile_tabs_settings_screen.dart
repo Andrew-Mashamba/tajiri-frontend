@@ -166,6 +166,117 @@ class _ProfileTabsSettingsScreenState extends State<ProfileTabsSettingsScreen> {
         return Icons.people_outlined;
       case 'info':
         return Icons.info_outlined;
+      // Finance
+      case 'account_balance_wallet': return Icons.account_balance_wallet_outlined;
+      case 'savings': return Icons.savings_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'trending_up': return Icons.trending_up_rounded;
+      case 'request_quote': return Icons.request_quote_outlined;
+      case 'receipt_long': return Icons.receipt_long_outlined;
+      // Health
+      case 'medical_services': return Icons.medical_services_outlined;
+      case 'local_pharmacy': return Icons.local_pharmacy_outlined;
+      case 'health_and_safety': return Icons.health_and_safety_outlined;
+      case 'fitness_center': return Icons.fitness_center_outlined;
+      case 'emergency': return Icons.emergency_outlined;
+      // Family
+      case 'spa': return Icons.spa_outlined;
+      case 'child_care': return Icons.child_care_outlined;
+      case 'family_restroom': return Icons.family_restroom_outlined;
+      case 'face': return Icons.face_outlined;
+      case 'content_cut': return Icons.content_cut_outlined;
+      // Business
+      case 'business_center': return Icons.business_center_outlined;
+      case 'email': return Icons.email_outlined;
+      case 'qr_code_2': return Icons.qr_code_2_rounded;
+      case 'repeat': return Icons.repeat_rounded;
+      case 'verified': return Icons.verified_outlined;
+      case 'notifications_active': return Icons.notifications_active_outlined;
+      case 'money_off': return Icons.money_off_csred_outlined;
+      case 'calculate': return Icons.calculate_outlined;
+      case 'credit_score': return Icons.credit_score_outlined;
+      case 'badge': return Icons.badge_outlined;
+      case 'payments': return Icons.payments_outlined;
+      case 'local_shipping': return Icons.local_shipping_outlined;
+      case 'shopping_cart': return Icons.shopping_cart_outlined;
+      // Daily Life
+      case 'restaurant': return Icons.restaurant_outlined;
+      case 'directions_car': return Icons.directions_car_outlined;
+      case 'home_repair_service': return Icons.home_repair_service_outlined;
+      case 'home': return Icons.home_outlined;
+      // My Cars
+      case 'directions_car_filled': return Icons.directions_car_filled_outlined;
+      case 'verified_user': return Icons.verified_user_outlined;
+      case 'time_to_leave': return Icons.time_to_leave_outlined;
+      case 'local_gas_station': return Icons.local_gas_station_outlined;
+      case 'car_repair': return Icons.car_repair_outlined;
+      case 'car_rental': return Icons.car_rental_outlined;
+      case 'groups': return Icons.groups_outlined;
+      case 'handyman': return Icons.handyman_outlined;
+      case 'handshake': return Icons.handshake_outlined;
+      // Planning
+      case 'calendar_month': return Icons.calendar_month_outlined;
+      case 'edit_note': return Icons.edit_note_outlined;
+      // Government
+      case 'assured_workload': return Icons.assured_workload_outlined;
+      case 'gavel': return Icons.gavel_outlined;
+      case 'person_pin': return Icons.person_pin_outlined;
+      case 'location_city': return Icons.location_city_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'domain': return Icons.domain_outlined;
+      case 'description': return Icons.description_outlined;
+      case 'business': return Icons.business_outlined;
+      case 'card_travel': return Icons.card_travel_outlined;
+      case 'credit_card': return Icons.credit_card_outlined;
+      case 'landscape': return Icons.landscape_outlined;
+      case 'security': return Icons.security_outlined;
+      case 'bolt': return Icons.bolt_outlined;
+      case 'water_drop': return Icons.water_drop_outlined;
+      case 'directions_bus': return Icons.directions_bus_outlined;
+      case 'policy': return Icons.policy_outlined;
+      case 'gas_meter': return Icons.gas_meter_outlined;
+      case 'grading': return Icons.grading_outlined;
+      // Community
+      case 'mosque': return Icons.mosque_outlined;
+      case 'diversity_3': return Icons.diversity_3_outlined;
+      case 'nightlife': return Icons.nightlife_outlined;
+      case 'event': return Icons.event_outlined;
+      case 'flight': return Icons.flight_outlined;
+      case 'sports_esports': return Icons.sports_esports_outlined;
+      // Faith — shared
+      case 'favorite': return Icons.favorite_outlined;
+      case 'menu_book': return Icons.menu_book_outlined;
+      case 'music_note': return Icons.music_note_outlined;
+      // Faith — Christian
+      case 'back_hand': return Icons.back_hand_outlined;
+      case 'church': return Icons.church_outlined;
+      case 'record_voice_over': return Icons.record_voice_over_outlined;
+      case 'school': return Icons.school_outlined;
+      case 'location_on': return Icons.location_on_outlined;
+      // Faith — Islamic
+      case 'schedule': return Icons.schedule_outlined;
+      case 'explore': return Icons.explore_outlined;
+      case 'auto_stories': return Icons.auto_stories_outlined;
+      case 'dark_mode': return Icons.dark_mode_outlined;
+      case 'self_improvement': return Icons.self_improvement_outlined;
+      case 'format_quote': return Icons.format_quote_outlined;
+      case 'celebration': return Icons.celebration_outlined;
+      // Education
+      case 'calendar_today': return Icons.calendar_today_outlined;
+      case 'assignment': return Icons.assignment_outlined;
+      case 'forum': return Icons.forum_outlined;
+      case 'note_alt': return Icons.note_alt_outlined;
+      case 'quiz': return Icons.quiz_outlined;
+      case 'grade': return Icons.grade_outlined;
+      case 'local_library': return Icons.local_library_outlined;
+      case 'campaign': return Icons.campaign_outlined;
+      case 'work_outline': return Icons.work_outline;
+      case 'history_edu': return Icons.history_edu_outlined;
+      case 'psychology': return Icons.psychology_outlined;
+      // Security
+      case 'local_police': return Icons.local_police_outlined;
+      case 'traffic': return Icons.traffic_outlined;
+      case 'shield': return Icons.shield_outlined;
       default:
         return Icons.tab_outlined;
     }

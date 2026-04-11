@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/livestream_models.dart';
 import '../config/api_config.dart';
+// TODO: Wire ExpenditureService into sendGift() once gift value (price * quantity)
+// is passed as a parameter. Currently only giftId is available, not the monetary value.
+// import 'expenditure_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 

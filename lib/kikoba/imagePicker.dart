@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'DataStore.dart';
-import 'tabshome.dart';
+
 import 'HttpService.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
@@ -336,10 +336,7 @@ class _ImagePickerScreenState extends State<imagePicker>
 
   void _navigateBackToHome() {
     _logger.d('Navigating back to home');
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const tabshome()),
-    );
+    Navigator.of(context).pop();
   }
 
   Widget _buildImagePreview() {

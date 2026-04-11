@@ -3,6 +3,7 @@ import 'package:heroicons/heroicons.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/shop_models.dart';
 import '../../services/shop_service.dart';
+import '../../widgets/budget_context_banner.dart';
 import '../../widgets/cached_media_image.dart';
 
 // DESIGN.md tokens
@@ -402,7 +403,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
+          BudgetContextBanner(
+            category: 'ununuzi',
+            paymentAmount: _total,
+            isSwahili: s?.isSwahili ?? false,
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -664,6 +671,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
             // Escrow / buyer protection notice
             _buildEscrowNotice(),
+
+            // Budget context
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: BudgetContextBanner(
+                category: 'ununuzi',
+                paymentAmount: _total,
+                isSwahili: s?.isSwahili ?? false,
+              ),
+            ),
 
             const SizedBox(height: 100),
           ],

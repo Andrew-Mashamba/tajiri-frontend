@@ -1,4 +1,5 @@
 // lib/kikoba/kikoba_module.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'DataStore.dart';
@@ -24,6 +25,9 @@ class _KikobaModuleState extends State<KikobaModule> {
   bool _isInitializing = true;
   bool _hasError = false;
   String _errorMessage = '';
+
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
   @override
   void initState() {
@@ -64,17 +68,47 @@ class _KikobaModuleState extends State<KikobaModule> {
         final vicobaUserName = response['name'] as String? ?? userName;
         _populateDataStore(vicobaUserId, vicobaUserName, phone);
         DataStore.userPresent = true;
+        // Store TAJIRI profile photo if returned from bridge login
+        if (response['tajiri_profile_photo'] != null) {
+          DataStore.currentUserProfilePhoto = response['tajiri_profile_photo'] as String;
+        }
       }
 
       DataStore.myVikobaList = await HttpService().getData2xp();
 
       if (mounted) setState(() => _isInitializing = false);
-    } catch (e) {
-      _logger.e('Kikoba module initialization failed: $e');
+    } on SocketException catch (_) {
+      _logger.e('Kikoba module initialization failed: no internet');
       if (mounted) {
         setState(() {
           _hasError = true;
-          _errorMessage = e.toString();
+          _errorMessage = _isSwahili
+              ? 'Hakuna mtandao. Angalia muunganisho wako ujaribue tena.'
+              : 'No internet connection. Check your network and try again.';
+          _isInitializing = false;
+        });
+      }
+    } catch (e) {
+      _logger.e('Kikoba module initialization failed: $e');
+      if (mounted) {
+        final msg = e.toString();
+        String userMessage;
+        if (msg.contains('simu') || msg.contains('phone')) {
+          userMessage = _isSwahili
+              ? 'Nambari ya simu haipatikani. Tafadhali sasisha wasifu wako.'
+              : 'Phone number not found. Please update your profile.';
+        } else if (msg.contains('bridge') || msg.contains('kuunganisha')) {
+          userMessage = _isSwahili
+              ? 'Imeshindwa kuunganisha na Kikoba. Tafadhali jaribu tena.'
+              : 'Could not connect to Kikoba. Please try again.';
+        } else {
+          userMessage = _isSwahili
+              ? 'Kuna tatizo limetokea. Tafadhali jaribu tena.'
+              : 'Something went wrong. Please try again.';
+        }
+        setState(() {
+          _hasError = true;
+          _errorMessage = userMessage;
           _isInitializing = false;
         });
       }
@@ -91,17 +125,17 @@ class _KikobaModuleState extends State<KikobaModule> {
   @override
   Widget build(BuildContext context) {
     if (_isInitializing) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: _kBackground,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(strokeWidth: 2, color: _kPrimary),
-              SizedBox(height: 16),
+              const CircularProgressIndicator(strokeWidth: 2, color: _kPrimary),
+              const SizedBox(height: 16),
               Text(
-                'Inapakia Kikoba...',
-                style: TextStyle(color: _kTertiary, fontSize: 13),
+                _isSwahili ? 'Inapakia Kikoba...' : 'Loading Kikoba...',
+                style: const TextStyle(color: _kTertiary, fontSize: 13),
               ),
             ],
           ),
@@ -129,7 +163,7 @@ class _KikobaModuleState extends State<KikobaModule> {
                 FilledButton(
                   onPressed: _initializeModule,
                   style: FilledButton.styleFrom(backgroundColor: _kPrimary),
-                  child: const Text('Jaribu Tena'),
+                  child: Text(_isSwahili ? 'Jaribu Tena' : 'Try Again'),
                 ),
               ],
             ),

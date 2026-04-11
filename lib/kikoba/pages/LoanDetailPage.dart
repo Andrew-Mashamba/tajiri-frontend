@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:logger/logger.dart';
+import '../../services/income_service.dart';
+import '../../services/local_storage_service.dart';
 import '../DataStore.dart';
 import '../HttpService.dart';
 import '../services/page_cache_service.dart';
@@ -11,6 +13,7 @@ import '../services/loan_service.dart';
 import '../models/loan_models.dart';
 import '../widgets/loan/loan_widgets.dart';
 import '../screens/mikopo/payment_schedule_screen.dart';
+import '../selectPaymentMethod.dart';
 
 // Monochrome Design Guidelines Colors
 const _primaryBg = Color(0xFFFAFAFA);
@@ -56,12 +59,40 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     super.initState();
     _loadData();
     _setupFirestoreListener();
+    _recordLoanIncomeIfDisbursed();
   }
 
   @override
   void dispose() {
     _firestoreSubscription?.cancel();
     super.dispose();
+  }
+
+  /// Fire-and-forget: record disbursed loan as TAJIRI income (deduplicated by referenceId).
+  Future<void> _recordLoanIncomeIfDisbursed() async {
+    try {
+      final status = widget.loan['status']?.toString().toLowerCase() ?? '';
+      if (status != 'active' && status != 'disbursed') return;
+
+      final loanId = widget.loan['applicationId']?.toString();
+      if (loanId == null) return;
+
+      final principal = double.tryParse(widget.loan['principalAmount']?.toString() ?? '0') ?? 0.0;
+      if (principal <= 0) return;
+
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null) return;
+
+      IncomeService.recordIncome(
+        token: token,
+        amount: principal,
+        source: 'kikoba_loan',
+        description: 'Mkopo: ${DataStore.currentKikobaName.isNotEmpty ? DataStore.currentKikobaName : "Kikoba"}',
+        referenceId: 'kikoba_loan_$loanId',
+        sourceModule: 'kikoba',
+      ).catchError((_) => null);
+    } catch (_) {}
   }
 
   /// Load data: first from cache for instant display, then from backend API
@@ -220,11 +251,29 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
   }
 
   Future<void> _payInstallment(Map<String, dynamic> installment) async {
-    // TODO: Implement payment flow
-    print('Pay installment: ${installment['installmentNumber']}');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Malipo ya awamu yanaendelea...')),
-    );
+    final amount = installment['amount'] ?? installment['totalAmount'] ?? installment['installmentAmount'];
+    if (amount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot determine installment amount')),
+      );
+      return;
+    }
+
+    final loanId = widget.loan['applicationId']?.toString() ?? widget.loan['id']?.toString() ?? '';
+    DataStore.paymentService = "rejesho";
+    DataStore.paymentAmount = amount;
+    DataStore.paidServiceId = loanId;
+    DataStore.personPaidId = DataStore.currentUserId ?? '';
+    DataStore.maelezoYaMalipo =
+        "${DataStore.currentUserName} amelipa awamu ya ${installment['installmentNumber']} ya mkopo, "
+        "kiasi cha TZS ${amount.toString()}";
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const selectPaymentMethode()),
+      );
+    }
   }
 
   Future<void> _liquidateLoan() async {
@@ -250,11 +299,23 @@ class _LoanDetailPageState extends State<LoanDetailPage> {
     );
 
     if (confirmed == true) {
-      // TODO: Implement loan liquidation/closure
-      print('Liquidate loan: ${widget.loan['applicationId']}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Malipo ya mkopo kamili yanaendelea...')),
-      );
+      final calculations = widget.loan['calculations'] as Map<String, dynamic>?;
+      final outstandingBalance = calculations?['outstandingBalance'] ?? calculations?['totalRemaining'] ?? 0;
+      final loanId = widget.loan['applicationId']?.toString() ?? widget.loan['id']?.toString() ?? '';
+
+      DataStore.paymentService = "closeloan";
+      DataStore.paymentAmount = outstandingBalance;
+      DataStore.paidServiceId = loanId;
+      DataStore.personPaidId = DataStore.currentUserId ?? '';
+      DataStore.maelezoYaMalipo =
+          "${DataStore.currentUserName} amefunga mkopo, kiasi cha TZS ${outstandingBalance.toString()}";
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const selectPaymentMethode()),
+        );
+      }
     }
   }
 

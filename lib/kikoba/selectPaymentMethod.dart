@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
+import '../services/expenditure_service.dart';
+import '../services/local_storage_service.dart';
+import '../widgets/budget_context_banner.dart';
 import 'DataStore.dart';
 
 import 'HttpService.dart';
@@ -10,6 +13,9 @@ import 'chooseBank.dart';
 import 'enterNumber.dart';
 import 'paymentStatus.dart';
 import 'waitDialog.dart';
+
+bool get _isSwahili =>
+    LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
 // Design Guidelines Colors (Monochrome)
 const _primaryBg = Color(0xFFFAFAFA);
@@ -24,14 +30,7 @@ class selectPaymentMethode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Payment Methods',
-      theme: ThemeData(
-        scaffoldBackgroundColor: _primaryBg,
-        fontFamily: 'Roboto',
-      ),
-      home: PaymentMethodScreen(),
-    );
+    return PaymentMethodScreen();
   }
 }
 
@@ -57,6 +56,36 @@ class PaymentMethodScreen extends StatelessWidget {
             : "Mobile Money";
 
 
+
+  /// Map DataStore.paymentService to a budget category.
+  static String _budgetCategory() {
+    return switch (DataStore.paymentService) {
+      'ada' => 'michango',
+      'hisa' => 'michango',
+      'akiba' => 'akiba',
+      'rejesho' || 'closeloan' || 'topuploan' => 'deni',
+      'mchango' => 'michango',
+      _ => 'michango',
+    };
+  }
+
+  /// Fire-and-forget: record this Kikoba payment as a TAJIRI budget expenditure.
+  Future<void> _recordBudgetExpenditure(String category, double amount, String description) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      if (token == null) return;
+
+      ExpenditureService.recordExpenditure(
+        token: token,
+        amount: amount,
+        category: category,
+        description: description,
+        referenceId: 'kikoba_${DataStore.paymentService}_${DateTime.now().millisecondsSinceEpoch}',
+        sourceModule: 'kikoba',
+      ).catchError((_) => null);
+    } catch (_) {}
+  }
 
   Route _routeToPaymentStatus() {
     return PageRouteBuilder(
@@ -188,6 +217,23 @@ class PaymentMethodScreen extends StatelessWidget {
         await _recordMchangoPayment();
       }
 
+      // Record as TAJIRI budget expenditure (fire-and-forget)
+      final budgetCategory = _budgetCategory();
+      final description = switch (DataStore.paymentService) {
+        'ada' => 'Kikoba Ada: ${DataStore.currentKikobaName}',
+        'hisa' => 'Kikoba Hisa: ${DataStore.currentKikobaName}',
+        'akiba' => 'Kikoba Akiba: ${DataStore.currentKikobaName}',
+        'rejesho' => 'Kikoba Loan Repayment: ${DataStore.currentKikobaName}',
+        'closeloan' => 'Kikoba Loan Close: ${DataStore.currentKikobaName}',
+        'topuploan' || 'topup' => 'Kikoba Loan Top-Up: ${DataStore.currentKikobaName}',
+        'mchango' => 'Kikoba Mchango: ${DataStore.currentKikobaName}',
+        _ => 'Kikoba: ${DataStore.currentKikobaName}',
+      };
+      final paymentAmount = DataStore.paymentAmount is double
+          ? DataStore.paymentAmount as double
+          : double.tryParse(DataStore.paymentAmount.toString()) ?? 0;
+      _recordBudgetExpenditure(budgetCategory, paymentAmount, description);
+
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop('dialog');
         Navigator.of(context).push(_routeToPaymentStatus());
@@ -198,8 +244,10 @@ class PaymentMethodScreen extends StatelessWidget {
         Navigator.of(context, rootNavigator: true).pop('dialog');
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Malipo yameshindikana: ${e.toString()}'),
-              backgroundColor: Colors.blue,
+              content: Text(_isSwahili
+                  ? 'Malipo yameshindikana: ${e.toString()}'
+                  : 'Payment failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
             )
         );
       }
@@ -263,9 +311,9 @@ class PaymentMethodScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: _iconBg,
         elevation: 0,
-        title: const Text(
-          'Njia za malipo',
-          style: TextStyle(
+        title: Text(
+          _isSwahili ? 'Njia za malipo' : 'Payment Methods',
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
             fontSize: 18,
@@ -281,7 +329,7 @@ class PaymentMethodScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: <Widget>[
-          _buildSectionHeader("Njia kuu ya malipo"),
+          _buildSectionHeader(_isSwahili ? "Njia kuu ya malipo" : "Primary payment method"),
 
           Container(
             margin: const EdgeInsets.symmetric(vertical: 6),
@@ -354,7 +402,15 @@ class PaymentMethodScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  BudgetContextBanner(
+                    category: _budgetCategory(),
+                    paymentAmount: (DataStore.paymentAmount is double
+                        ? DataStore.paymentAmount as double
+                        : double.tryParse(DataStore.paymentAmount.toString()) ?? 0),
+                    isSwahili: true,
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -368,9 +424,9 @@ class PaymentMethodScreen extends StatelessWidget {
                         ),
                       ),
                       onPressed: () => _processPayment(context),
-                      child: const Text(
-                        'Lipa',
-                        style: TextStyle(
+                      child: Text(
+                        _isSwahili ? 'Lipa' : 'Pay',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -382,7 +438,7 @@ class PaymentMethodScreen extends StatelessWidget {
             ),
           ),
 
-          _buildSectionHeader("Njia Mbadala"),
+          _buildSectionHeader(_isSwahili ? "Njia Mbadala" : "Alternative Methods"),
 
           _buildPaymentOption(
             icon: Icons.account_balance,

@@ -37,6 +37,18 @@ class StoriesUpdateEvent extends LiveUpdateEvent {
   const StoriesUpdateEvent();
 }
 
+/// Budget data changed (income recorded, expenditure recorded, envelope updated) — refresh budget UI.
+class BudgetUpdateEvent extends LiveUpdateEvent {
+  final String? updateType; // 'income', 'expenditure', 'envelope_updated'
+  const BudgetUpdateEvent([this.updateType]);
+}
+
+/// Baby data changed (caregiver logged feeding, sleep, diaper, etc.) — refresh baby dashboard.
+class BabyUpdateEvent extends LiveUpdateEvent {
+  final int? babyId;
+  const BabyUpdateEvent([this.babyId]);
+}
+
 /// Global live-update service: listens to Firestore `updates/{userId}` and broadcasts events
 /// so the UI can refetch from the REST API and update instantly.
 class LiveUpdateService {
@@ -82,7 +94,16 @@ class LiveUpdateService {
             _permissionDenied = true;
             _subscription?.cancel();
             _subscription = null;
-            if (kDebugMode) debugPrint('[LiveUpdate] Firestore permission denied — live updates disabled until app restart. Backend needs to update Firebase security rules for the "updates" collection.');
+            if (kDebugMode) debugPrint('[LiveUpdate] Firestore permission denied — live updates disabled. Will retry in 5 minutes.');
+            // Retry after 5 minutes instead of permanently disabling
+            Future.delayed(const Duration(minutes: 5), () {
+              _permissionDenied = false;
+              if (_currentUserId != null) {
+                final uid = _currentUserId!;
+                _currentUserId = null; // reset so start() doesn't short-circuit
+                start(uid);
+              }
+            });
           } else {
             if (kDebugMode) debugPrint('[LiveUpdate] Listen error: $e');
           }
@@ -125,6 +146,20 @@ class LiveUpdateService {
         break;
       case 'stories_updated':
         ev = const StoriesUpdateEvent();
+        break;
+      case 'budget_updated':
+      case 'income_recorded':
+      case 'expenditure_recorded':
+      case 'envelope_updated':
+        ev = BudgetUpdateEvent(event);
+        break;
+      case 'baby_updated':
+      case 'baby_feeding_logged':
+      case 'baby_sleep_logged':
+      case 'baby_diaper_logged':
+      case 'baby_growth_logged':
+        final babyId = payload?['baby_id'] ?? payload?['babyId'];
+        ev = BabyUpdateEvent(babyId is int ? babyId : (babyId != null ? int.tryParse(babyId.toString()) : null));
         break;
       default:
         if (event != null && event.isNotEmpty) {

@@ -17,13 +17,22 @@ class Wallet {
 
   factory Wallet.fromJson(Map<String, dynamic> json) {
     return Wallet(
-      balance: (json['balance'] ?? 0).toDouble(),
-      pendingBalance: (json['pending_balance'] ?? 0).toDouble(),
+      balance: _parseDouble(json['balance']),
+      pendingBalance: _parseDouble(json['pending_balance']),
       currency: json['currency'] ?? 'TZS',
       isActive: json['is_active'] ?? true,
       hasPin: json['has_pin'] ?? false,
-      adBalance: (json['ad_balance'] as num?)?.toDouble() ?? 0.0,
+      adBalance: _parseDouble(json['ad_balance']),
     );
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    if (value is num) return value.toDouble();
+    return 0.0;
   }
 
   String get balanceFormatted => '${currency} ${_formatAmount(balance)}';
@@ -78,10 +87,10 @@ class WalletTransaction {
       transactionId: json['transaction_id'] ?? '',
       userId: json['user_id'],
       type: json['type'] ?? 'deposit',
-      amount: (json['amount'] ?? 0).toDouble(),
-      fee: (json['fee'] ?? 0).toDouble(),
-      balanceBefore: (json['balance_before'] ?? 0).toDouble(),
-      balanceAfter: (json['balance_after'] ?? 0).toDouble(),
+      amount: Wallet._parseDouble(json['amount']),
+      fee: Wallet._parseDouble(json['fee']),
+      balanceBefore: Wallet._parseDouble(json['balance_before']),
+      balanceAfter: Wallet._parseDouble(json['balance_after']),
       status: json['status'] ?? 'pending',
       paymentMethod: json['payment_method'],
       provider: json['provider'],
@@ -200,12 +209,12 @@ class PaymentRequest {
       requestId: json['request_id'] ?? '',
       requesterId: json['requester_id'],
       payerId: json['payer_id'],
-      amount: (json['amount'] ?? 0).toDouble(),
+      amount: Wallet._parseDouble(json['amount']),
       description: json['description'],
       status: json['status'] ?? 'pending',
-      expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at']) : null,
-      paidAt: json['paid_at'] != null ? DateTime.parse(json['paid_at']) : null,
-      createdAt: DateTime.parse(json['created_at']),
+      expiresAt: json['expires_at'] != null ? DateTime.tryParse(json['expires_at']) : null,
+      paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at']) : null,
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       requester: json['requester'] != null ? PaymentUser.fromJson(json['requester']) : null,
       payer: json['payer'] != null ? PaymentUser.fromJson(json['payer']) : null,
     );

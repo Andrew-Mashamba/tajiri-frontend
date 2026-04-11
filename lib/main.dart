@@ -61,6 +61,7 @@ import 'services/fcm_service.dart';
 import 'services/event_tracking_service.dart';
 import 'services/ad_service.dart';
 import 'services/background_sync_service.dart';
+import 'games/pages/game_challenge_accept_screen.dart';
 import 'services/message_database.dart';
 import 'l10n/app_strings.dart';
 import 'l10n/app_strings_scope.dart';
@@ -212,7 +213,9 @@ class _TajiriAppState extends State<TajiriApp> {
           builder: (context, __) {
             final locale = Locale(LanguageNotifier.instance.value);
             FcmService.setNavigatorKey(_appNavigatorKey);
-            return MaterialApp(
+            return AppStringsScope(
+              strings: AppStrings(LanguageNotifier.instance.value),
+              child: MaterialApp(
               navigatorKey: _appNavigatorKey,
               title: 'Tajiri',
               debugShowCheckedModeBanner: false,
@@ -224,10 +227,7 @@ class _TajiriAppState extends State<TajiriApp> {
               builder: (context, child) {
                 return GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
-                  child: AppStringsScope(
-                    strings: AppStrings(LanguageNotifier.instance.value),
-                    child: child ?? const SizedBox.shrink(),
-                  ),
+                  child: child ?? const SizedBox.shrink(),
                 );
               },
               onGenerateRoute: (settings) {
@@ -918,6 +918,30 @@ class _TajiriAppState extends State<TajiriApp> {
             }
             break;
 
+          case 'game':
+            // /game/accept/:sessionId — deep link for game challenge accept
+            if (pathSegments.length >= 3 &&
+                pathSegments[1] == 'accept') {
+              final sessionId = int.tryParse(pathSegments[2]) ?? 0;
+              if (sessionId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return GameChallengeAcceptScreen(
+                        sessionId: sessionId,
+                        currentUserId: snapshot.data!,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            break;
+
           case 'login':
             return MaterialPageRoute(
               builder: (_) => const LoginScreen(),
@@ -932,6 +956,7 @@ class _TajiriAppState extends State<TajiriApp> {
         // Default fallback
         return MaterialPageRoute(builder: (_) => const SplashScreen());
           },
+        ),
         );
           },
         );

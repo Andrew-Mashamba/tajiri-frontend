@@ -9,6 +9,7 @@ import 'HttpService.dart';
 import 'Article.dart';
 import 'DataStore.dart';
 import 'OfflineDatabase.dart';
+import '../services/local_storage_service.dart';
 // import 'RegisterOrLogin.dart'; // removed — auth handled by TAJIRI bridge
 
 class getKikobaData extends StatefulWidget {
@@ -33,6 +34,9 @@ class SplashState extends State<getKikobaData>
 
   bool _isLoading = true;
   String _errorMessage = '';
+
+  bool get _isSwahili =>
+      LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
 
   @override
   void initState() {
@@ -602,6 +606,8 @@ class SplashState extends State<getKikobaData>
 
   void _navigateToHome() {
     _logger.i('🚀 Navigating to Home (tabshome)');
+    // pushReplacement here so the loading page is NOT in the back stack.
+    // When user presses back from tabshome, they go straight to VikobaListPage.
     Navigator.of(context).pushReplacement(_createRoute());
   }
 
@@ -633,7 +639,27 @@ class SplashState extends State<getKikobaData>
 
     return Scaffold(
       backgroundColor: primaryBackground,
+      appBar: AppBar(
+        backgroundColor: primaryBackground,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: primaryText, size: 24),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          DataStore.currentKikobaName,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: primaryText,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(

@@ -8,23 +8,17 @@ import 'package:uuid/uuid.dart';
 import 'waitDialog.dart';
 import 'HttpService.dart';
 import 'DataStore.dart';
+import '../services/event_service.dart';
+import '../services/local_storage_service.dart';
 
 
 
 class pickdatetime extends StatelessWidget {
   const pickdatetime({super.key});
 
-
-
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'VIKUNDI',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(title: 'Chagua Tarehe'),
-    );
+    return const MyHomePage(title: 'Chagua Tarehe');
   }
 }
 
@@ -249,6 +243,14 @@ class _MyHomePageState extends State<MyHomePage>  {
 
             print (result);
 
+            // Fire-and-forget: sync meeting to TAJIRI calendar
+            _syncMeetingToCalendar(
+              MadhumuniController.text,
+              dateyakikao,
+              timeyakikao,
+              eneoController.text,
+            );
+
             Navigator.of(context, rootNavigator: true).pop('dialog');
 
             Navigator.of(context, rootNavigator: true).pop(context);
@@ -308,6 +310,41 @@ class _MyHomePageState extends State<MyHomePage>  {
 
 
 
+
+  Future<void> _syncMeetingToCalendar(
+    String title,
+    String dateStr,
+    String timeStr,
+    String location,
+  ) async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final user = storage.getUser();
+      final userId = user?.userId;
+      if (token == null || userId == null) return;
+
+      // Parse date string (yyyy-MM-dd)
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) return;
+
+      final kikobaName = DataStore.currentKikobaName ?? 'Kikoba';
+      final eventName = '$kikobaName: $title';
+
+      // ignore: unawaited_futures
+      EventService().createEvent(
+        creatorId: userId,
+        name: eventName,
+        startDate: date,
+        startTime: timeStr.isNotEmpty ? timeStr : null,
+        description: title,
+        locationName: location.isNotEmpty ? location : null,
+        category: 'kikoba',
+      );
+    } catch (_) {
+      // Fire-and-forget — never block the meeting creation flow
+    }
+  }
 
   void addData(String namba, String jinalamwalikwa, String cheo) {
     var postComment = "${DataStore.currentUserName} amemwalika mjumbe mpya, ndugu $jinalamwalikwa kama $cheo, kwenye kikoba hichi.";

@@ -95,6 +95,13 @@ class LocalStorageService {
           .map((json) => ProfileTabConfig.fromJson(json as Map<String, dynamic>))
           .toList();
 
+      // If saved tabs are significantly fewer than defaults, reset to get
+      // the new category layout (one-time migration for super-app tabs).
+      if (tabs.length < ProfileTabDefaults.defaultTabs.length - 5) {
+        _userBox.delete(_profileTabsKey);
+        return ProfileTabDefaults.getDefaults();
+      }
+
       // Ensure we have all tabs (in case new ones were added)
       final existingIds = tabs.map((t) => t.id).toSet();
       for (final defaultTab in ProfileTabDefaults.defaultTabs) {

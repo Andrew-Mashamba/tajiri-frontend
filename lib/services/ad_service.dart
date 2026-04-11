@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/ad_models.dart';
 import '../config/api_config.dart';
+import 'expenditure_service.dart';
+import 'income_service.dart';
 import 'local_storage_service.dart';
 
 void _log(String message) {
@@ -112,7 +114,19 @@ class AdService {
           'revenue': revenue,
         }),
       );
-      return response.statusCode == 200 || response.statusCode == 201;
+      final success = response.statusCode == 200 || response.statusCode == 201;
+      // Fire-and-forget: record ad revenue as income in budget system
+      if (success && token != null) {
+        IncomeService.recordIncome(
+          token: token,
+          amount: revenue,
+          source: 'ad_revenue',
+          description: 'AdMob revenue: $placement',
+          referenceId: 'admob_${DateTime.now().millisecondsSinceEpoch}',
+          sourceModule: 'ad',
+        ).catchError((_) => null);
+      }
+      return success;
     } catch (e) {
       _log('reportAdMobRevenue error: $e');
       return false;
@@ -384,6 +398,17 @@ class AdService {
         body: jsonEncode({'amount': amount}),
       );
       final body = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+      // Fire-and-forget: record ad deposit as expenditure in budget system
+      if (body['success'] == true && token != null) {
+        ExpenditureService.recordExpenditure(
+          token: token,
+          amount: amount,
+          category: 'biashara',
+          description: 'Ad budget top-up',
+          referenceId: 'ad_deposit_${DateTime.now().millisecondsSinceEpoch}',
+          sourceModule: 'ad',
+        ).catchError((_) => null);
+      }
       return body;
     } catch (e) {
       _log('depositAdBalance error: $e');

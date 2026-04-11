@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
@@ -224,6 +225,14 @@ class HttpService {
       String userNumber,
       String userNumberMNO,
       ) async {
+    if (DataStore.currentUserId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentUserId is empty, aborting payment');
+      return '';
+    }
+    if (DataStore.currentKikobaId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentKikobaId is empty, aborting payment');
+      return '';
+    }
     _logger.i('Creating MNO payment intent...');
     try {
       final url = "${_baseUrl}payment";
@@ -381,6 +390,14 @@ class HttpService {
       String personPaidId,
       String maelezoYaMalipo,
       ) async {
+    if (DataStore.currentUserId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentUserId is empty, aborting loan payment');
+      return '';
+    }
+    if (DataStore.currentKikobaId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentKikobaId is empty, aborting loan payment');
+      return '';
+    }
     _logger.i('Processing loan payment via MNO...');
     try {
       final url = "${_baseUrl}loan";
@@ -499,6 +516,14 @@ class HttpService {
       String maelezoYaMalipo,
       String paymentTopUpAmount,
       ) async {
+    if (DataStore.currentUserId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentUserId is empty, aborting topup loan payment');
+      return '';
+    }
+    if (DataStore.currentKikobaId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentKikobaId is empty, aborting topup loan payment');
+      return '';
+    }
     final String url = "${_baseUrl}loan";
     String res = "";
 
@@ -1065,6 +1090,14 @@ class HttpService {
       String personPaidId,
       String paymentDescription,
       ) async {
+    if (DataStore.currentUserId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentUserId is empty, aborting rejesho payment');
+      return 'error';
+    }
+    if (DataStore.currentKikobaId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentKikobaId is empty, aborting rejesho payment');
+      return 'error';
+    }
     String result = "error";
 
     try {
@@ -4998,6 +5031,14 @@ class HttpService {
 
   /// Submit a new loan application
   static Future<Map<String, dynamic>?> submitLoanApplication(Map<String, dynamic> application) async {
+    if (DataStore.currentUserId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentUserId is empty, aborting loan application');
+      return null;
+    }
+    if (DataStore.currentKikobaId.isEmpty) {
+      debugPrint('[HttpService] ERROR: currentKikobaId is empty, aborting loan application');
+      return null;
+    }
     logger.i('📝 [POST /submitLoanApplication] Submitting loan application');
 
     try {
@@ -9408,6 +9449,24 @@ class HttpService {
     } catch (e) {
       Logger().e('Bridge login error: $e');
       return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> searchTajiriUsers(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${_baseUrl}tajiri-users/search?q=${Uri.encodeComponent(query)}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[HttpService] searchTajiriUsers error: $e');
+      return [];
     }
   }
 

@@ -353,13 +353,150 @@ class AppStrings {
       case 'shop': return shopTab;
       case 'friends': return friends;
       case 'about': return about;
+      // Finance
+      case 'budget': return isSwahili ? 'Bajeti' : 'Budget';
+      case 'kikoba': return 'Kikoba';
+      case 'banking': return isSwahili ? 'Pochi' : 'Wallet';
+      case 'investments': return isSwahili ? 'Uwekezaji' : 'Invest';
+      case 'loans': return isSwahili ? 'Mikopo' : 'Loans';
+      // Health
+      case 'doctor': return isSwahili ? 'Daktari' : 'Doctor';
+      case 'pharmacy': return isSwahili ? 'Dawa' : 'Pharmacy';
+      case 'insurance': return isSwahili ? 'Bima' : 'Insurance';
+      case 'fitness': return isSwahili ? 'Afya' : 'Fitness';
+      // Women & Family
+      case 'my_circle': return isSwahili ? 'Duru' : 'Circle';
+      case 'my_pregnancy': return isSwahili ? 'Ujauzito' : 'Pregnancy';
+      case 'my_baby': return isSwahili ? 'Mtoto' : 'Baby';
+      case 'family': return isSwahili ? 'Familia' : 'Family';
+      case 'skincare': return isSwahili ? 'Ngozi' : 'Skin Care';
+      case 'hair_nails': return isSwahili ? 'Nywele' : 'Hair & Nails';
+      // Business
+      case 'biz_profile': return isSwahili ? 'Biashara Zangu' : 'My Businesses';
+      case 'biz_docs': return isSwahili ? 'Nyaraka' : 'Documents';
+      case 'biz_email': return 'Email';
+      case 'biz_card': return isSwahili ? 'Kadi QR' : 'QR Card';
+      case 'biz_quotes': return isSwahili ? 'Makadirio' : 'Quotes';
+      case 'biz_invoices': return isSwahili ? 'Ankara' : 'Invoices';
+      case 'biz_recurring': return isSwahili ? 'Ankara Auto' : 'Recurring';
+      case 'biz_vfd': return 'TRA VFD';
+      case 'biz_customers': return isSwahili ? 'Wateja' : 'Customers';
+      case 'biz_debts': return isSwahili ? 'Madeni' : 'Debts';
+      case 'biz_reminders': return isSwahili ? 'Vikumbusho' : 'Reminders';
+      case 'biz_expenses': return isSwahili ? 'Matumizi' : 'Expenses';
+      case 'biz_tax': return isSwahili ? 'Kodi' : 'Tax';
+      case 'biz_credit': return 'CRB';
+      case 'biz_employees': return isSwahili ? 'Timu' : 'Team';
+      case 'biz_payroll': return isSwahili ? 'Mishahara' : 'Payroll';
+      case 'biz_suppliers': return isSwahili ? 'Wauzaji' : 'Suppliers';
+      case 'biz_po': return isSwahili ? 'Manunuzi' : 'Orders';
+      case 'biz_tenders': return isSwahili ? 'Zabuni' : 'Tenders';
+      case 'biz_appointments': return isSwahili ? 'Miadi' : 'Booking';
+      // Daily Life
+      case 'food': return isSwahili ? 'Chakula' : 'Food';
+      case 'transport': return isSwahili ? 'Usafiri' : 'Transport';
+      case 'services': return 'Mafundi';
+      case 'housing': return isSwahili ? 'Nyumba' : 'Housing';
+      case 'bills': return isSwahili ? 'Bili' : 'Bills';
+      case 'vehicle': return isSwahili ? 'Gari' : 'Vehicle';
+      // My Cars
+      case 'my_cars': return isSwahili ? 'Magari Yangu' : 'My Cars';
+      case 'car_insurance': return isSwahili ? 'Bima ya Gari' : 'Car Insurance';
+      case 'buy_car': return isSwahili ? 'Nunua Gari' : 'Buy a Car';
+      case 'fuel_delivery': return isSwahili ? 'Mafuta' : 'Fuel Delivery';
+      case 'service_garage': return isSwahili ? 'Gereji' : 'Service';
+      case 'sell_car': return isSwahili ? 'Uza Gari' : 'Sell Car';
+      case 'rent_car': return isSwahili ? 'Kodi Gari' : 'Rent a Car';
+      case 'owners_club': return isSwahili ? 'Klabu' : 'Owners Club';
+      case 'spare_parts': return isSwahili ? 'Vipuri' : 'Spare Parts';
+      // Planning
+      case 'calendar': return isSwahili ? 'Kalenda' : 'Calendar';
+      case 'notes': return isSwahili ? 'Kumbukumbu' : 'Notes';
+      // Government & Legal
+      case 'government': return isSwahili ? 'Serikali' : 'Govt';
+      case 'lawyer': return isSwahili ? 'Wakili' : 'Lawyer';
+      // Government services
+      case 'barozi_wangu': return 'Barozi Wangu';
+      case 'ofisi_mtaa': return isSwahili ? 'Ofisi za Mtaa' : 'Ward Office';
+      case 'dc': return isSwahili ? 'Mkuu wa Wilaya' : 'DC Office';
+      case 'rc': return isSwahili ? 'Mkuu wa Mkoa' : 'RC Office';
+      case 'katiba': return isSwahili ? 'Katiba' : 'Constitution';
+      case 'legal_gpt': return 'LegalGPT';
+      case 'nida': return 'NIDA';
+      case 'rita': return 'RITA';
+      case 'tra': return 'TRA';
+      case 'brela': return 'BRELA';
+      case 'passport': return isSwahili ? 'Pasipoti' : 'Passport';
+      case 'driving_licence': return isSwahili ? 'Leseni' : 'Licence';
+      case 'land_office': return isSwahili ? 'Ardhi' : 'Land';
+      case 'nhif': return 'NHIF';
+      case 'nssf': return 'NSSF';
+      case 'latra': return 'LATRA';
+      case 'tira': return 'TIRA';
+      case 'ewura': return 'EWURA';
+      case 'heslb': return 'HESLB';
+      case 'necta': return 'NECTA';
+      case 'tanesco': return 'TANESCO';
+      case 'dawasco': return 'DAWASCO';
+      // Community
+      case 'tajirika': return 'Tajirika';
+      case 'community': return isSwahili ? 'Jamii' : 'Community';
+      case 'nightlife': return isSwahili ? 'Usiku' : 'Night Life';
+      case 'events': return isSwahili ? 'Matukio' : 'Events';
+      case 'travel': return isSwahili ? 'Safari' : 'Travel';
+      case 'news': return isSwahili ? 'Habari' : 'News';
+      case 'games': return isSwahili ? 'Michezo' : 'Games';
+      // Faith
+      case 'my_faith': return isSwahili ? 'Imani Yangu' : 'My Faith';
+      case 'biblia': return isSwahili ? 'Biblia' : 'Bible';
+      case 'sala': return isSwahili ? 'Sala' : 'Prayer';
+      case 'fungu_la_kumi': return isSwahili ? 'Fungu la Kumi' : 'Tithe';
+      case 'kanisa_langu': return isSwahili ? 'Kanisa Langu' : 'My Church';
+      case 'huduma': return isSwahili ? 'Huduma' : 'Sermons';
+      case 'jumuiya': return 'Jumuiya';
+      case 'ibada': return isSwahili ? 'Ibada' : 'Worship';
+      case 'shule_ya_jumapili': return isSwahili ? 'S. ya Jumapili' : 'Sunday School';
+      case 'tafuta_kanisa': return isSwahili ? 'Tafuta Kanisa' : 'Find Church';
+      case 'wakati_wa_sala': return isSwahili ? 'Nyakati za Sala' : 'Prayer Times';
+      case 'qibla': return 'Qibla';
+      case 'quran': return isSwahili ? 'Qurani' : 'Quran';
+      case 'kalenda_hijri': return isSwahili ? 'Kalenda Hijri' : 'Hijri Calendar';
+      case 'ramadan': return isSwahili ? 'Ramadhani' : 'Ramadan';
+      case 'zaka': return isSwahili ? 'Zaka' : 'Zakat';
+      case 'dua': return 'Dua';
+      case 'hadith': return isSwahili ? 'Hadithi' : 'Hadith';
+      case 'tafuta_msikiti': return isSwahili ? 'Tafuta Msikiti' : 'Find Mosque';
+      case 'maulid': return 'Maulid';
+      // Health (new)
+      case 'ambulance': return isSwahili ? 'Ambulansi' : 'Ambulance';
+      // Education
+      case 'my_class': return isSwahili ? 'Darasa Langu' : 'My Class';
+      case 'timetable': return isSwahili ? 'Ratiba' : 'Timetable';
+      case 'assignments': return isSwahili ? 'Kazi' : 'Assignments';
+      case 'class_chat': return isSwahili ? 'Gumzo' : 'Class Chat';
+      case 'class_notes': return isSwahili ? 'Maelezo' : 'Notes';
+      case 'exam_prep': return isSwahili ? 'Mitihani' : 'Exam Prep';
+      case 'results': return isSwahili ? 'Matokeo' : 'Results';
+      case 'fee_status': return isSwahili ? 'Ada' : 'Fee Status';
+      case 'library': return isSwahili ? 'Maktaba' : 'Library';
+      case 'campus_news': return isSwahili ? 'Habari' : 'Campus News';
+      case 'study_groups': return isSwahili ? 'Vikundi' : 'Study Groups';
+      case 'past_papers': return isSwahili ? 'Mitihani ya Zamani' : 'Past Papers';
+      case 'newton': return 'Newton AI';
+      case 'career': return isSwahili ? 'Kazi' : 'Career';
+      // Security
+      case 'police': return isSwahili ? 'Polisi' : 'Police';
+      case 'traffic': return isSwahili ? 'Trafiki' : 'Traffic';
+      case 'neighbourhood_watch': return isSwahili ? 'Ulinzi' : 'Watch';
+      case 'alerts': return isSwahili ? 'Tahadhari' : 'Alerts';
       default: return id;
     }
   }
 
-  /// For own profile: uses the same "My X" getters as myOrders, myProducts, etc.
+  /// For own profile: uses "My X" pattern for social tabs, plain label for service tabs.
   String profileTabLabelOwn(String id) {
     switch (id) {
+      // Social tabs get "My" prefix
       case 'posts': return myPosts;
       case 'photos': return myPhotos;
       case 'videos': return myVideos;
@@ -371,7 +508,8 @@ class AppStrings {
       case 'shop': return myShop;
       case 'friends': return myFriends;
       case 'about': return about;
-      default: return isSwahili ? '$id yangu' : 'My $id';
+      // All other tabs: use the same label as profileTabLabel (no "My" prefix)
+      default: return profileTabLabel(id);
     }
   }
 
@@ -1492,4 +1630,21 @@ class AppStrings {
   String get shangaziBrewing => isSwahili ? 'Shangazi anapika chai...' : 'Shangazi is brewing tea...';
   String get confirmAction => isSwahili ? 'Thibitisha' : 'Confirm';
   String get cancelAction => isSwahili ? 'Ghairi' : 'Cancel';
+
+  // ——— Tajirika (Partner Program) ———
+  String get tajirika => 'Tajirika';
+  String get partnerDashboard => isSwahili ? 'Dashibodi ya Mshirika' : 'Partner Dashboard';
+  String get joinTajirika => isSwahili ? 'Jiunge na Tajirika' : 'Join Tajirika';
+  String get registerNow => isSwahili ? 'Jisajili Sasa' : 'Register Now';
+  String get partnerRegistration => isSwahili ? 'Usajili wa Mshirika' : 'Partner Registration';
+  String get verificationStatus => isSwahili ? 'Hali ya Uthibitisho' : 'Verification Status';
+  String get partnerProfile => isSwahili ? 'Wasifu wa Mshirika' : 'Partner Profile';
+  String get portfolioManager => isSwahili ? 'Kazi Zangu' : 'My Portfolio';
+  String get trainingHub => isSwahili ? 'Kituo cha Mafunzo' : 'Training Hub';
+  String get earningsOverview => isSwahili ? 'Muhtasari wa Mapato' : 'Earnings Overview';
+  String get referralCenter => isSwahili ? 'Kituo cha Rufaa' : 'Referral Center';
+  String get skillCertification => isSwahili ? 'Ujuzi na Vyeti' : 'Skills & Certification';
+  String get partnerSettings => isSwahili ? 'Mipangilio ya Mshirika' : 'Partner Settings';
+  String get referralCode => isSwahili ? 'Nambari ya Rufaa' : 'Referral Code';
+  String get deactivateAccount => isSwahili ? 'Zima Akaunti' : 'Deactivate Account';
 }
