@@ -132,7 +132,11 @@ dependencies:
   geolocator: ^13.0.2
   google_maps_flutter: ^2.10.0
   flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
   share_plus: ^12.0.1
+  pdf: ^3.11.1
+  printing: ^5.13.0
+  add_2_calendar: ^3.0.1
   qr_flutter: ^4.1.0
 
   # AdMob monetization
@@ -181,6 +185,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
+  sqflite_common_ffi: ^2.3.4+1
 
 flutter_launcher_icons:
   android: true
@@ -204,6 +209,7 @@ flutter:
 
   assets:
     - assets/images/games/
+    - assets/filter_assets/wigs_processed/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
