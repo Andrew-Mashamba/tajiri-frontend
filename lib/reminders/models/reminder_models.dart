@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 
 bool _parseBool(dynamic v, [bool fallback = false]) {
   if (v is bool) return v;
-  if (v is int) return v == 1;
+  if (v is int) return v != 0;
   if (v is String) return v == '1' || v == 'true';
   return fallback;
 }
+
+const Object _kSentinel = Object();
 
 // ── ReminderCategory ──────────────────────────────────────────────────────
 
@@ -198,24 +200,24 @@ class ReminderItem {
   ReminderItem copyWith({
     String? id,
     String? title,
-    String? subtitle,
+    Object? subtitle = _kSentinel,
     DateTime? dueAt,
     ReminderCategory? category,
     ReminderRepeat? repeat,
     bool? isDone,
     bool? isStandalone,
-    String? sourceRoute,
+    Object? sourceRoute = _kSentinel,
   }) {
     return ReminderItem(
       id: id ?? this.id,
       title: title ?? this.title,
-      subtitle: subtitle ?? this.subtitle,
+      subtitle: subtitle == _kSentinel ? this.subtitle : subtitle as String?,
       dueAt: dueAt ?? this.dueAt,
       category: category ?? this.category,
       repeat: repeat ?? this.repeat,
       isDone: isDone ?? this.isDone,
       isStandalone: isStandalone ?? this.isStandalone,
-      sourceRoute: sourceRoute ?? this.sourceRoute,
+      sourceRoute: sourceRoute == _kSentinel ? this.sourceRoute : sourceRoute as String?,
     );
   }
 }
