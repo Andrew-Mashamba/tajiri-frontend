@@ -246,6 +246,18 @@ export 'services/project_service.dart' show ProjectService;
 
 ---
 
+## User Employment Profile Update
+
+When a business owner registers a team member, the platform user's employment profile is updated automatically. This means:
+
+- On `POST /business/employees` success, the backend sets the linked user's profile fields: `employer` (business name), `job_title` (position), `employment_start_date`, `contract_type`.
+- On `DELETE /business/employees/{id}`, the backend clears those fields (sets `employer` and `job_title` to null, marks employment as ended).
+- On `PUT /business/employees/{id}`, the backend syncs any changed `position` or `contractType` to the user's profile.
+
+The frontend does not need to make a separate API call — the backend handles profile sync as a side-effect of the employee CRUD endpoints. The backend `ask_backend.sh` prompt must explicitly request this behaviour.
+
+---
+
 ## Backend Requirements
 
 Both subsystems require new Laravel routes. Use `./scripts/ask_backend.sh` to request:
