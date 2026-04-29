@@ -98,6 +98,7 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'kikoba', label: 'Kikoba', icon: 'savings', enabled: true, order: 12),
     ProfileTabConfig(id: 'investments', label: 'Invest', icon: 'trending_up', enabled: true, order: 14),
     ProfileTabConfig(id: 'loans', label: 'Loans', icon: 'request_quote', enabled: true, order: 15),
+    ProfileTabConfig(id: 'my_wallet', label: 'Wallet', icon: 'account_balance_wallet', enabled: true, order: 16),
 
     // ── Health & Wellness ───────────────────────────────────────────
     ProfileTabConfig(id: 'doctor', label: 'Doctor', icon: 'medical_services', enabled: true, order: 16),
@@ -113,6 +114,8 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'family', label: 'Family', icon: 'family_restroom', enabled: true, order: 22),
     ProfileTabConfig(id: 'skincare', label: 'Skin Care', icon: 'face', enabled: true, order: 23),
     ProfileTabConfig(id: 'hair_nails', label: 'Hair & Nails', icon: 'content_cut', enabled: true, order: 24),
+    ProfileTabConfig(id: 'my_children', label: 'My Children', icon: 'child_care', enabled: true, order: 25),
+    ProfileTabConfig(id: 'my_parents', label: 'My Parents', icon: 'elderly', enabled: true, order: 26),
 
     // ── Business ────────────────────────────────────────────────────
     // Core
@@ -142,6 +145,7 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'biz_tenders', label: 'Tenders', icon: 'gavel', enabled: true, order: 44),
     // Operations
     ProfileTabConfig(id: 'biz_appointments', label: 'Booking', icon: 'event', enabled: true, order: 45),
+    ProfileTabConfig(id: 'accounting', label: 'Accounting', icon: 'auto_graph', enabled: true, order: 46),
 
     // ── Daily Life & Home ───────────────────────────────────────────
     ProfileTabConfig(id: 'food', label: 'Food', icon: 'restaurant', enabled: true, order: 46),
@@ -221,6 +225,8 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'events', label: 'Events', icon: 'event', enabled: true, order: 61),
     ProfileTabConfig(id: 'travel', label: 'Travel', icon: 'flight', enabled: true, order: 62),
     ProfileTabConfig(id: 'games', label: 'Games', icon: 'sports_esports', enabled: true, order: 63),
+    ProfileTabConfig(id: 'news', label: 'News', icon: 'newspaper', enabled: true, order: 64),
+    ProfileTabConfig(id: 'reminders', label: 'Reminders', icon: 'alarm', enabled: true, order: 65),
 
     // ── Education ─────────────────────────────────────────────────────
     ProfileTabConfig(id: 'my_class', label: 'My Class', icon: 'school', enabled: true, order: 100),
@@ -261,7 +267,7 @@ class ProfileTabDefaults {
     ProfileTabCategory(
       id: 'finance',
       label: 'FINANCE',
-      tabIds: ['budget', 'kikoba', 'investments', 'loans', 'bills'],
+      tabIds: ['budget', 'kikoba', 'investments', 'loans', 'my_wallet', 'bills'],
     ),
     ProfileTabCategory(
       id: 'health',
@@ -271,7 +277,7 @@ class ProfileTabDefaults {
     ProfileTabCategory(
       id: 'family',
       label: 'WOMEN & FAMILY',
-      tabIds: ['my_circle', 'my_pregnancy', 'my_baby', 'family', 'skincare', 'hair_nails'],
+      tabIds: ['my_circle', 'my_pregnancy', 'my_baby', 'family', 'skincare', 'hair_nails', 'my_children', 'my_parents'],
     ),
     ProfileTabCategory(
       id: 'work',
@@ -283,13 +289,13 @@ class ProfileTabDefaults {
         'biz_expenses', 'biz_tax', 'biz_credit',
         'biz_employees', 'biz_payroll',
         'biz_suppliers', 'biz_po', 'biz_tenders',
-        'biz_appointments',
+        'biz_appointments', 'accounting',
       ],
     ),
     ProfileTabCategory(
       id: 'lifestyle',
       label: 'LIFESTYLE',
-      tabIds: ['food', 'transport', 'services', 'housing', 'nightlife', 'events', 'travel', 'games'],
+      tabIds: ['food', 'transport', 'services', 'housing', 'nightlife', 'events', 'travel', 'games', 'news', 'reminders'],
     ),
     ProfileTabCategory(
       id: 'official',

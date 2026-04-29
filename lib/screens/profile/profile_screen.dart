@@ -160,6 +160,11 @@ import '../../traffic/traffic_module.dart';
 import '../../neighbourhood_watch/neighbourhood_watch_module.dart';
 import '../../alerts/alerts_module.dart';
 import '../../nightlife/nightlife_module.dart';
+import '../../my_children/my_children_module.dart';
+import '../../my_parents/my_parents_module.dart';
+import '../../news/news_module.dart';
+import '../../reminders/reminders_module.dart';
+import '../../accounting/accounting_module.dart';
 // Education
 import '../../my_class/my_class_module.dart';
 import '../../timetable/timetable_module.dart';
@@ -2077,7 +2082,7 @@ class _ProfileTabPage extends StatelessWidget {
         return BudgetModule(userId: userId);
       case 'kikoba':
         return KikobaModule(userId: userId);
-      case 'banking':
+      case 'my_wallet':
         return MyWalletModule(userId: userId);
       case 'investments':
         return InvestmentsModule(userId: userId);
@@ -2428,6 +2433,18 @@ class _ProfileTabPage extends StatelessWidget {
         return StudyGroupsModule(userId: userId);
       case 'career':
         return CareerModule(userId: userId);
+
+      // ── New Modules ──
+      case 'my_children':
+        return MyChildrenModule(userId: userId);
+      case 'my_parents':
+        return MyParentsModule(userId: userId);
+      case 'news':
+        return NewsModule(userId: userId);
+      case 'reminders':
+        return RemindersModule(userId: userId);
+      case 'accounting':
+        return AccountingModule(userId: userId);
 
       default:
         return Center(
