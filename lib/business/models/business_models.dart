@@ -2005,3 +2005,90 @@ class BusinessAppointment {
         'notes': notes,
       };
 }
+
+
+// ─── Supplier Catalog ───────────────────────────────────────────────────────
+
+enum SupplierCatalogItemKind { product, service }
+
+class SupplierCatalogItem {
+  final int id;
+  final String name;
+  final String? description;
+  final String? detail;
+  final SupplierCatalogItemKind kind;
+  final String? imageUrl;
+  final List<String>? imageUrls;
+  final double unitPrice;
+  final double? compareAtPrice;
+  final String? currency;
+  final int? stockQuantity;
+  final int defaultQuantity;
+  final int? quantity;
+  final String? category;
+  final String? condition;
+  final String? availability;
+  final int? durationMinutes;
+  final String? pricingType;
+  final bool? allowDelivery;
+  final bool? allowPickup;
+  final bool? allowShipping;
+  final double? deliveryFee;
+  final String? locationName;
+
+  SupplierCatalogItem({
+    required this.id,
+    required this.name,
+    this.description,
+    this.detail,
+    this.kind = SupplierCatalogItemKind.product,
+    this.imageUrl,
+    this.imageUrls,
+    this.unitPrice = 0,
+    this.compareAtPrice,
+    this.currency,
+    this.stockQuantity,
+    this.defaultQuantity = 1,
+    this.quantity,
+    this.category,
+    this.condition,
+    this.availability,
+    this.durationMinutes,
+    this.pricingType,
+    this.allowDelivery,
+    this.allowPickup,
+    this.allowShipping,
+    this.deliveryFee,
+    this.locationName,
+  });
+
+  factory SupplierCatalogItem.fromJson(Map<String, dynamic> json) {
+    return SupplierCatalogItem(
+      id: _parseInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      detail: json['detail']?.toString(),
+      kind: json['kind']?.toString() == 'service'
+          ? SupplierCatalogItemKind.service
+          : SupplierCatalogItemKind.product,
+      imageUrl: json['image_url']?.toString(),
+      imageUrls: (json['image_urls'] as List?)?.map((e) => e.toString()).toList(),
+      unitPrice: _parseDouble(json['unit_price']),
+      compareAtPrice: _parseDouble(json['compare_at_price']),
+      currency: json['currency']?.toString(),
+      stockQuantity: _parseInt(json['stock_quantity']),
+      defaultQuantity: _parseInt(json['default_quantity']) ?? 1,
+      quantity: _parseInt(json['quantity']),
+      category: json['category']?.toString(),
+      condition: json['condition']?.toString(),
+      availability: json['availability']?.toString(),
+      durationMinutes: _parseInt(json['duration_minutes']),
+      pricingType: json['pricing_type']?.toString(),
+      allowDelivery: json['allow_delivery'] as bool?,
+      allowPickup: json['allow_pickup'] as bool?,
+      allowShipping: json['allow_shipping'] as bool?,
+      deliveryFee: _parseDouble(json['delivery_fee']),
+      locationName: json['location_name']?.toString(),
+    );
+  }
+}
