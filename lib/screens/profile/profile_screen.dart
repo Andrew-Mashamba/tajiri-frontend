@@ -180,6 +180,26 @@ import '../../library/library_module.dart';
 import '../../campus_news/campus_news_module.dart';
 import '../../study_groups/study_groups_module.dart';
 import '../../career/career_module.dart';
+import '../../appointments/appointments_module.dart';
+import '../../calls/calls_module.dart';
+import '../../consultations/consultations_module.dart';
+import '../../crb/crb_module.dart';
+import '../../customer_orders/customer_orders_module.dart';
+import '../../debts/debts_module.dart';
+import '../../engagements/engagements_module.dart';
+import '../../expenses/expenses_module.dart';
+import '../../income/income_module.dart';
+import '../../invoices/invoices_module.dart';
+import '../../orders/orders_module.dart';
+import '../../payroll/payroll_module.dart';
+import '../../products/products_module.dart';
+import '../../projects/projects_module.dart';
+import '../../recurring/recurring_module.dart';
+import '../../revenue/revenue_module.dart';
+import '../../tax/tax_module.dart';
+import '../../team/team_module.dart';
+import '../../transactions/transactions_module.dart';
+import '../../biz_services/biz_services_module.dart';
 class ProfileScreen extends StatefulWidget {
   final int userId;
   final int? currentUserId;
@@ -2445,6 +2465,48 @@ class _ProfileTabPage extends StatelessWidget {
         return RemindersModule(userId: userId);
       case 'accounting':
         return AccountingModule(userId: userId);
+
+      // ── Additional Modules ──
+      case 'appointments':
+        return AppointmentsModule(userId: userId);
+      case 'calls':
+        return CallsModule(userId: userId);
+      case 'consultations':
+        return ConsultationsModule(userId: userId);
+      case 'crb':
+        return CrbModule(userId: userId);
+      case 'customer_orders':
+        return CustomerOrdersModule(userId: userId);
+      case 'debts':
+        return DebtsModule(userId: userId);
+      case 'engagements':
+        return EngagementsModule(userId: userId);
+      case 'expenses':
+        return ExpensesModule(userId: userId);
+      case 'income':
+        return IncomeModule(userId: userId);
+      case 'invoices':
+        return InvoicesModule(userId: userId);
+      case 'orders':
+        return OrdersModule(userId: userId);
+      case 'payroll':
+        return PayrollModule(userId: userId);
+      case 'products':
+        return ProductsModule(userId: userId);
+      case 'projects':
+        return ProjectsModule(userId: userId);
+      case 'recurring':
+        return RecurringModule(userId: userId);
+      case 'revenue':
+        return RevenueModule(userId: userId);
+      case 'tax':
+        return TaxModule(userId: userId);
+      case 'team':
+        return TeamModule(userId: userId);
+      case 'transactions':
+        return TransactionsModule(userId: userId);
+      case 'biz_services':
+        return BizServicesModule(userId: userId);
 
       default:
         return Center(

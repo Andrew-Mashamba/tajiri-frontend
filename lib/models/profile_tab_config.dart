@@ -249,6 +249,28 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'traffic', label: 'Traffic', icon: 'traffic', enabled: true, order: 121),
     ProfileTabConfig(id: 'neighbourhood_watch', label: 'Neighbourhood Watch', icon: 'shield', enabled: true, order: 122),
     ProfileTabConfig(id: 'alerts', label: 'Alerts', icon: 'notifications_active', enabled: true, order: 123),
+
+    // ── Additional Modules ─────────────────────────────────────────────
+    ProfileTabConfig(id: 'appointments', label: 'Appointments', icon: 'calendar_today', enabled: true, order: 130),
+    ProfileTabConfig(id: 'calls', label: 'Calls', icon: 'call', enabled: true, order: 131),
+    ProfileTabConfig(id: 'consultations', label: 'Consultations', icon: 'medical_services', enabled: true, order: 132),
+    ProfileTabConfig(id: 'crb', label: 'CRB', icon: 'credit_score', enabled: true, order: 133),
+    ProfileTabConfig(id: 'customer_orders', label: 'Orders', icon: 'shopping_bag', enabled: true, order: 134),
+    ProfileTabConfig(id: 'debts', label: 'Debts', icon: 'account_balance_wallet', enabled: true, order: 135),
+    ProfileTabConfig(id: 'engagements', label: 'Engagements', icon: 'handshake', enabled: true, order: 136),
+    ProfileTabConfig(id: 'expenses', label: 'Expenses', icon: 'money_off', enabled: true, order: 137),
+    ProfileTabConfig(id: 'income', label: 'Income', icon: 'attach_money', enabled: true, order: 138),
+    ProfileTabConfig(id: 'invoices', label: 'Invoices', icon: 'receipt_long', enabled: true, order: 139),
+    ProfileTabConfig(id: 'orders', label: 'Incoming', icon: 'notifications', enabled: true, order: 140),
+    ProfileTabConfig(id: 'payroll', label: 'Payroll', icon: 'payments', enabled: true, order: 141),
+    ProfileTabConfig(id: 'products', label: 'Products', icon: 'inventory_2', enabled: true, order: 142),
+    ProfileTabConfig(id: 'projects', label: 'Projects', icon: 'folder_open', enabled: true, order: 143),
+    ProfileTabConfig(id: 'recurring', label: 'Recurring', icon: 'repeat', enabled: true, order: 144),
+    ProfileTabConfig(id: 'revenue', label: 'Revenue', icon: 'trending_up', enabled: true, order: 145),
+    ProfileTabConfig(id: 'tax', label: 'Tax', icon: 'calculate', enabled: true, order: 146),
+    ProfileTabConfig(id: 'team', label: 'Team', icon: 'groups', enabled: true, order: 147),
+    ProfileTabConfig(id: 'transactions', label: 'Transactions', icon: 'swap_horiz', enabled: true, order: 148),
+    ProfileTabConfig(id: 'biz_services', label: 'Services', icon: 'business_center', enabled: true, order: 149),
   ];
 
   /// Ordered category definitions for the profile tab grid.
@@ -335,6 +357,16 @@ class ProfileTabDefaults {
       id: 'security',
       label: 'SECURITY',
       tabIds: ['police', 'traffic', 'neighbourhood_watch', 'alerts'],
+    ),
+    ProfileTabCategory(
+      id: 'more',
+      label: 'MORE',
+      tabIds: [
+        'appointments', 'calls', 'consultations', 'crb', 'customer_orders',
+        'debts', 'engagements', 'expenses', 'income', 'invoices',
+        'orders', 'payroll', 'products', 'projects', 'recurring',
+        'revenue', 'tax', 'team', 'transactions', 'biz_services',
+      ],
     ),
   ];
 
