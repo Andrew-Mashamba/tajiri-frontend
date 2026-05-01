@@ -1,0 +1,38 @@
+---
+description: Where TAJIRI agent skills and memory live (Cursor); session and authority order
+alwaysApply: true
+---
+
+# TAJIRI Cursor context
+
+## Authority (highest first)
+
+1. User instructions in the chat  
+2. Repo root `CLAUDE.md` and `docs/DESIGN.md`  
+3. Files under `.cursor/skills/` (full `SKILL.md` bodies)  
+4. Other project docs  
+
+If a skill disagrees with `CLAUDE.md` or `docs/DESIGN.md`, follow the repo docs.
+
+## Skills (ported from Claude Code)
+
+| Area | Path |
+|------|------|
+| Index / triggers | `.cursor/skills/SKILLS_SUMMARY.md` |
+| Social platform (feed, messages, clips, Michango, …) | `.cursor/skills/tajiri-platform/SKILL.md` |
+| Flutter / Dart | `.cursor/skills/flutter-expert/SKILL.md` and `references/` |
+| UI / Swahili / Material | `.cursor/skills/design-guidelines/SKILL.md` |
+| Offline, Hive, sync | `.cursor/skills/mobile-offline-support/SKILL.md` |
+| Session checkpoints | `.cursor/skills/session-memory/SKILL.md` |
+| Long-term project memory (`--learn`) | `.cursor/skills/project-memory-store/SKILL.md` |
+
+Read the relevant `SKILL.md` when the task matches its domain.
+
+## Memory files
+
+- Session: `.cursor/memory/session-state.md` (restore at session start when useful)  
+- Project knowledge: `.cursor/memory/project/*.md`  
+
+## Claude-only config
+
+`.claude/settings.json` enabled Claude Code plugins (e.g. superpowers). Cursor does not load those; use this ruleset and the skill files above instead.

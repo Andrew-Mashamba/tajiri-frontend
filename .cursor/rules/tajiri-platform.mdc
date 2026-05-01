@@ -1,0 +1,13 @@
+---
+description: Social features — feeds, stories, messaging, clips, live, wallet, Michango
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# TAJIRI platform features
+
+For feeds, stories, clips, messaging, live streams, engagement, music, groups, events, wallet, and Michango (crowdfunding), read:
+
+`.cursor/skills/tajiri-platform/SKILL.md`
+
+Combine with `tajiri-flutter.mdc` and `CLAUDE.md` for API base URL, services layout, and real-time patterns (REST + Firestore + WebSockets as documented in the repo).

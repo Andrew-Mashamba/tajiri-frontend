@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
+import '../../reminders/models/reminder_models.dart' show ReminderItem;
 import '../models/calendar_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -130,4 +131,12 @@ class CalendarService {
       return CalendarResult(success: false, message: 'Kosa: $e');
     }
   }
+
+  // STUB — calendar reminders aggregator. Returns empty until backend wires
+  // /calendar/upcoming-with-reminders.
+  Future<List<ReminderItem>> getUpcomingWithReminders({
+    required int userId,
+    required String token,
+    bool strict = false,
+  }) async => const [];
 }

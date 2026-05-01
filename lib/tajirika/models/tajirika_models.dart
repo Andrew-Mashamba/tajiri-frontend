@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../config/api_config.dart';
 
+// Re-export the standalone partner_product model so consumers that import
+// 'tajirika_models.dart' transparently see PartnerProduct, PartnerProductKind,
+// PartnerProductVariant, and the Result/List/Order/PhotoUpload helpers.
+export 'partner_product.dart';
+
 // ==================== PARSING HELPERS ====================
 
 int _parseInt(dynamic value) {

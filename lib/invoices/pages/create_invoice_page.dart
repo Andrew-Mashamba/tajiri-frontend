@@ -336,7 +336,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           id: null,
           userId: user.id,
           name: user.fullName.isNotEmpty ? user.fullName : (user.username ?? ''),
-          type: BusinessType.soleProprietor,
+          type: BusinessType.sole_proprietor,
         );
       });
     } else if (bizList.length == 1) {

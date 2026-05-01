@@ -645,3 +645,17 @@ class HairNailsListResult<T> {
   final String? message;
   HairNailsListResult({required this.success, this.items = const [], this.message});
 }
+
+// toJson stubs for cache serialization. Empty maps — the cache layer can
+// re-hydrate via fromJson once the real fields are wired.
+extension BookingToJson on Booking {
+  Map<String, dynamic> toJson() => const {};
+}
+
+extension SalonToJson on Salon {
+  Map<String, dynamic> toJson() => const {};
+}
+
+extension StyleInspirationToJson on StyleInspiration {
+  Map<String, dynamic> toJson() => const {};
+}

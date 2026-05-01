@@ -217,4 +217,62 @@ class FoodService {
       return FoodResult(success: false, message: 'Kosa: $e');
     }
   }
+
+  // -------------------------------------------------------------------------
+  // STUBS — methods consumed by chef/beneficiary/food-runner pages whose
+  // backend endpoints are not yet implemented. Return null at runtime; pages
+  // that call these will need real implementations before they work.
+  // -------------------------------------------------------------------------
+  Future<dynamic> acceptCuratedReservation({Object? partnerUserId, Object? reservationId}) async => null;
+  Future<dynamic> addFavourite({Object? targetId, Object? targetType, Object? userId}) async => null;
+  Future<dynamic> cancelChefReservation({Object? reservationId, Object? userId}) async => null;
+  Future<dynamic> cascadeChefListing({Object? listingId, Object? userId}) async => null;
+  Future<dynamic> claimFoodRun({Object? runId, Object? runnerUserId}) async => null;
+  Future<dynamic> closeBeneficiaryNeed({Object? needId, Object? userId}) async => null;
+  Future<dynamic> confirmReceipt({Object? listingId, Object? orgId, Object? userId}) async => null;
+  Future<dynamic> createBeneficiaryNeed({Object? orgId, Object? userId, Object? title, Object? description, Object? quantity, Object? unit, Object? deadline, Object? daysOfWeek, Object? deliveryMode, Object? dietaryConstraints, Object? dueDate, Object? durationWeeks, Object? mealType, Object? needType, Object? portionsNeeded}) async => null;
+  Future<dynamic> createCashDonation({Object? amount, Object? donorType, Object? donorUserId, Object? orgId, Object? notes, Object? contactEmail, Object? contactPerson, Object? contactPhone, Object? funguLaKumiTagged, Object? organizationName, Object? paymentMethod, Object? paymentReference, Object? purpose, Object? registrationNumber, Object? zakaTagged}) async => null;
+  Future<dynamic> createChefListing({Object? userId, Object? title, Object? description, Object? portions, Object? pricePerPortion, Object? availableUntil, Object? deliveryMode, Object? mode, Object? customAmount, Object? cuisineTags, Object? isGiveaway, Object? beneficiaryOrgId, Object? cascadeOrgId, Object? cookedAt, Object? deliveryEnabled, Object? deliveryFeeTzs, Object? deliveryRadiusKm, Object? dietaryTags, Object? originalPriceTzs, Object? photoUrl, Object? pickupAddress, Object? pickupWindowEnd, Object? pickupWindowStart, Object? portionsTotal, Object? priceTzs, Object? recipientType, Object? selectionMode}) async => null;
+  Future<dynamic> createChefProduct({Object? title, Object? userId, Object? description, Object? price, Object? quantity, Object? cuisineTags, Object? availableUntil, Object? basePriceTzs, Object? leadTimeHours, Object? minQuantity, Object? mode, Object? photos, Object? tags}) async => null;
+  Future<dynamic> createNeedPledge({Object? needId, Object? donorUserId, Object? quantity, Object? notes, Object? portions, Object? note, Object? contactPhone, Object? deliveryDate}) async => null;
+  Future<dynamic> createReview({Object? stars, Object? tags, Object? targetId, Object? targetType, Object? text, Object? userId}) async => null;
+  Future<dynamic> followBeneficiaryOrg({Object? orgId, Object? userId}) async => null;
+  Future<dynamic> getBeneficiaryFollowState({Object? orgId, Object? userId}) async => null;
+  Future<dynamic> getBeneficiaryOrg(Object? orgId, {Object? userId}) async => null;
+  Future<dynamic> getChefListing(Object? listingId, {Object? userId}) async => null;
+  Future<dynamic> getChefListingContact(Object? listingId, [Object? userId]) async => null;
+  Future<dynamic> getChefListings({Object? mode, Object? userId, Object? page, Object? perPage, Object? location, Object? cuisine}) async => null;
+  Future<dynamic> getChefProduct(Object? productId, {Object? userId}) async => null;
+  Future<dynamic> getFoodEmergency(Object? userId) async => null;
+  Future<dynamic> getFoodPreferences({Object? userId}) async => null;
+  Future<dynamic> getMyBeneficiaryOrg(Object? userId) async => null;
+  Future<dynamic> incomingDonations({Object? orgId, Object? userId}) async => null;
+  Future<dynamic> listBeneficiaryNeeds({Object? limit, Object? type, Object? orgId, Object? status, Object? ward}) async => null;
+  Future<dynamic> listBeneficiaryOrgs({Object? limit, Object? status, Object? type, Object? q, Object? userId, Object? page, Object? perPage}) async => null;
+  Future<dynamic> listCuratedReservations({Object? listingId, Object? partnerUserId}) async => null;
+  Future<dynamic> listFavourites([Object? userId]) async => null;
+  Future<dynamic> listFollowedBeneficiaryOrgs([Object? userId]) async => null;
+  Future<dynamic> listFoodRuns({Object? status, Object? userId}) async => null;
+  Future<dynamic> listReviews({Object? targetId, Object? targetType, Object? page}) async => null;
+  Future<dynamic> markChefReservationDelivered({Object? reservationId, Object? userId}) async => null;
+  Future<dynamic> markChefReservationOutForDelivery({Object? reservationId, Object? userId}) async => null;
+  Future<dynamic> markChefReservationPickedUp({Object? reservationId, Object? userId}) async => null;
+  Future<dynamic> myFoodRuns({Object? userId}) async => null;
+  Future<dynamic> orderChefProduct({Object? productId, Object? userId, Object? quantity, Object? deliveryMode, Object? deliveryAddress, Object? requestedFor, Object? notes}) async => null;
+  Future<dynamic> pauseBeneficiaryNeed({Object? needId, Object? userId}) async => null;
+  Future<dynamic> registerBeneficiaryOrg([Object? body, Object? userId, Object? name, Object? type, Object? location, Object? phone]) async => null;
+  Future<dynamic> rejectCuratedReservation({Object? partnerUserId, Object? reservationId}) async => null;
+  Future<dynamic> releaseFoodRun({Object? reason, Object? runId, Object? runnerUserId}) async => null;
+  Future<dynamic> removeFavourite({Object? favouriteId, Object? userId}) async => null;
+  Future<dynamic> reportBeneficiaryOrg({Object? orgId, Object? reason, Object? userId, Object? detail}) async => null;
+  Future<dynamic> reserveChefListing({Object? deliveryMode, Object? listingId, Object? portions, Object? userId, Object? whyMe}) async => null;
+  Future<dynamic> resumeBeneficiaryNeed({Object? needId, Object? userId}) async => null;
+  Future<dynamic> search({Object? query, Object? type}) async => null;
+  Future<dynamic> unfollowBeneficiaryOrg({Object? orgId, Object? userId}) async => null;
+  Future<dynamic> updateChefListing({Object? addPortions, Object? close, Object? extendMinutes, Object? flipToGiveaway, Object? id, Object? userId}) async => null;
+  Future<dynamic> updateChefProduct({Object? productId, Object? title, Object? userId, Object? description, Object? price, Object? basePriceTzs, Object? leadTimeHours, Object? minQuantity, Object? mode, Object? photos, Object? tags}) async => null;
+  Future<dynamic> updateFoodPreferences({Object? allergens, Object? autoTagFungu, Object? autoTagZakat, Object? defaultPaymentMethod, Object? defaultWard, Object? dietaryTags, Object? hideFromCommunityFeed, Object? hideOnLeaderboard, Object? maxDeliveryRadiusKm, Object? notificationCategories, Object? quietHoursEnd, Object? quietHoursStart, Object? showSaidiaRail, Object? userId}) async => null;
+  Future<dynamic> updateFoodRunStatus({Object? runId, Object? runnerUserId, Object? status}) async => null;
+  Future<dynamic> uploadChefListingPhoto({Object? file, Object? userId}) async => null;
+  Future<dynamic> uploadChefProductPhoto({Object? file, Object? userId}) async => null;
 }

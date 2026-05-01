@@ -28,8 +28,11 @@ const Color _kDivider = Color(0xFFE0E0E0);
 /// sort bar, and infinite-scroll product grid.
 class ShopScreen extends StatefulWidget {
   final int currentUserId;
+  // Optional pre-filled search to deep-link from product detail share-flows.
+  // Currently accepted but not yet wired into the search controller.
+  final String? initialSearchQuery;
 
-  const ShopScreen({super.key, required this.currentUserId});
+  const ShopScreen({super.key, required this.currentUserId, this.initialSearchQuery});
 
   @override
   State<ShopScreen> createState() => _ShopScreenState();

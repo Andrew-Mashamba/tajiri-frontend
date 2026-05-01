@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../business/models/business_models.dart';
 import '../../business/services/business_service.dart';
+import '../../tra/models/tra_models.dart' show TaxDeadline;
 import '../../reminders/services/reminders_service.dart';
 import '../../services/local_storage_service.dart';
 
@@ -570,7 +571,7 @@ class _TaxPageState extends State<TaxPage> {
   Widget _traReminders(bool sw) {
     final rows = _deadlines.isNotEmpty
         ? _deadlines
-            .map((d) => _reminderRow(d.tax, d.deadline))
+            .map((d) => _reminderRow(d.tax, DateFormat('yyyy-MM-dd').format(d.deadline)))
             .toList()
         : _fallbackDeadlines
             .map((d) => _reminderRow(d['tax']!, d['deadline']!))
@@ -693,7 +694,7 @@ class _TaxPageState extends State<TaxPage> {
                   color: _kSecondary)),
           const SizedBox(height: 6),
           if (_deadlines.isNotEmpty)
-            ..._deadlines.map((d) => _filingRow(d.tax, d.deadline))
+            ..._deadlines.map((d) => _filingRow(d.tax, DateFormat('yyyy-MM-dd').format(d.deadline)))
           else ...[
             _filingRow('VAT',
                 sw ? 'Tarehe 20 ya mwezi unaofuata' : '20th of the following month'),

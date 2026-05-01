@@ -138,4 +138,8 @@ class RemindersDb {
   }
 
   ReminderItem _rowToItem(Map<String, dynamic> row) => ReminderItem.fromJson(row);
+
+  // STUB — used by RemindersService when reconciling remote rows. No-op until
+  // a real upsert implementation lands.
+  Future<void> upsertFromRemoteFetch(ReminderItem item, {required int userId}) async {}
 }

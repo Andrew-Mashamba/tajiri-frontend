@@ -49,12 +49,8 @@ class DebtsOverviewEntry extends StatelessWidget {
               color: _kPrimary,
             ),
           );
-          if (!embedInParent) {
-            return const StandaloneRouteShell(
-              titleKey: 'biz_debts',
-              child: loading,
-            );
-          }
+          // StandaloneRouteShell is not yet implemented — fall back to a
+          // plain Scaffold for both embedded and standalone presentations.
           return const Scaffold(
             backgroundColor: _kBackground,
             body: loading,

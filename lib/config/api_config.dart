@@ -21,6 +21,11 @@ class ApiConfig {
     'Authorization': 'Bearer $token',
   };
 
+  // Same as [authHeaders] but skips any X-Trace-Id we'd otherwise inject;
+  // used by digest/summary endpoints where trace propagation isn't desired.
+  static Map<String, String> authHeadersWithoutTrace(String token) =>
+      authHeaders(token);
+
   /// WebSocket URL for Laravel Reverb (call signaling). If null, derived from [baseUrl] (same host, /app/{reverbAppKey}).
   /// Set explicitly if Reverb runs on a different host/port.
   static String? reverbWsUrl;

@@ -117,6 +117,25 @@ class TaxDeadline {
 
   bool get isOverdue => status == 'overdue';
   int get daysUntilDue => dueDate.difference(DateTime.now()).inDays;
+
+  // Aliases used by tax_page.dart.
+  DateTime get deadline => dueDate;
+  String get tax => taxType;
+
+  TaxDeadline copyWith({
+    int? id,
+    String? taxType,
+    DateTime? dueDate,
+    String? period,
+    String? status,
+  }) =>
+      TaxDeadline(
+        id: id ?? this.id,
+        taxType: taxType ?? this.taxType,
+        dueDate: dueDate ?? this.dueDate,
+        period: period ?? this.period,
+        status: status ?? this.status,
+      );
 }
 
 // ─── Tax Breakdown ────────────────────────────────────────────

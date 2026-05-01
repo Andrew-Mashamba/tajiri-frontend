@@ -1,0 +1,13 @@
+---
+description: UI/design — design-guidelines skill plus DESIGN.md monochromatic system
+globs: **/*.dart
+alwaysApply: false
+---
+
+# Design (TAJIRI)
+
+Read `.cursor/skills/design-guidelines/SKILL.md` for spacing, typography, Swahili UI habits, and component patterns.
+
+## Single source of truth for visuals
+
+`docs/DESIGN.md` and `CLAUDE.md` define the **monochromatic** Material 3 palette (#1A1A1A / #FAFAFA, no colorful promo buttons). If the skill shows a blue primary (`#1E88E5`) or other palette that conflicts with `docs/DESIGN.md`, follow **DESIGN.md** and existing app `ThemeData`.

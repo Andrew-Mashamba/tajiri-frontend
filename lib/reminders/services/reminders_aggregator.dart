@@ -6,6 +6,7 @@ import '../../calendar/services/calendar_service.dart';
 import '../../crb/services/crb_service.dart';
 import '../../team/services/team_service.dart';
 import '../../tenders/services/tender_service.dart';
+import '../models/reminder_event_kind.dart';
 import '../models/reminder_models.dart';
 import '../reminders_source_exception.dart';
 import 'reminders_service.dart';
@@ -109,7 +110,7 @@ class RemindersAggregator {
           strict: !lenient)),
       wrap(BusinessService.getUpcomingExpensesForReminders(token, userId,
           strict: !lenient)),
-      wrap(BusinessService.getTaxDeadlines(token, userId, strict: !lenient)),
+      wrap(BusinessService.getTaxDeadlinesForReminders(token, userId, strict: !lenient)),
       wrap(CrbService.getCrbPastDueEntries(token, userId,
           strict: !lenient)),
       wrap(TeamService.getExpiringEmployeeContracts(token, userId,

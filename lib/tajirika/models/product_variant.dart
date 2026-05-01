@@ -30,15 +30,19 @@ class ProductVariant {
 
   ProductVariant({
     required this.id,
-    required this.partnerProductId,
-    required this.labelSw,
-    required this.labelEn,
+    this.partnerProductId = 0,
+    String? labelSw,
+    String? labelEn,
+    String? labelSwahili,
+    String? labelEnglish,
     required this.priceTzs,
-    required this.leadTimeHours,
-    required this.durationMinutes,
+    int? leadTimeHours,
+    this.durationMinutes = 0,
     required this.sortOrder,
     required this.isActive,
-  });
+  })  : labelSw = labelSw ?? labelSwahili,
+        labelEn = labelEn ?? labelEnglish,
+        leadTimeHours = leadTimeHours ?? 0;
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
     return ProductVariant(
@@ -62,4 +66,9 @@ class ProductVariant {
     if (sw.isNotEmpty) return sw;
     return '—';
   }
+
+  // Aliases for callers using the longer field names.
+  String? get labelSwahili => labelSw;
+  String? get labelEnglish => labelEn;
+  String labelForLocale({bool swahili = false}) => displayLabel(swahili);
 }

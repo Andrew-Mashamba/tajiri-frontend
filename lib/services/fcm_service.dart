@@ -789,4 +789,38 @@ class FcmService {
       if (kDebugMode) debugPrint('[FCM] Token registration failed: $e');
     }
   }
+
+  // -------------------------------------------------------------------------
+  // STUBS — local-notification scheduling for skincare/hair-nails reminders.
+  // Real implementation will use flutter_local_notifications. For now no-ops.
+  // -------------------------------------------------------------------------
+  Future<void> cancelNotification(int id) async {
+    if (kDebugMode) debugPrint('[FCM] cancelNotification($id) — stub');
+  }
+
+  Future<void> scheduleSkincareZonedNotification({
+    required int notificationId,
+    required String title,
+    required String body,
+    required DateTime scheduledLocal,
+    String? target,
+    Object? match,
+  }) async {
+    if (kDebugMode) {
+      debugPrint('[FCM] scheduleSkincareZonedNotification($notificationId, $title, @$scheduledLocal) — stub');
+    }
+  }
+
+  Future<void> scheduleHairNailsZonedNotification({
+    required int notificationId,
+    required String title,
+    required String body,
+    required DateTime scheduledLocal,
+    String? target,
+    Object? match,
+  }) async {
+    if (kDebugMode) {
+      debugPrint('[FCM] scheduleHairNailsZonedNotification($notificationId, $title, @$scheduledLocal) — stub');
+    }
+  }
 }

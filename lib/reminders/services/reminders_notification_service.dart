@@ -8,6 +8,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../services/local_storage_service.dart';
+import '../models/reminder_event_kind.dart';
 import '../models/reminder_models.dart';
 import '../reminders_module.dart';
 import 'reminders_notification_schedule_store.dart';
@@ -66,7 +67,7 @@ class RemindersNotificationService {
     final storage = await LocalStorageService.getInstance();
     final useSwahili =
         storage.getLanguageCode().toLowerCase().startsWith('sw');
-    String categoryTitle(ReminderCategory c) => c.labelForLocale(useSwahili);
+    String categoryTitle(ReminderCategory c) => c.labelForLocale(swahili: useSwahili);
 
     final pending = await _plugin.pendingNotificationRequests();
     final reminderPendingIds = pending

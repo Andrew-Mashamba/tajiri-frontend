@@ -831,6 +831,7 @@ class TajirikaService {
     String? tier,
     double? minRating,
     bool? available,
+    Object? dropOffMode,
     int page = 1,
   }) async {
     try {

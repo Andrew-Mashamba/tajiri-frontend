@@ -14,6 +14,7 @@ class TeaService {
     String? message,
     String? conversationId,
     int? userId,
+    String? mode,
   }) async {
     try {
       final body = <String, dynamic>{};

@@ -1,0 +1,19 @@
+---
+description: Flutter/Dart work — use flutter-expert skill with this repo’s real stack
+globs: **/*.dart
+alwaysApply: false
+---
+
+# Flutter (TAJIRI repo)
+
+For patterns and references, read `.cursor/skills/flutter-expert/SKILL.md` and its `references/` folder.
+
+## Repo stack (overrides generic skill text)
+
+This codebase uses **no** Provider / Bloc / Riverpod (see `CLAUDE.md`). Prefer:
+
+- `setState` in widgets  
+- `ValueNotifier` and other `ChangeNotifier`-style singletons where documented  
+- `LocalStorageService` + **Hive** for persistence  
+
+When the flutter-expert skill says to use Riverpod/`Consumer`, **ignore that** for this repo unless the user explicitly asks to introduce a new state library.

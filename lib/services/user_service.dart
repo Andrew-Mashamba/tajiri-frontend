@@ -441,3 +441,29 @@ class ProfileUpdateResult {
     this.errors,
   });
 }
+
+/// Stub result for handle availability checks. The real endpoint isn't wired
+/// yet, so we report [endpointMissing] = true and the UI shows a skip-for-now
+/// state instead of a hard error.
+class HandleAvailabilityResult {
+  final bool isAvailable;
+  final bool endpointMissing;
+  final String? message;
+  HandleAvailabilityResult({
+    this.isAvailable = false,
+    this.endpointMissing = true,
+    this.message,
+  });
+
+  // Alias for callers that use `available` instead of `isAvailable`.
+  bool get available => isAvailable;
+}
+
+extension UserServiceHandle on UserService {
+  Future<HandleAvailabilityResult> checkHandleAvailability(String handle) async {
+    return HandleAvailabilityResult(
+      endpointMissing: true,
+      message: 'Handle check endpoint not yet available.',
+    );
+  }
+}

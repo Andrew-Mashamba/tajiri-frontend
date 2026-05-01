@@ -64,6 +64,7 @@ import '../../my_baby/my_baby_module.dart';
 import '../../skincare/skincare_module.dart';
 import '../../hair_nails/hair_nails_module.dart';
 import '../../business/business_module.dart';
+import '../../customer_orders/widgets/service_due_dashboard.dart';
 import '../../business/biz_tab_wrapper.dart';
 import '../../business/pages/business_documents_page.dart';
 import '../../business/pages/email/email_client_page.dart';
@@ -72,6 +73,15 @@ import '../../business/pages/quotes_page.dart';
 import '../../business/pages/invoices_page.dart';
 import '../../business/pages/recurring_invoices_page.dart';
 import '../../business/pages/vfd_page.dart';
+
+// Recovered orphan modules — see "Recovered orphan modules" section in
+// profile_tab_config.dart. Imported with prefixes to avoid clashing with the
+// older lib/business/* pages of the same names.
+import '../../mafundi/pages/mafundi_home_page.dart' as mafundi_home;
+import '../../myjob/pages/my_job_page.dart' as myjob_home;
+import '../../clients/pages/clients_page.dart' as clients_v2;
+import '../../suppliers/pages/suppliers_page.dart' as suppliers_v2;
+import '../../vfd/pages/vfd_page.dart' as vfd_v2;
 import '../../business/pages/customers_page.dart';
 import '../../business/pages/debts_page.dart';
 import '../../business/pages/reminder_settings_page.dart';
@@ -217,7 +227,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   final ProfileService _profileService = ProfileService();
-  final PostService _postService = PostService();
   final FriendService _friendService = FriendService();
   final MessageService _messageService = MessageService();
   final ImagePicker _imagePicker = ImagePicker();
@@ -231,13 +240,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Tab configuration
   List<ProfileTabConfig> _allTabs = [];
   List<ProfileTabConfig> _enabledTabs = [];
-
-  // Posts tab data
-  List<Post> _posts = [];
-  bool _isLoadingPosts = false;
-  // ignore: unused_field - used for future load-more pagination
-  bool _hasMorePosts = true;
-  int _postsPage = 1;
 
   // Profile photo upload
   bool _isUploadingPhoto = false;
@@ -265,17 +267,21 @@ class _ProfileScreenState extends State<ProfileScreen>
     debugPrint('[ProfileScreen] _loadTabsAndProfile started for userId: ${widget.userId}');
 
     final storage = await LocalStorageService.getInstance();
+    if (!mounted) return;
     debugPrint('[ProfileScreen] LocalStorageService loaded');
 
     _allTabs = storage.getProfileTabs();
-    debugPrint('[ProfileScreen] All tabs loaded: ${_allTabs.length}');
-
     _enabledTabs = _allTabs.where((t) => t.enabled).toList();
-    debugPrint('[ProfileScreen] Enabled tabs: ${_enabledTabs.length}');
+    debugPrint('[ProfileScreen] Tabs: ${_allTabs.length} total, ${_enabledTabs.length} enabled');
 
-    // Dispose old controller if exists (e.g., during hot restart)
+    // Dispose any controller from a previous run before reassigning. This is
+    // defensive: in the normal mount->initState->_loadTabsAndProfile flow
+    // _tabController is null. It only becomes non-null here if _refreshTabs()
+    // ran (e.g. after returning from Settings), which means we're being
+    // re-entered after a tab-config change. Disposing first prevents a leak.
     _tabController?.removeListener(_onTabChanged);
     _tabController?.dispose();
+    _tabController = null;
 
     if (_enabledTabs.isNotEmpty) {
       _tabController = TabController(
@@ -284,17 +290,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         animationDuration: const Duration(milliseconds: 280),
       );
       _tabController!.addListener(_onTabChanged);
-      debugPrint('[ProfileScreen] TabController created');
     } else {
       debugPrint('[ProfileScreen] WARNING: No enabled tabs!');
     }
 
-    if (mounted) {
-      setState(() {});
-      _loadProfile();
-    } else {
-      debugPrint('[ProfileScreen] Widget not mounted, skipping profile load');
-    }
+    setState(() {});
+    _loadProfile();
   }
 
   Future<void> _refreshTabs() async {
@@ -344,11 +345,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   void _onTabChanged() {
     if (_tabController == null || _enabledTabs.isEmpty) return;
     setState(() {}); // Update custom tab bar selected state (e.g. after swipe)
-    final currentTabId = _enabledTabs[_tabController!.index].id;
-    if (currentTabId == 'posts' && _posts.isEmpty && !_isLoadingPosts) {
-      _loadPosts();
-    }
-    // Photos tab is now handled by PhotoGalleryWidget internally
+    // Tab content widgets (_ProfilePostsPage, PhotoGalleryWidget, etc.) handle
+    // their own data loading and pagination internally.
   }
 
   Future<void> _loadProfile() async {
@@ -371,8 +369,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (result.success) {
           _profile = result.profile;
           debugPrint('[ProfileScreen] Profile loaded: ${_profile?.fullName}');
-          // Load initial posts
-          _loadPosts();
           // Load streak for all profiles (visible to visitors)
           _loadProfileStreak();
           // Load viral assists count
@@ -387,41 +383,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _loadPosts() async {
-    debugPrint('[ProfileScreen] _loadPosts called, userId: ${widget.userId}, page: $_postsPage');
-    if (_isLoadingPosts) {
-      debugPrint('[ProfileScreen] Already loading posts, skipping');
-      return;
-    }
-
-    setState(() => _isLoadingPosts = true);
-
-    final currentUserId = widget.currentUserId ?? widget.userId;
-    final result = await _postService.getPosts(
-      userId: currentUserId,
-      profileUserId: widget.userId,
-      page: _postsPage,
-      perPage: 20,
-    );
-
-    debugPrint('[ProfileScreen] Posts result: success=${result.success}, count=${result.posts.length}');
-    if (!result.success) {
-      debugPrint('[ProfileScreen] Error: ${result.message}');
-    }
-
-    if (mounted) {
-      setState(() {
-        _isLoadingPosts = false;
-        if (result.success) {
-          _posts = result.posts;
-          _hasMorePosts = result.meta?.hasMore ?? false;
-          debugPrint('[ProfileScreen] Posts loaded: ${_posts.length} posts');
-        }
-      });
-    }
-  }
-
-
   Future<void> _loadProfileStreak() async {
     try {
       final creatorService = CreatorService();
@@ -429,8 +390,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (mounted && streak != null) {
         setState(() => _profileStreak = streak);
       }
-    } catch (e) {
-      // Non-critical — silently ignore
+    } catch (e, st) {
+      // Non-critical: streak badge just doesn't render. Log so it shows up
+      // in crashlytics/console rather than disappearing.
+      debugPrint('[ProfileScreen] _loadProfileStreak failed: $e\n$st');
     }
   }
 
@@ -446,8 +409,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (mounted) {
         setState(() => _viralAssistsCount = count);
       }
-    } catch (e) {
-      // Non-critical — silently ignore
+    } catch (e, st) {
+      // Non-critical: viral-assists badge just doesn't render.
+      debugPrint('[ProfileScreen] _loadViralAssists failed: $e\n$st');
     }
   }
 
@@ -465,7 +429,8 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     setState(() => _isUploadingPhoto = true);
 
-    // Optional face detection (non-blocking)
+    // Optional face detection (non-blocking). If detection fails the upload
+    // still proceeds; the server will fall back to its own auto-crop.
     Map<String, int>? faceBbox;
     try {
       final bounds = await FaceValidator.detectLargestFace(File(image.path));
@@ -477,7 +442,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           'height': bounds.height.round(),
         };
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[ProfileScreen] FaceValidator failed (continuing without bbox): $e\n$st');
+    }
 
     final result = await _profileService.updateProfilePhoto(
       userId: widget.userId,
@@ -544,28 +511,30 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _openChatWithProfileUser() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     final result = await _messageService.getPrivateConversation(
       _currentUserId,
       widget.userId,
     );
     if (!mounted) return;
     if (result.success && result.conversation != null) {
-      Navigator.pushNamed(
-        context,
+      navigator.pushNamed(
         '/chat/${result.conversation!.id}',
         arguments: <String, dynamic>{'conversation': result.conversation},
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(result.message ?? 'Could not open chat')),
       );
     }
   }
 
   Future<void> _handleFriendAction() async {
-    if (_profile == null) return;
+    final profile = _profile;
+    if (profile == null) return;
 
-    final status = _profile!.friendshipStatus;
+    final status = profile.friendshipStatus;
 
     switch (status) {
       case FriendshipStatus.none:
@@ -711,9 +680,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  static const Color _backgroundLight = Color(0xFFFAFAFA);
-  static const Color _secondaryText = Color(0xFF666666);
-
   /// Format count for profile stats (e.g. 1200 → 1.2K, 1500000 → 1.5M)
   List<String> _getMilestoneBadges(int followerCount) {
     final badges = <String>[];
@@ -735,19 +701,23 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final secondaryText = theme.colorScheme.onSurfaceVariant;
+
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: _backgroundLight,
-        body: SafeArea(
-          child: const Center(child: CircularProgressIndicator()),
+        backgroundColor: scaffoldBg,
+        body: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
     if (_error != null) {
       return Scaffold(
-        backgroundColor: _backgroundLight,
-        appBar: AppBar(backgroundColor: Colors.white),
+        backgroundColor: scaffoldBg,
+        appBar: AppBar(backgroundColor: theme.colorScheme.surface),
         body: SafeArea(
           child: Center(
             child: Padding(
@@ -755,11 +725,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.grey.shade400),
+                  Icon(Icons.error_outline, size: 64, color: secondaryText.withValues(alpha: 0.6)),
                   const SizedBox(height: 16),
                   Text(
                     _error!,
-                    style: const TextStyle(color: _secondaryText, fontSize: 14),
+                    style: TextStyle(color: secondaryText, fontSize: 14),
                     textAlign: TextAlign.center,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
@@ -783,15 +753,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     // Wait for tabs to load
     if (_tabController == null || _enabledTabs.isEmpty) {
       return Scaffold(
-        backgroundColor: _backgroundLight,
-        body: SafeArea(
-          child: const Center(child: CircularProgressIndicator()),
+        backgroundColor: scaffoldBg,
+        body: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: _backgroundLight,
+      backgroundColor: scaffoldBg,
       body: SafeArea(
         child: Stack(
           children: [
@@ -1444,6 +1414,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: sectionSpacing),
       ],
 
+      // Spec §G.4 — service-due dashboard (customer-side)
+      if (_isOwnProfile) ...[
+        ServiceDueDashboard(userId: widget.userId),
+        const SizedBox(height: sectionSpacing),
+      ],
+
       // 3. Action buttons (when viewing someone else)
       if (!_isOwnProfile)
         Padding(
@@ -1920,13 +1896,25 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   String _formatDate(DateTime date) {
-    final months = [
-      'Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
-      'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'
-    ];
-    return '${months[date.month - 1]} ${date.year}';
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+    return '${_localizedMonth(date.month, isSw: isSw)} ${date.year}';
   }
 
+}
+
+const List<String> _monthsSw = [
+  'Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
+  'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba',
+];
+
+const List<String> _monthsEn = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+String _localizedMonth(int monthOneBased, {required bool isSw}) {
+  final i = (monthOneBased - 1).clamp(0, 11);
+  return (isSw ? _monthsSw : _monthsEn)[i];
 }
 
 /// Me page: compact quick link (Settings, Wallet, Calls). DESIGN.md §13.4 — 48dp min height.
@@ -2141,7 +2129,7 @@ class _ProfileTabPage extends StatelessWidget {
         return MyCircleModule(userId: userId);
       case 'my_pregnancy':
         if (!isOwnProfile) {
-          final isSw = LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
+          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -2161,7 +2149,7 @@ class _ProfileTabPage extends StatelessWidget {
         return MyPregnancyModule(userId: userId);
       case 'my_baby':
         if (!isOwnProfile) {
-          final isSw = LocalStorageService.instanceSync?.getLanguageCode() == 'sw';
+          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -2508,9 +2496,44 @@ class _ProfileTabPage extends StatelessWidget {
       case 'biz_services':
         return BizServicesModule(userId: userId);
 
+      // ── Recovered orphan modules ─────────────────────────────────
+      case 'mafundi':
+        return mafundi_home.MafundiHomePage(userId: userId);
+      case 'myjob':
+        return _MyJobTokenWrapper(userId: userId);
+      case 'client_directory':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? clients_v2.ClientsPage(businessId: fId)
+                : const SizedBox.shrink());
+      case 'supplier_directory':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? suppliers_v2.SuppliersPage(businessId: fId, isOwner: true)
+                : const SizedBox.shrink());
+      case 'vfd_compliance':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? vfd_v2.VfdPage(businessId: fId)
+                : const SizedBox.shrink());
+
       default:
-        return Center(
-          child: Text('Tab not found: $tabId'),
+        // Defensive fallback for tab IDs added to ProfileTabConfig without
+        // a matching dispatcher entry. Visible only to developers; users
+        // never see unknown tab IDs because the grid only shows enabled tabs
+        // backed by config.
+        assert(false, 'ProfileScreen: no widget mapping for tabId="$tabId"');
+        final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+        return _ComingSoonTab(
+          icon: icon,
+          title: title,
+          subtitle: isSw ? 'Inakuja Hivi Karibuni' : 'Coming soon',
+          description: isSw
+              ? 'Kipengele hiki kitapatikana hivi karibuni.'
+              : 'This module is not yet available.',
         );
     }
   }
@@ -5139,6 +5162,8 @@ class _ProfileAboutPage extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -5151,7 +5176,7 @@ class _ProfileAboutPage extends StatelessWidget {
             icon: Icons.person,
             children: [
               if (profile?.dateOfBirth != null)
-                _buildRow('Tarehe ya Kuzaliwa', _formatFullDate(profile!.dateOfBirth!)),
+                _buildRow('Tarehe ya Kuzaliwa', _formatFullDate(profile!.dateOfBirth!, isSw: isSw)),
               if (profile?.genderLabel != null)
                 _buildRow('Jinsia', profile!.genderLabel!),
               if (profile?.relationshipStatusLabel != null)
@@ -5234,7 +5259,7 @@ class _ProfileAboutPage extends StatelessWidget {
             children: [
               _buildRow(
                 'Alijiunga',
-                _formatFullDate(profile?.createdAt ?? DateTime.now()),
+                _formatFullDate(profile?.createdAt ?? DateTime.now(), isSw: isSw),
               ),
             ],
           ),
@@ -5332,12 +5357,8 @@ class _ProfileAboutPage extends StatelessWidget {
     );
   }
 
-  String _formatFullDate(DateTime date) {
-    final months = [
-      'Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
-      'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  String _formatFullDate(DateTime date, {required bool isSw}) {
+    return '${date.day} ${_localizedMonth(date.month, isSw: isSw)} ${date.year}';
   }
 }
 
@@ -5418,6 +5439,35 @@ class _ComingSoonTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Loads the user's auth token then renders the orphan-recovery [MyJobPage].
+/// MyJobPage requires the token as a constructor argument; this thin wrapper
+/// fetches it from [LocalStorageService] so the dispatcher case stays clean.
+class _MyJobTokenWrapper extends StatelessWidget {
+  final int userId;
+
+  const _MyJobTokenWrapper({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: () async {
+        final storage = await LocalStorageService.getInstance();
+        return storage.getAuthToken();
+      }(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final token = snap.data;
+        if (token == null || token.isEmpty) {
+          return const Center(child: Text('Sijaingia'));
+        }
+        return myjob_home.MyJobPage(token: token);
+      },
     );
   }
 }

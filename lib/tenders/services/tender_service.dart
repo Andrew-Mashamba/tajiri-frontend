@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../reminders/models/reminder_models.dart' show ReminderItem;
 import '../../services/local_storage_service.dart';
 import '../models/tender_models.dart';
 
@@ -405,4 +406,8 @@ class TenderService {
       return TenderResult.fail('Imeshindwa kuunganisha na seva');
     }
   }
+
+  // STUB — tenders aggregator for reminders. Returns empty until backend lands.
+  static Future<List<ReminderItem>> getAllTenderRemindersForAggregator(
+      int userId, {bool strict = false}) async => const [];
 }

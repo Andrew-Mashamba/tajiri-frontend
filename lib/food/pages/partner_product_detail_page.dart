@@ -970,7 +970,7 @@ class _PartnerProductDetailPageState extends State<PartnerProductDetailPage> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      v.labelSwahili,
+                      v.labelSwahili ?? '',
                       style: const TextStyle(
                           fontSize: 12, color: _kPrimary),
                     ),

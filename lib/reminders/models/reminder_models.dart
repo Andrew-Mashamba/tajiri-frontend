@@ -169,6 +169,11 @@ class ReminderItem {
     this.isDone = false,
     required this.isStandalone,
     this.sourceRoute,
+    // Stub-only — accepted by callers, not stored on the model yet.
+    // ignore: unused_element_parameter
+    Object? serverId,
+    // ignore: unused_element_parameter
+    Object? eventKind,
   });
 
   factory ReminderItem.fromJson(Map<String, dynamic> json) {
@@ -207,6 +212,11 @@ class ReminderItem {
     bool? isDone,
     bool? isStandalone,
     Object? sourceRoute = _kSentinel,
+    // Stub-only — accepted by callers, not stored on the model yet.
+    // ignore: unused_element_parameter
+    Object? serverId,
+    // ignore: unused_element_parameter
+    Object? eventKind,
   }) {
     return ReminderItem(
       id: id ?? this.id,
@@ -236,4 +246,17 @@ class ReminderListResult<T> {
   final List<T> items;
   final String? message;
   ReminderListResult({required this.success, this.items = const [], this.message});
+}
+
+// Stub compat getters — referenced by reminder pages but not on the canonical
+// model yet. Real fields land when the API exposes them.
+extension ReminderItemCompat on ReminderItem {
+  String? get eventKind => null;
+  String? get serverId => null;
+}
+
+extension ReminderCategoryLocale on ReminderCategory {
+  // Stub — until per-locale labels land, return the Swahili displayName for
+  // both locales (existing behavior). Callers pass `swahili: true|false`.
+  String labelForLocale({bool swahili = false}) => displayName;
 }

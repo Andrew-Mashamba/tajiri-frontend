@@ -1,5 +1,6 @@
 // test/reminders/services/reminders_aggregator_test.dart
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tajiri/reminders/models/reminder_event_kind.dart';
 import 'package:tajiri/reminders/models/reminder_models.dart';
 import 'package:tajiri/reminders/services/reminders_aggregator.dart';
 

@@ -55,6 +55,11 @@ class BusinessListResult<T> {
 // ---------------------------------------------------------------------------
 enum BusinessType { sole_proprietor, llc, partnership }
 
+extension BusinessTypeAlias on BusinessType {
+  // camelCase alias for callers that don't use the snake_case constant.
+  static BusinessType get soleProprietor => BusinessType.sole_proprietor;
+}
+
 BusinessType _parseBusinessType(dynamic v) {
   if (v == null) return BusinessType.sole_proprietor;
   final s = v.toString().toLowerCase();
@@ -183,7 +188,23 @@ String debtStatusLabel(DebtStatus s, {bool swahili = false}) {
   }
 }
 
-enum InvoiceStatus { draft, sent, paid, overdue, cancelled }
+enum InvoiceStatus {
+  draft,
+  sent,
+  paid,
+  overdue,
+  cancelled,
+  // Stub additions referenced by invoice_detail_page; semantics land with the
+  // backend status machine.
+  delivered,
+  viewed,
+  // ignore: constant_identifier_names
+  partially_paid,
+  // ignore: constant_identifier_names
+  void_status,
+  // ignore: constant_identifier_names
+  credit_noted,
+}
 
 InvoiceStatus _parseInvoiceStatus(dynamic v) {
   if (v == null) return InvoiceStatus.draft;
@@ -206,6 +227,16 @@ String invoiceStatusLabel(InvoiceStatus s, {bool swahili = false}) {
       return swahili ? 'Imechelewa' : 'Overdue';
     case InvoiceStatus.cancelled:
       return swahili ? 'Imefutwa' : 'Cancelled';
+    case InvoiceStatus.delivered:
+      return swahili ? 'Imefika' : 'Delivered';
+    case InvoiceStatus.viewed:
+      return swahili ? 'Imeangaliwa' : 'Viewed';
+    case InvoiceStatus.partially_paid:
+      return swahili ? 'Imelipwa kwa sehemu' : 'Partially paid';
+    case InvoiceStatus.void_status:
+      return swahili ? 'Batili' : 'Void';
+    case InvoiceStatus.credit_noted:
+      return swahili ? 'Yenye Nota ya Mkopo' : 'Credit noted';
   }
 }
 
@@ -926,6 +957,7 @@ class TaxCalculation {
   final double nssfTotal;
   final double sdlTotal;
   final double wcfTotal;
+  final double whtTotal;
 
   TaxCalculation({
     this.businessId,
@@ -941,6 +973,7 @@ class TaxCalculation {
     this.nssfTotal = 0,
     this.sdlTotal = 0,
     this.wcfTotal = 0,
+    this.whtTotal = 0,
   });
 
   double get totalTaxObligation =>
@@ -961,6 +994,7 @@ class TaxCalculation {
       nssfTotal: _parseDouble(json['nssf_total']),
       sdlTotal: _parseDouble(json['sdl_total']),
       wcfTotal: _parseDouble(json['wcf_total']),
+      whtTotal: _parseDouble(json['wht_total']),
     );
   }
 
@@ -1813,7 +1847,7 @@ class Supplier {
       };
 }
 
-enum PurchaseOrderStatus { draft, sent, received, cancelled }
+enum PurchaseOrderStatus { draft, sent, received, cancelled, partiallyReceived }
 
 PurchaseOrderStatus _parsePOStatus(dynamic v) {
   if (v == null) return PurchaseOrderStatus.draft;
@@ -1834,6 +1868,8 @@ String poStatusLabel(PurchaseOrderStatus s) {
       return 'Imepokelewa';
     case PurchaseOrderStatus.cancelled:
       return 'Imefutwa';
+    case PurchaseOrderStatus.partiallyReceived:
+      return 'Imepokelewa kwa sehemu';
   }
 }
 
@@ -2018,7 +2054,7 @@ class SupplierCatalogItem {
   final String? detail;
   final SupplierCatalogItemKind kind;
   final String? imageUrl;
-  final List<String>? imageUrls;
+  final List<String> imageUrls;
   final double unitPrice;
   final double? compareAtPrice;
   final String? currency;
@@ -2043,7 +2079,7 @@ class SupplierCatalogItem {
     this.detail,
     this.kind = SupplierCatalogItemKind.product,
     this.imageUrl,
-    this.imageUrls,
+    this.imageUrls = const [],
     this.unitPrice = 0,
     this.compareAtPrice,
     this.currency,
@@ -2072,7 +2108,7 @@ class SupplierCatalogItem {
           ? SupplierCatalogItemKind.service
           : SupplierCatalogItemKind.product,
       imageUrl: json['image_url']?.toString(),
-      imageUrls: (json['image_urls'] as List?)?.map((e) => e.toString()).toList(),
+      imageUrls: (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       unitPrice: _parseDouble(json['unit_price']),
       compareAtPrice: _parseDouble(json['compare_at_price']),
       currency: json['currency']?.toString(),
@@ -2089,6 +2125,550 @@ class SupplierCatalogItem {
       allowShipping: json['allow_shipping'] as bool?,
       deliveryFee: _parseDouble(json['delivery_fee']),
       locationName: json['location_name']?.toString(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stub models — minimal shape to compile pages that consume them.
+// Real fromJson wiring lands when the backend endpoints are added.
+// ---------------------------------------------------------------------------
+
+class CreditNote {
+  final int? id;
+  final int? invoiceId;
+  final String creditNoteNumber;
+  final double totalAmount;
+  final String reason;
+  final String status;
+  final DateTime? issuedAt;
+  final DateTime? createdAt;
+  final List<CreditNoteItem> items;
+
+  CreditNote({
+    this.id,
+    this.invoiceId,
+    this.creditNoteNumber = '',
+    this.totalAmount = 0,
+    this.reason = '',
+    this.status = 'issued',
+    this.issuedAt,
+    this.createdAt,
+    this.items = const [],
+  });
+
+  factory CreditNote.fromJson(Map<String, dynamic> json) {
+    return CreditNote(
+      id: _parseInt(json['id']),
+      invoiceId: _parseInt(json['invoice_id']),
+      creditNoteNumber: json['credit_note_number']?.toString() ?? '',
+      totalAmount: _parseDouble(json['total_amount']),
+      reason: json['reason']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'issued',
+      issuedAt: _parseDate(json['issued_at']),
+      createdAt: _parseDate(json['created_at']),
+      items: (json['items'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(CreditNoteItem.fromJson)
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+class CreditNoteItem {
+  final int? id;
+  final String description;
+  final double quantity;
+  final double unitPrice;
+  final double totalPrice;
+  final bool isVatExempt;
+  final int? originalInvoiceItemIndex;
+
+  CreditNoteItem({
+    this.id,
+    this.description = '',
+    this.quantity = 0,
+    this.unitPrice = 0,
+    this.totalPrice = 0,
+    this.isVatExempt = false,
+    this.originalInvoiceItemIndex,
+  });
+
+  factory CreditNoteItem.fromJson(Map<String, dynamic> json) {
+    return CreditNoteItem(
+      id: _parseInt(json['id']),
+      description: json['description']?.toString() ?? '',
+      quantity: _parseDouble(json['quantity']),
+      unitPrice: _parseDouble(json['unit_price']),
+      totalPrice: _parseDouble(json['total_price']),
+      isVatExempt: _parseBool(json['is_vat_exempt']),
+    );
+  }
+}
+
+class InvoicePayment {
+  final int? id;
+  final int? invoiceId;
+  final double amount;
+  final String method;
+  final String? reference;
+  final String? notes;
+  final DateTime? paidAt;
+  final DateTime? createdAt;
+
+  InvoicePayment({
+    this.id,
+    this.invoiceId,
+    this.amount = 0,
+    this.method = '',
+    this.reference,
+    this.notes,
+    this.paidAt,
+    this.createdAt,
+  });
+
+  factory InvoicePayment.fromJson(Map<String, dynamic> json) {
+    return InvoicePayment(
+      id: _parseInt(json['id']),
+      invoiceId: _parseInt(json['invoice_id']),
+      amount: _parseDouble(json['amount']),
+      method: json['method']?.toString() ?? '',
+      reference: json['reference']?.toString(),
+      notes: json['notes']?.toString(),
+      paidAt: _parseDate(json['paid_at']),
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
+
+  String methodLabel({bool swahili = false}) {
+    switch (method) {
+      case 'cash':
+        return swahili ? 'Pesa Taslimu' : 'Cash';
+      case 'mobile_money':
+        return swahili ? 'Pesa za Simu' : 'Mobile Money';
+      case 'bank':
+      case 'bank_transfer':
+        return swahili ? 'Benki' : 'Bank';
+      case 'card':
+        return swahili ? 'Kadi' : 'Card';
+      default:
+        return method.isEmpty ? '-' : method;
+    }
+  }
+}
+
+class InvoiceDelivery {
+  final int? id;
+  final int? invoiceId;
+  final String deliveryType; // 'email' | 'sms' | 'whatsapp' | 'reminder'
+  final String status;
+  final String? recipient;
+  final DateTime? sentAt;
+  final DateTime? createdAt;
+
+  InvoiceDelivery({
+    this.id,
+    this.invoiceId,
+    this.deliveryType = '',
+    this.status = '',
+    this.recipient,
+    this.sentAt,
+    this.createdAt,
+  });
+
+  factory InvoiceDelivery.fromJson(Map<String, dynamic> json) {
+    return InvoiceDelivery(
+      id: _parseInt(json['id']),
+      invoiceId: _parseInt(json['invoice_id']),
+      deliveryType: json['delivery_type']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      recipient: json['recipient']?.toString(),
+      sentAt: _parseDate(json['sent_at']),
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
+}
+
+class SupplierPayable {
+  final int? id;
+  final String? supplierName;
+  final String? poNumber;
+  final double amount;
+  final double paidAmount;
+  final double remainingAmount;
+  final DateTime? dueDate;
+  final String status;
+
+  SupplierPayable({
+    this.id,
+    this.supplierName,
+    this.poNumber,
+    this.amount = 0,
+    this.paidAmount = 0,
+    this.remainingAmount = 0,
+    this.dueDate,
+    this.status = '',
+  });
+
+  factory SupplierPayable.fromJson(Map<String, dynamic> json) {
+    final amt = _parseDouble(json['amount']);
+    final paid = _parseDouble(json['paid_amount']);
+    return SupplierPayable(
+      id: _parseInt(json['id']),
+      supplierName: json['supplier_name']?.toString(),
+      poNumber: json['po_number']?.toString(),
+      amount: amt,
+      paidAmount: paid,
+      remainingAmount: _parseDouble(json['remaining_amount'], amt - paid),
+      dueDate: _parseDate(json['due_date']),
+      status: json['status']?.toString() ?? '',
+    );
+  }
+}
+
+class RecurringPurchaseOrder {
+  final int? id;
+  final String? supplierName;
+  final RecurringFrequency frequency;
+  final DateTime? nextRunDate;
+  final DateTime? endDate;
+  final double totalAmount;
+  final int totalGenerated;
+  final int? maxOrders;
+  final bool autoSend;
+  final List<dynamic> items;
+
+  RecurringPurchaseOrder({
+    this.id,
+    this.supplierName,
+    this.frequency = RecurringFrequency.monthly,
+    this.nextRunDate,
+    this.endDate,
+    this.totalAmount = 0,
+    this.totalGenerated = 0,
+    this.maxOrders,
+    this.autoSend = false,
+    this.items = const [],
+  });
+
+  factory RecurringPurchaseOrder.fromJson(Map<String, dynamic> json) {
+    final freqStr = json['frequency']?.toString() ?? 'monthly';
+    return RecurringPurchaseOrder(
+      id: _parseInt(json['id']),
+      supplierName: json['supplier_name']?.toString(),
+      frequency: RecurringFrequency.values.firstWhere(
+        (f) => f.name == freqStr,
+        orElse: () => RecurringFrequency.monthly,
+      ),
+      nextRunDate: _parseDate(json['next_run_date']),
+      endDate: _parseDate(json['end_date']),
+      totalAmount: _parseDouble(json['total_amount']),
+      totalGenerated: _parseInt(json['total_generated']) ?? 0,
+      maxOrders: _parseInt(json['max_orders']),
+      autoSend: _parseBool(json['auto_send']),
+      items: (json['items'] as List?) ?? const [],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compat getters — pages reference these but the underlying models predate the
+// new fields. Defaults are safe (null/0/empty) so render paths don't crash.
+// Replace with real fields once the backend exposes them.
+// ---------------------------------------------------------------------------
+
+extension InvoiceCompat on Invoice {
+  double get amountPaid => 0;
+  double get balanceRemaining => totalAmount;
+  String? get customerPhone => null;
+  String? get customerEmail => null;
+  String? get customerTin => null;
+  String? get customerAddress => null;
+  String? get discountType => null;
+  double get discountValue => 0;
+  double get discountAmount => 0;
+  String? get paymentTerms => null;
+  String? get paymentInstructions => null;
+  int? get sourceQuoteId => null;
+  String? get vfdReceiptNumber => null;
+  String? get vfdReceiptUrl => null;
+}
+
+extension InvoiceItemCompat on InvoiceItem {
+  String? get unitLabel => null;
+  bool get isVatExempt => false;
+  double get receivedQty => 0;
+  double get shortfall => 0;
+}
+
+extension BusinessCompat on Business {
+  String? get handle => null;
+  String? get handleDisplay => null;
+  String? get ownerHandle => null;
+  String? get ownerName => null;
+  String? get ownerUsername => null;
+}
+
+extension SupplierCompat on Supplier {
+  String? get handle => null;
+  String? get logoUrl => null;
+  String? get ownerName => null;
+  String? get ownerEmail => null;
+  String? get ownerPhone => null;
+  String? get ownerPhotoPath => null;
+  String? get ownerUsername => null;
+  int? get ownerUserId => null;
+  bool get isPlatformLinked => false;
+  int? get platformBusinessId => null;
+}
+
+extension DebtCompat on Debt {
+  String? get externalRef => null;
+  bool get isCrbDebt => false;
+}
+
+extension ExpenseCompat on Expense {
+  int? get journalEntryId => null;
+}
+
+extension CreditNoteCompat on CreditNote {
+  double get subtotal => totalAmount;
+  double get vatAmount => 0;
+  String? get vfdReverseReceiptNumber => null;
+  String reasonLabel({bool swahili = false}) => reason;
+}
+
+// Stub representation of a TAJIRI-platform business shown in the supplier
+// picker. Real fromJson lands when the backend search endpoint exposes shape.
+class PlatformBusiness {
+  final int? id;
+  final String name;
+  final String? logoUrl;
+  final String? handle;
+  final String? ownerName;
+  final String? sector;
+  final String? matchContext;
+
+  PlatformBusiness({
+    this.id,
+    this.name = '',
+    this.logoUrl,
+    this.handle,
+    this.ownerName,
+    this.sector,
+    this.matchContext,
+  });
+
+  factory PlatformBusiness.fromJson(Map<String, dynamic> json) {
+    return PlatformBusiness(
+      id: _parseInt(json['id']),
+      name: json['name']?.toString() ?? '',
+      logoUrl: json['logo_url']?.toString(),
+      handle: json['handle']?.toString(),
+      ownerName: json['owner_name']?.toString(),
+      sector: json['sector']?.toString(),
+      matchContext: json['match_context']?.toString(),
+    );
+  }
+}
+
+extension CreditNoteItemToJson on CreditNoteItem {
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'description': description,
+        'quantity': quantity,
+        'unit_price': unitPrice,
+        'total_price': totalPrice,
+        'is_vat_exempt': isVatExempt,
+      };
+}
+
+extension InvoicePaymentCompat on InvoicePayment {
+  String? get recordedBy => null;
+}
+
+extension InvoiceDeliveryCompat on InvoiceDelivery {
+  String get channel => deliveryType;
+  String channelLabel({bool swahili = false}) {
+    switch (deliveryType) {
+      case 'email':
+        return swahili ? 'Barua pepe' : 'Email';
+      case 'sms':
+        return 'SMS';
+      case 'whatsapp':
+        return 'WhatsApp';
+      case 'reminder':
+        return swahili ? 'Kikumbusho' : 'Reminder';
+      default:
+        return deliveryType.isEmpty ? '-' : deliveryType;
+    }
+  }
+}
+
+extension RecurringPurchaseOrderCompat on RecurringPurchaseOrder {
+  int? get supplierId => null;
+  bool get isActive => true;
+  String? get notes => null;
+  int? get deliveryOffsetDays => null;
+}
+
+// Helper functions for invoice overdue logic. Used across invoice pages and
+// the invoice card widget. An invoice is overdue when it has a [dueDate] in
+// the past and isn't fully paid / cancelled.
+bool isInvoiceOverdue(Invoice invoice) {
+  final due = invoice.dueDate;
+  if (due == null) return false;
+  if (invoice.status == InvoiceStatus.paid ||
+      invoice.status == InvoiceStatus.cancelled ||
+      invoice.status == InvoiceStatus.void_status ||
+      invoice.status == InvoiceStatus.draft) {
+    return false;
+  }
+  return DateTime.now().isAfter(due);
+}
+
+int invoiceOverdueDays(Invoice invoice) {
+  final due = invoice.dueDate;
+  if (due == null) return 0;
+  final diff = DateTime.now().difference(due).inDays;
+  return diff > 0 ? diff : 0;
+}
+
+class SupplierAnalytics {
+  final double totalSpent;
+  final int orderCount;
+  final int poCount;
+  final double currentMonthSpent;
+  final double lastMonthSpent;
+  final double thisYearSpent;
+  final List<SupplierAnalyticsTopItem> topItems;
+  final List<SupplierAnalyticsMonthPoint> monthlyTrend;
+  final List<dynamic> recentPos;
+
+  SupplierAnalytics({
+    this.totalSpent = 0,
+    this.orderCount = 0,
+    this.poCount = 0,
+    this.currentMonthSpent = 0,
+    this.lastMonthSpent = 0,
+    this.thisYearSpent = 0,
+    this.topItems = const [],
+    this.monthlyTrend = const [],
+    this.recentPos = const [],
+  });
+
+  factory SupplierAnalytics.fromJson(Map<String, dynamic> json) {
+    return SupplierAnalytics(
+      totalSpent: _parseDouble(json['total_spent']),
+      orderCount: _parseInt(json['order_count']) ?? 0,
+      poCount: _parseInt(json['po_count']) ?? 0,
+      currentMonthSpent: _parseDouble(json['current_month_spent']),
+      lastMonthSpent: _parseDouble(json['last_month_spent']),
+      thisYearSpent: _parseDouble(json['this_year_spent']),
+      topItems: (json['top_items'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(SupplierAnalyticsTopItem.fromJson)
+              .toList() ??
+          const [],
+      monthlyTrend: (json['monthly_trend'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(SupplierAnalyticsMonthPoint.fromJson)
+              .toList() ??
+          const [],
+      recentPos: (json['recent_pos'] as List?) ?? const [],
+    );
+  }
+}
+
+class SupplierAnalyticsTopItem {
+  final String name;
+  final String description;
+  final double spent;
+  final double totalValue;
+  final int count;
+  final int orderCount;
+
+  SupplierAnalyticsTopItem({
+    this.name = '',
+    this.description = '',
+    this.spent = 0,
+    this.totalValue = 0,
+    this.count = 0,
+    this.orderCount = 0,
+  });
+
+  factory SupplierAnalyticsTopItem.fromJson(Map<String, dynamic> json) {
+    final spent = _parseDouble(json['spent']);
+    return SupplierAnalyticsTopItem(
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      spent: spent,
+      totalValue: _parseDouble(json['total_value'], spent),
+      count: _parseInt(json['count']) ?? 0,
+      orderCount: _parseInt(json['order_count']) ?? 0,
+    );
+  }
+}
+
+class SupplierAnalyticsMonthPoint {
+  final String month;
+  final double spent;
+  final int orderCount;
+
+  SupplierAnalyticsMonthPoint({
+    this.month = '',
+    this.spent = 0,
+    this.orderCount = 0,
+  });
+
+  factory SupplierAnalyticsMonthPoint.fromJson(Map<String, dynamic> json) {
+    return SupplierAnalyticsMonthPoint(
+      month: json['month']?.toString() ?? '',
+      spent: _parseDouble(json['spent']),
+      orderCount: _parseInt(json['order_count']) ?? 0,
+    );
+  }
+}
+
+class InvoiceSettings {
+  final String numberPrefix;
+  final int nextSequence;
+  final String defaultPaymentTerms;
+  final bool defaultIncludeVat;
+  final String? defaultPaymentInstructions;
+  final String? defaultNotes;
+  final bool autoReminderEnabled;
+  final List<int> reminderDaysAfterDue;
+  final String? logoUrl;
+
+  InvoiceSettings({
+    this.numberPrefix = 'INV',
+    this.nextSequence = 1,
+    this.defaultPaymentTerms = 'net_30',
+    this.defaultIncludeVat = false,
+    this.defaultPaymentInstructions,
+    this.defaultNotes,
+    this.autoReminderEnabled = false,
+    this.reminderDaysAfterDue = const [],
+    this.logoUrl,
+  });
+
+  factory InvoiceSettings.fromJson(Map<String, dynamic> json) {
+    return InvoiceSettings(
+      numberPrefix: json['number_prefix']?.toString() ?? 'INV',
+      nextSequence: _parseInt(json['next_sequence']) ?? 1,
+      defaultPaymentTerms: json['default_payment_terms']?.toString() ?? 'net_30',
+      defaultIncludeVat: _parseBool(json['default_include_vat']),
+      defaultPaymentInstructions: json['default_payment_instructions']?.toString(),
+      defaultNotes: json['default_notes']?.toString(),
+      autoReminderEnabled: _parseBool(json['auto_reminder_enabled']),
+      reminderDaysAfterDue: (json['reminder_days_after_due'] as List?)
+              ?.map((e) => _parseInt(e) ?? 0)
+              .where((d) => d > 0)
+              .toList() ??
+          const [],
+      logoUrl: json['logo_url']?.toString(),
     );
   }
 }

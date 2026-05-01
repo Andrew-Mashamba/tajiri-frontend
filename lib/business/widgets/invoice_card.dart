@@ -30,13 +30,20 @@ class InvoiceCard extends StatelessWidget {
       case InvoiceStatus.draft:
         return _kSecondary;
       case InvoiceStatus.sent:
+      case InvoiceStatus.delivered:
+      case InvoiceStatus.viewed:
         return Colors.blue.shade700;
       case InvoiceStatus.paid:
         return Colors.green.shade700;
+      case InvoiceStatus.partially_paid:
+        return Colors.amber.shade700;
       case InvoiceStatus.overdue:
         return Colors.red.shade700;
       case InvoiceStatus.cancelled:
+      case InvoiceStatus.void_status:
         return Colors.grey;
+      case InvoiceStatus.credit_noted:
+        return Colors.purple.shade400;
     }
   }
 

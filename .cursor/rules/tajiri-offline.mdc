@@ -1,0 +1,11 @@
+---
+description: Offline, cache, sync — mobile-offline-support skill for Hive and queues
+globs: lib/services/**/*.dart
+alwaysApply: false
+---
+
+# Offline and caching
+
+Read `.cursor/skills/mobile-offline-support/SKILL.md` for offline-first patterns, queues, and sync.
+
+**Note:** The skill file opens with a React Native example; this project is **Flutter**. Apply the Dart/Flutter and Hive / `LocalStorageService` sections relevant to TAJIRI.

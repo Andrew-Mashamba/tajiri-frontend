@@ -153,6 +153,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage>
         return Colors.green;
       case PurchaseOrderStatus.cancelled:
         return Colors.red;
+      case PurchaseOrderStatus.partiallyReceived:
+        return Colors.amber;
     }
   }
 
@@ -167,6 +169,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage>
         return 'Received';
       case PurchaseOrderStatus.cancelled:
         return 'Cancelled';
+      case PurchaseOrderStatus.partiallyReceived:
+        return 'Partially received';
     }
   }
 

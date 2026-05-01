@@ -1647,4 +1647,77 @@ class AppStrings {
   String get partnerSettings => isSwahili ? 'Mipangilio ya Mshirika' : 'Partner Settings';
   String get referralCode => isSwahili ? 'Nambari ya Rufaa' : 'Referral Code';
   String get deactivateAccount => isSwahili ? 'Zima Akaunti' : 'Deactivate Account';
+
+  // Stub keys — placeholder strings to keep the build green. Translations land
+  // when the corresponding feature copy is finalized. Keys echo their name so
+  // missing translations are visible during QA.
+  String get hairNailsCaptureError => 'Capture error';
+  String get hairNailsCaptureSave => 'Save';
+  String get hairNailsCaptureSaving => 'Saving…';
+  String get hairNailsSendLook => 'Send look';
+  String get hairNailsSendLookBody => 'Share this look with your stylist.';
+  String get hairNailsVirtualTryOnDisclaimer => 'Try-on is a preview only.';
+  String get hairNailsVirtualTryOnInitError => 'Could not start try-on.';
+  String get hairNailsVirtualTryOnNoCamera => 'Camera not available.';
+  String get hairNailsVirtualTryOnSeekFace => 'Position your face in the frame.';
+  String get hairNailsVirtualTryOnSwipeStyles => 'Swipe to try styles.';
+  String get hairNailsVirtualTryOnTitle => 'Virtual Try-On';
+  String get remindersAggregatedHint => isSwahili ? 'Vikumbusho vinaonyesha matukio yanayokuja.' : 'Reminders show your upcoming events.';
+  String get remindersCategorySection => isSwahili ? 'Kundi' : 'Category';
+  String get remindersDateTimeLabel => isSwahili ? 'Tarehe na Saa' : 'Date & time';
+  String get remindersDeleteMessage => isSwahili ? 'Una uhakika unataka kufuta?' : 'Delete this reminder?';
+  String get remindersDeleteTitle => isSwahili ? 'Futa kikumbusho' : 'Delete reminder';
+  String get remindersDetailTitle => isSwahili ? 'Maelezo ya Kikumbusho' : 'Reminder details';
+  String get remindersEmpty => isSwahili ? 'Hakuna vikumbusho' : 'No reminders';
+  String get remindersEmptyCompleted => isSwahili ? 'Hakuna vilivyokamilika' : 'Nothing completed yet';
+  String get remindersEmptyHint => isSwahili ? 'Ongeza kikumbusho kwa kubonyeza +' : 'Tap + to add a reminder';
+  String get remindersEmptyUpcoming => isSwahili ? 'Hakuna vinavyokuja' : 'Nothing upcoming';
+  String get remindersFabAdd => isSwahili ? 'Ongeza Kikumbusho' : 'Add reminder';
+  String get remindersLoadFailed => isSwahili ? 'Imeshindikana kupakia' : 'Failed to load';
+  String get remindersNew => isSwahili ? 'Kikumbusho Kipya' : 'New reminder';
+  String get remindersNoSourceScreen => isSwahili ? 'Hakuna skrini ya chanzo' : 'No source screen';
+  String get remindersNotesLabel => isSwahili ? 'Maelezo' : 'Notes';
+  String get remindersNotifyEnabledSubtitle => isSwahili ? 'Utapata arifa' : 'You will be notified';
+  String get remindersNotifyEnabledTitle => isSwahili ? 'Arifa zimewashwa' : 'Notifications on';
+  String get remindersNotifyToggleSubtitle => isSwahili ? 'Washa arifa kwa hii' : 'Toggle notifications for this';
+  String get remindersNotifyToggleTitle => isSwahili ? 'Arifa' : 'Notify me';
+  String get remindersOpenSourceButton => isSwahili ? 'Fungua Chanzo' : 'Open source';
+  String get remindersRefresh => isSwahili ? 'Onyesha upya' : 'Refresh';
+  String get remindersRepeatSection => isSwahili ? 'Kurudia' : 'Repeat';
+  String get remindersSaveDetails => isSwahili ? 'Hifadhi Maelezo' : 'Save details';
+  String get remindersSaveFailed => isSwahili ? 'Imeshindikana kuhifadhi' : 'Save failed';
+  String get remindersSavedNotifySyncFailed => isSwahili ? 'Imehifadhiwa lakini arifa imeshindikana' : 'Saved but notification sync failed';
+  String get remindersSignInRequired => isSwahili ? 'Tafadhali ingia kuendelea' : 'Sign in to continue';
+  String get remindersSignInToSave => isSwahili ? 'Ingia kuhifadhi' : 'Sign in to save';
+  String get remindersSlidableDelete => isSwahili ? 'Futa' : 'Delete';
+  String get remindersSlidableDone => isSwahili ? 'Imekamilika' : 'Done';
+  String get remindersSlidableSnooze => isSwahili ? 'Akhirisha' : 'Snooze';
+  String get remindersSlidableUndo => isSwahili ? 'Tendua' : 'Undo';
+  String get remindersSnooze15m => '15 min';
+  String get remindersSnooze1h => '1 hr';
+  String get remindersSnoozeDefaultSection => isSwahili ? 'Akhirisha kwa muda chaguo-msingi' : 'Default snooze';
+  String get remindersSnoozeNowButton => isSwahili ? 'Akhirisha sasa' : 'Snooze now';
+  String get remindersSnoozeSheetTitle => isSwahili ? 'Akhirisha kikumbusho' : 'Snooze reminder';
+  String get remindersSnoozeTomorrow => isSwahili ? 'Kesho' : 'Tomorrow';
+  String get remindersSoundChange => isSwahili ? 'Badilisha sauti' : 'Change sound';
+  String get remindersSoundDefault => isSwahili ? 'Sauti ya msingi' : 'Default sound';
+  String get remindersSoundIosNote => isSwahili ? 'iOS hutumia sauti ya mfumo' : 'iOS uses system sound';
+  String get remindersSoundPhone => isSwahili ? 'Sauti ya simu' : 'Phone sound';
+  String get remindersSoundSection => isSwahili ? 'Sauti' : 'Sound';
+  String get remindersSoundSilent => isSwahili ? 'Kimya' : 'Silent';
+  String get remindersTitle => isSwahili ? 'Vikumbusho' : 'Reminders';
+  String get remindersTitleLabel => isSwahili ? 'Kichwa' : 'Title';
+  String get remindersTitleRequired => isSwahili ? 'Kichwa kinahitajika' : 'Title is required';
+
+  // Method-style stubs — use methods (not getters) so callers can pass args.
+  String remindersTabToday(int count) =>
+      isSwahili ? 'Leo${count > 0 ? ' ($count)' : ''}' : 'Today${count > 0 ? ' ($count)' : ''}';
+  String remindersTabUpcoming(int count) =>
+      isSwahili ? 'Inakuja${count > 0 ? ' ($count)' : ''}' : 'Upcoming${count > 0 ? ' ($count)' : ''}';
+  String remindersTabDone(int count) =>
+      isSwahili ? 'Imekamilika${count > 0 ? ' ($count)' : ''}' : 'Done${count > 0 ? ' ($count)' : ''}';
+  String remindersSnoozeOptionMinutes(int minutes) =>
+      isSwahili ? 'Dakika $minutes' : '$minutes min';
+  String remindersUnknownSourceRoute(String route) =>
+      isSwahili ? 'Skrini haijajulikana: $route' : 'Unknown source screen: $route';
 }

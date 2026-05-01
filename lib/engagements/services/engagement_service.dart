@@ -513,4 +513,16 @@ class EngagementService {
       return MilestoneResult(success: false, message: 'Decode error: $e', statusCode: res.statusCode);
     }
   }
+
+  // STUB — public engagement profile fetch. Static so it matches the call
+  // pattern `EngagementService.getPublic(id: ...)`. Result has the shape the
+  // page expects (`.success`, `.engagement`).
+  static Future<_EngagementPublicResultStub> getPublic({Object? id, Object? slug, Object? userId}) async =>
+      _EngagementPublicResultStub();
+}
+
+class _EngagementPublicResultStub {
+  bool get success => false;
+  Engagement? get engagement => null;
+  String? get message => 'Public engagement endpoint not yet available.';
 }

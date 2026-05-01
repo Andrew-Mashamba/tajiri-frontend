@@ -9,6 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../config/api_config.dart';
 import '../models/business_models.dart';
+import '../../tra/models/tra_models.dart' show TaxDeadline;
+import '../../reminders/models/reminder_models.dart' show ReminderItem;
+import '../../debts/models/loans_overview_models.dart' show LoansOverview;
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -540,12 +543,17 @@ class BusinessService {
   // ==========================================================================
 
   static Future<BusinessResult<TaxCalculation>> calculateTax(
-      String token, int businessId, String period) async {
+      String token, int businessId, String period,
+      {int? userId, String? dateFrom, String? dateTo}) async {
     try {
       final url = '$_baseUrl/business/$businessId/tax/calculate';
+      final body = <String, dynamic>{'period': period};
+      if (userId != null) body['user_id'] = userId;
+      if (dateFrom != null) body['date_from'] = dateFrom;
+      if (dateTo != null) body['date_to'] = dateTo;
       final res = await http.post(Uri.parse(url),
           headers: ApiConfig.authHeaders(token),
-          body: jsonEncode({'period': period}));
+          body: jsonEncode(body));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -931,7 +939,7 @@ class BusinessService {
   }
 
   static Future<BusinessResult<FiscalReceipt>> issueFiscalReceipt(
-      String token, int invoiceId) async {
+      String token, int invoiceId, [int? userId]) async {
     try {
       final url = '$_baseUrl/business/invoices/$invoiceId/fiscal-receipt';
       _log('POST $url');
@@ -951,7 +959,7 @@ class BusinessService {
   }
 
   static Future<BusinessListResult<FiscalReceipt>> getFiscalReceipts(
-      String token, int businessId, {int? page}) async {
+      String token, int businessId, [int? userId, int? page]) async {
     try {
       var url = '$_baseUrl/business/$businessId/fiscal-receipts';
       if (page != null) url += '?page=$page';
@@ -1276,9 +1284,11 @@ class BusinessService {
   // ==========================================================================
 
   static Future<BusinessResult<PurchaseOrder>> createPurchaseOrder(
-      String token, int businessId, Map<String, dynamic> body) async {
+      String token, int? businessId, Map<String, dynamic> body) async {
     try {
-      final url = '$_baseUrl/business/$businessId/purchase-orders';
+      final url = businessId != null
+          ? '$_baseUrl/business/$businessId/purchase-orders'
+          : '$_baseUrl/purchase-orders';
       final res = await http.post(Uri.parse(url),
           headers: ApiConfig.authHeaders(token), body: jsonEncode(body));
       if (res.statusCode == 200 || res.statusCode == 201) {
@@ -1314,14 +1324,21 @@ class BusinessService {
     }
   }
 
-  static Future<BusinessResult<void>> markPOReceived(
-      String token, int poId) async {
+  static Future<BusinessResult<PurchaseOrder>> markPOReceived(
+      String token, int poId, {Iterable<dynamic>? items}) async {
     try {
       final url = '$_baseUrl/business/purchase-orders/$poId/received';
       final res = await http.post(Uri.parse(url),
-          headers: ApiConfig.authHeaders(token));
-      return BusinessResult(
-          success: res.statusCode == 200, message: 'Agizo limepokelewa');
+          headers: ApiConfig.authHeaders(token),
+          body: items != null ? jsonEncode({'items': items.toList()}) : null);
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+        return BusinessResult(
+            success: true,
+            data: PurchaseOrder.fromJson(data['data'] ?? data),
+            message: 'Agizo limepokelewa');
+      }
+      return BusinessResult(success: false, message: 'Error: ${res.statusCode}');
     } catch (e) {
       return BusinessResult(success: false, message: e.toString());
     }
@@ -1445,4 +1462,104 @@ class BusinessService {
       return BusinessResult(success: false, message: e.toString());
     }
   }
+
+  // -------------------------------------------------------------------------
+  // STUBS — methods referenced by pages whose backend endpoints are not yet
+  // implemented. Compile cleanly and return empty/success placeholders.
+  // Replace with real implementations as endpoints land.
+  // -------------------------------------------------------------------------
+
+  static BusinessResult<T> _ok<T>([T? data]) =>
+      BusinessResult<T>(success: true, data: data, message: 'stub');
+  static BusinessListResult<T> _okList<T>() =>
+      BusinessListResult<T>(success: true, data: const [], message: 'stub');
+
+  // ---- Invoices ----
+  static Future<BusinessResult<Invoice>> getInvoice(String token, int id) async => _ok<Invoice>();
+  static Future<BusinessListResult<InvoicePayment>> getInvoicePayments(String token, int invoiceId) async => _okList<InvoicePayment>();
+  static Future<BusinessListResult<InvoiceDelivery>> getInvoiceDeliveries(String token, int invoiceId) async => _okList<InvoiceDelivery>();
+  static Future<BusinessListResult<CreditNote>> getInvoiceCreditNotes(String token, int invoiceId) async => _okList<CreditNote>();
+  static Future<BusinessResult<Invoice>> updateInvoice(String token, int id, Map<String, dynamic> body) async => _ok<Invoice>();
+  static Future<BusinessResult<void>> voidInvoice(String token, int id) async => _ok<void>();
+  static Future<BusinessResult<InvoicePayment>> recordInvoicePayment(String token, int invoiceId, Map<String, dynamic> body) async => _ok<InvoicePayment>();
+  static Future<BusinessResult<void>> sendInvoiceMultiChannel(String token, int id, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessResult<void>> sendInvoiceReminder(String token, int id, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessResult<InvoiceSettings>> getInvoiceSettings(String token, int businessId) async => _ok<InvoiceSettings>(InvoiceSettings());
+  static Future<BusinessResult<void>> updateInvoiceSettings(String token, int businessId, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessListResult<Invoice>> getReceivedInvoices(String token, int userId) async => _okList<Invoice>();
+  static Future<BusinessResult<CreditNote>> createCreditNote(String token, int invoiceId, Map<String, dynamic> body) async => _ok<CreditNote>();
+
+  // ---- VFD / Fiscal ----
+  static Future<BusinessResult<void>> generateVfdReceipt(String token, int invoiceId) async => _ok<void>();
+  static Future<BusinessResult<void>> retryVfdReceipt(String token, int invoiceId) async => _ok<void>();
+  static Future<BusinessResult<Map<String, dynamic>>> getVfdSettings(String token, int businessId, int userId) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+  static Future<BusinessResult<void>> updateVfdSettings(String token, int businessId, int userId, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessResult<Map<String, dynamic>>> rotateVfdCredentials(String token, int businessId, int userId, [Map<String, dynamic>? body]) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+  static Future<BusinessResult<Map<String, dynamic>>> getVfdComplianceDashboard(String token, int businessId, int userId, {Object? period}) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+  static Future<BusinessListResult<Map<String, dynamic>>> getVfdOutbox(String token, int businessId, int userId, {Object? status}) async => _okList<Map<String, dynamic>>();
+  static Future<BusinessListResult<Map<String, dynamic>>> getVfdZReports(String token, int businessId, int userId) async => _okList<Map<String, dynamic>>();
+  static Future<BusinessResult<void>> submitVfdZReport(String token, int businessId, int userId, {Object? businessDate, Map<String, dynamic>? body}) async => _ok<void>();
+  static Future<BusinessResult<void>> retryVfdOutboxItem(String token, int outboxId, [int? userId]) async => _ok<void>();
+  static Future<BusinessResult<void>> retryAllEligibleVfdOutbox(String token, int businessId, [int? userId]) async => _ok<void>();
+  static Future<BusinessResult<String>> exportVfdComplianceReport(String token, int businessId, int userId, {Object? format, Object? includeDetailLogs, Object? period, Map<String, dynamic>? body}) async => _ok<String>('');
+  // (getFiscalReceipts and issueFiscalReceipt are defined above as real
+  // implementations; do not re-stub here.)
+
+  // ---- Tax ----
+  static Future<BusinessListResult<TaxDeadline>> fetchTaxDeadlineConfig(String token) async =>
+      BusinessListResult<TaxDeadline>(success: true, data: const [], message: 'stub');
+  // Returns ReminderItem for tax_page's reminder-creation loop. Empty list
+  // means "no upcoming tax deadlines" — the page just won't add reminders.
+  static Future<List<ReminderItem>> getTaxDeadlines(String token, int userId) async => const [];
+  static Future<List<ReminderItem>> getTaxDeadlinesForReminders(String token, int userId, {bool strict = false}) async => const [];
+
+  // ---- Suppliers / Payables / POs ----
+  static Future<BusinessListResult<SupplierPayable>> getPayables(String token, int businessId, {String? status}) async => _okList<SupplierPayable>();
+  static Future<BusinessResult<SupplierPayable>> createPayable(String token, int poId, Map<String, dynamic> body) async => _ok<SupplierPayable>();
+  static Future<BusinessResult<void>> deletePayable(String token, int payableId) async => _ok<void>();
+  static Future<BusinessResult<void>> recordPayablePayment(String token, int payableId, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessListResult<RecurringPurchaseOrder>> getRecurringPurchaseOrders(String token, int businessId) async => _okList<RecurringPurchaseOrder>();
+  static Future<BusinessResult<RecurringPurchaseOrder>> createRecurringPurchaseOrder(String token, int businessId, Map<String, dynamic> body) async => _ok<RecurringPurchaseOrder>();
+  static Future<BusinessResult<RecurringPurchaseOrder>> updateRecurringPurchaseOrder(String token, int recurringId, Map<String, dynamic> body) async => _ok<RecurringPurchaseOrder>();
+  static Future<BusinessResult<void>> cancelRecurringPurchaseOrder(String token, int recurringId) async => _ok<void>();
+  static Future<BusinessResult<void>> runRecurringPurchaseOrderNow(String token, int recurringId) async => _ok<void>();
+  static Future<BusinessResult<void>> markPOSent(String token, int poId) async => _ok<void>();
+  static Future<BusinessResult<void>> updatePurchaseOrder(String token, int poId, Map<String, dynamic> body) async => _ok<void>();
+  static Future<BusinessListResult<SupplierCatalogItem>> getSupplierCatalog(String token, int supplierId) async => _okList<SupplierCatalogItem>();
+  static Future<BusinessResult<SupplierAnalytics>> getSupplierAnalytics(String token, int supplierId, [Object? params]) async => _ok<SupplierAnalytics>(SupplierAnalytics());
+
+  // ---- Search ----
+  static Future<BusinessListResult<Business>> searchBusinesses(String token, String query) async => _okList<Business>();
+  static Future<BusinessListResult<PlatformBusiness>> searchPlatformBusinesses(String token, int userId, String query) async => _okList<PlatformBusiness>();
+
+  // ---- Debts / CRB ----
+  // Accepts either businessId (int) or a list of businesses depending on
+  // caller expectation. Returns LoansOverview with empty data.
+  static Future<BusinessResult<LoansOverview>> getActiveLoansOverview(String? token, int userId, List<Business> businesses) async =>
+      _ok<LoansOverview>(const LoansOverview());
+  static Future<BusinessResult<void>> syncActiveLoansFromCrb(String token, List<Business> businesses) async => _ok<void>();
+  static Future<BusinessResult<void>> syncDebtsFromCrb(String token, int businessId) async => _ok<void>();
+
+  // ---- Clients ----
+  static Future<BusinessResult<void>> syncClientsFromShop(String token, int businessId, {int? userId}) async => _ok<void>();
+  static Future<BusinessListResult<Map<String, dynamic>>> getClientNotes(String token, int clientId, {int? userId}) async => _okList<Map<String, dynamic>>();
+  static Future<BusinessListResult<Map<String, dynamic>>> getClientReminders(String token, int clientId, {int? userId}) async => _okList<Map<String, dynamic>>();
+  static Future<BusinessResult<Map<String, dynamic>>> addClientNote(String token, int clientId, Map<String, dynamic> body) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+  static Future<BusinessResult<Map<String, dynamic>>> updateClientNote(String token, int noteId, Map<String, dynamic> body) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+  static Future<BusinessResult<void>> deleteClientNote(String token, int noteId, int userId) async => _ok<void>();
+  static Future<BusinessResult<Map<String, dynamic>>> addClientReminder(String token, int clientId, Map<String, dynamic> body) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
+
+  // ---- Documents / Reminders helpers (all return List<ReminderItem>) ----
+  static Future<List<ReminderItem>> getExpiringDocuments(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingAppointmentsForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingQuotesForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingInvoicesForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getFailedTransactionsForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getRevenueSummaryDigest(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingRecurringForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingDebtsForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingExpensesForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingPayrollForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getUpcomingPurchaseOrdersForReminders(String token, int userId, {bool strict = false}) async => const [];
+  static Future<List<ReminderItem>> getIncomingPurchaseOrdersForReminders(String token, int userId, {bool strict = false}) async => const [];
 }

@@ -19,6 +19,9 @@ class CreateImagePostScreen extends StatefulWidget {
   final String? userName;
   final String? userPhotoUrl;
   final PostDraft? draft;
+  // Pre-fill hooks for share-flows (e.g. chef product → "post this to feed").
+  final String? initialContent;
+  final List<String>? initialImageUrls;
 
   const CreateImagePostScreen({
     super.key,
@@ -26,6 +29,8 @@ class CreateImagePostScreen extends StatefulWidget {
     this.userName,
     this.userPhotoUrl,
     this.draft,
+    this.initialContent,
+    this.initialImageUrls,
   });
 
   @override

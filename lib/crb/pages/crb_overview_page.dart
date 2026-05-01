@@ -3,7 +3,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../business/models/business_models.dart';
+import '../../business/models/business_models.dart' hide CreditReport, CreditScore;
 import '../../l10n/app_strings_scope.dart';
 import '../../services/local_storage_service.dart';
 import '../models/crb_models.dart';

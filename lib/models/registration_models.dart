@@ -11,7 +11,9 @@ class RegistrationState {
 
   // Step 1: Bio Information
   String? firstName;
+  String? middleName;
   String? lastName;
+  String? handle;
   DateTime? dateOfBirth;
   Gender? gender;
 

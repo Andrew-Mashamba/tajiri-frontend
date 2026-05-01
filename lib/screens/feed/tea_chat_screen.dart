@@ -25,7 +25,10 @@ class _ChatItem {
 }
 
 class TeaChatScreen extends StatefulWidget {
-  const TeaChatScreen({super.key});
+  // Optional pre-filled prompt for deep-link entry points (e.g. hair-nails
+  // → "ask Shangazi"). Currently accepted but not yet wired into the input.
+  final String? initialMessage;
+  const TeaChatScreen({super.key, this.initialMessage});
 
   @override
   State<TeaChatScreen> createState() => _TeaChatScreenState();

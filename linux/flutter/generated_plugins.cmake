@@ -9,6 +9,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_linux
   flutter_sound
   flutter_webrtc
+  printing
   rive_native
   url_launcher_linux
 )
