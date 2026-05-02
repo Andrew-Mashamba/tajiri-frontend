@@ -584,6 +584,28 @@ class FcmService {
       _openBudget(data, navigator);
       return;
     }
+    // Mapato (Income Sources) notifications — when the backend rule engine
+    // flips a previously-locked source to 'ready', or settles a payout,
+    // deep-link straight into that source's detail screen so the creator
+    // can act without hunting.
+    if (type == 'creator.source.unlocked' ||
+        type == 'creator.source.ready' ||
+        type == 'creator.payout.settled') {
+      _openIncomeSource(data, navigator);
+      return;
+    }
+  }
+
+  /// Opens an Income Sources surface — the source detail screen if a
+  /// `source_id` is in the payload, otherwise the creator-module landing.
+  void _openIncomeSource(Map<String, dynamic> data, NavigatorState navigator) {
+    if (!navigator.mounted) return;
+    final sourceId = data['source_id'] as String?;
+    if (sourceId != null && sourceId.isNotEmpty) {
+      navigator.pushNamed('/creator/source/$sourceId');
+    } else {
+      navigator.pushNamed('/creator');
+    }
   }
 
   /// Opens budget tab via home screen.

@@ -47,64 +47,164 @@ class _SponsoredPostsScreenState extends State<SponsoredPostsScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = AppStringsScope.of(context);
+    final isSw = strings?.isSwahili ?? false;
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1A1A1A),
         elevation: 0,
+        scrolledUnderElevation: 1,
         title: Text(
           strings?.browseSponsorableCreators ?? 'Browse Creators',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A1A)))
-          : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_error!, style: const TextStyle(color: Color(0xFF666666))),
-                    const SizedBox(height: 16),
-                    TextButton(onPressed: _loadCreators, child: Text(strings?.retry ?? 'Retry')),
-                  ],
-                ))
-              : RefreshIndicator(
-                  onRefresh: _loadCreators,
-                  color: const Color(0xFF1A1A1A),
-                  child: _creators.isEmpty
-                      ? ListView(children: [
-                          const SizedBox(height: 100),
-                          Center(child: Text(
-                            strings?.starLegendOnly ?? 'Star & Legend only',
-                            style: const TextStyle(color: Color(0xFF999999), fontSize: 14),
-                          )),
-                        ])
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _creators.length,
-                          itemBuilder: (context, index) {
-                            final creator = _creators[index];
-                            return _buildCreatorCard(creator, strings);
-                          },
-                        ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF1A1A1A),
+                  ),
                 ),
+              )
+            : _error != null
+                ? _buildErrorState(strings, isSw)
+                : RefreshIndicator(
+                    onRefresh: _loadCreators,
+                    color: const Color(0xFF1A1A1A),
+                    child: _creators.isEmpty
+                        ? _buildEmptyState(strings, isSw)
+                        : ListView.builder(
+                            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _creators.length,
+                            itemBuilder: (context, index) {
+                              final creator = _creators[index];
+                              return _buildCreatorCard(creator, strings);
+                            },
+                          ),
+                  ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(AppStrings? s, bool isSw) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.campaign_outlined,
+                  size: 64,
+                  color: Colors.grey.shade300,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isSw ? 'Hakuna creator wa kuonyesha' : 'No creators to show',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  s?.starLegendOnly ?? 'Star & Legend only',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(AppStrings? s, bool isSw) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isSw ? 'Imeshindwa kupakua' : 'Could not load',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _error ?? '',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _loadCreators,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1A1A1A),
+                  side: const BorderSide(color: Color(0xFFE5E5E5)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: Text(s?.retry ?? 'Retry'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildCreatorCard(SponsorableCreator creator, dynamic strings) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E0E0), width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () => Navigator.pushNamed(context, '/profile/${creator.userId}'),
-        child: Row(
-          children: [
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.pushNamed(context, '/profile/${creator.userId}'),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
             CircleAvatar(
               radius: 24,
               backgroundColor: const Color(0xFFE0E0E0),
@@ -139,7 +239,9 @@ class _SponsoredPostsScreenState extends State<SponsoredPostsScreen> {
               ),
             ),
             const Icon(Icons.chevron_right_rounded, color: Color(0xFF999999)),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

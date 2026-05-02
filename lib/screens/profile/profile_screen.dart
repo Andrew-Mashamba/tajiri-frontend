@@ -42,7 +42,7 @@ import '../../models/file_models.dart';
 import '../../services/group_service.dart';
 import '../../services/file_service.dart';
 import 'profile_stats_bottom_sheet.dart';
-import '../../creator/screens/dashboard_section.dart';
+import '../../creator/screens/income_sources_screen.dart';
 import 'edit_profile_screen.dart';
 import '../../creator/services/creator_service.dart';
 import '../../creator/models/flywheel_models.dart';
@@ -2485,10 +2485,11 @@ class _ProfileTabPage extends StatelessWidget {
         );
       case 'creator':
         if (!isOwnProfile) return _privateInfoPlaceholder(context);
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: CreatorDashboardSection(userId: userId),
-        );
+        // Mapato (Income Sources) is now the landing for the lib/creator/
+        // module. Tier / streak / multipliers / projected-payout moved
+        // behind the "Stats" action button on the IncomeSourcesScreen
+        // AppBar — not lost, just one tap deeper.
+        return IncomeSourcesView(creatorId: userId);
       case 'about':
         return _ProfileAboutPage(
           profile: profile,

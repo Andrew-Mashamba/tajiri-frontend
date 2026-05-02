@@ -58,30 +58,43 @@ class PostingNudgeCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onCreatePost,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                isSwahili ? 'Chapisha' : 'Post',
-                style: const TextStyle(
-                  color: Color(0xFF1A1A1A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onCreatePost,
+              borderRadius: BorderRadius.circular(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 32),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isSwahili ? 'Chapisha' : 'Post',
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onDismiss,
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.close, color: Colors.white54, size: 16),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onDismiss,
+              customBorder: const CircleBorder(),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.close_rounded, color: Colors.white54, size: 16),
+              ),
             ),
           ),
         ],

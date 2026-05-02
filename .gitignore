@@ -46,3 +46,6 @@ app.*.map.json
 ios/build/
 android/build/
 .claude/worktrees/
+
+# Superpowers brainstorm session artifacts (mockups, state)
+.superpowers/

@@ -102,6 +102,8 @@ class AlgorithmTransparencyCard extends StatelessWidget {
               Text(
                 _formatNumber(reach),
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(width: 8),
               Container(
@@ -116,7 +118,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
                     Icon(
                       isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                       size: 14,
-                      color: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                      color: isPositive ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -124,7 +126,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: isPositive ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                        color: isPositive ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
                       ),
                     ),
                   ],
@@ -139,11 +141,10 @@ class AlgorithmTransparencyCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Driver + decay
+          // Driver + decay (monochrome icons — color reserved for status badges only)
           if (topDriver != null && topDriver!.isNotEmpty) ...[
             _buildInsightRow(
               icon: Icons.rocket_launch_rounded,
-              iconColor: const Color(0xFF2196F3),
               label: (s?.isSwahili == true) ? 'Kichocheo Kikuu' : 'Top Driver',
               value: topDriver!,
             ),
@@ -152,7 +153,6 @@ class AlgorithmTransparencyCard extends StatelessWidget {
           if (watchTimeDecay != null && watchTimeDecay!.isNotEmpty) ...[
             _buildInsightRow(
               icon: Icons.timer_rounded,
-              iconColor: const Color(0xFFFF9800),
               label: (s?.isSwahili == true) ? 'Muda wa Kutazama' : 'Watch Time',
               value: watchTimeDecay!,
             ),
@@ -184,7 +184,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
 
           // Predicted earnings
           if (predictedEarnings != null && predictedEarnings! > 0) ...[
-            const Divider(height: 24, color: Color(0xFFE0E0E0)),
+            const Divider(height: 24, color: Color(0xFFF0F0F0)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -205,17 +205,19 @@ class AlgorithmTransparencyCard extends StatelessWidget {
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              height: 44,
+              height: 48,
               child: OutlinedButton(
                 onPressed: onActionTap,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF1A1A1A),
-                  side: const BorderSide(color: Color(0xFFE0E0E0)),
+                  side: const BorderSide(color: Color(0xFFE5E5E5)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: Text(
                   (s?.isSwahili == true) ? 'Angalia Takwimu Zaidi' : 'View Full Analytics',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -227,7 +229,6 @@ class AlgorithmTransparencyCard extends StatelessWidget {
 
   Widget _buildInsightRow({
     required IconData icon,
-    required Color iconColor,
     required String label,
     required String value,
   }) {
@@ -238,19 +239,30 @@ class AlgorithmTransparencyCard extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
+            color: const Color(0xFFF2F2F2),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 16, color: iconColor),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 16, color: const Color(0xFF1A1A1A)),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF999999))),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF999999)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -264,7 +276,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFAFAFA),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(color: const Color(0xFFE5E5E5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

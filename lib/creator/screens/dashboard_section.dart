@@ -12,7 +12,6 @@ import '../widgets/streak_indicator.dart';
 import '../widgets/collaboration_card.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'settings_screen.dart';
-import 'earnings_ledger_screen.dart';
 
 class CreatorDashboardSection extends StatefulWidget {
   final int userId;
@@ -97,7 +96,13 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE0E0E0), width: 0.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,39 +129,45 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                 Semantics(
                   button: true,
                   label: strings?.creatorSettings ?? 'Creator settings',
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CreatorSettingsScreen(currentUserId: widget.userId),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.tune_rounded,
-                              size: 14, color: Color(0xFF666666)),
-                          const SizedBox(width: 4),
-                          Text(
-                            (strings?.isSwahili == true)
-                                ? 'Mipangilio'
-                                : 'Preferences',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF666666),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CreatorSettingsScreen(currentUserId: widget.userId),
                           ),
-                        ],
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.tune_rounded,
+                                  size: 14, color: Color(0xFF666666)),
+                              const SizedBox(width: 4),
+                              Text(
+                                (strings?.isSwahili == true)
+                                    ? 'Mipangilio'
+                                    : 'Preferences',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF666666),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -239,28 +250,31 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                 ],
               ),
             ],
-            // Earnings ledger link — always visible for creators
+            // Income sources link — always visible for creators.
+            // Opens the panoramic Mapato (Income) home view that supersedes
+            // the old earnings ledger.
             const SizedBox(height: 8),
-            InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CreatorEarningsLedgerScreen(creatorId: widget.userId),
-                ),
-              ),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      strings?.viewYourEarnings ?? 'View your earnings',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.pushNamed(context, '/creator'),
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          strings?.viewYourEarnings ?? 'View your earnings',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A1A)),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A1A)),
-                  ],
+                  ),
                 ),
               ),
             ),

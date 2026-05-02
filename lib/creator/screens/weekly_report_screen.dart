@@ -54,30 +54,34 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1A1A1A),
         elevation: 0,
+        scrolledUnderElevation: 1,
         title: Text(
           strings?.weeklyReport ?? 'Weekly Report',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A1A)))
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, style: const TextStyle(color: Color(0xFF666666))),
-                      const SizedBox(height: 16),
-                      TextButton(onPressed: _loadReport, child: Text(strings?.retry ?? 'Retry')),
-                    ],
+      body: SafeArea(
+        child: _loading
+            ? const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF1A1A1A),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadReport,
-                  color: const Color(0xFF1A1A1A),
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
+                ),
+              )
+            : _error != null
+                ? _buildErrorState(strings)
+                : RefreshIndicator(
+                    onRefresh: _loadReport,
+                    color: const Color(0xFF1A1A1A),
+                    child: ListView(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
                       // Week range
                       Text(
                         '${_report!.weekStart} — ${_report!.weekEnd}',
@@ -131,10 +135,13 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                       // Best post
                       if (_report!.bestPostId != null && _report!.bestPostId! > 0)
                         _buildCard(
-                          child: InkWell(
-                            onTap: () => Navigator.pushNamed(context, '/post/${_report!.bestPostId}'),
-                            child: Row(
-                              children: [
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => Navigator.pushNamed(context, '/post/${_report!.bestPostId}'),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                children: [
                                 const Icon(Icons.emoji_events_rounded, size: 24, color: Color(0xFF1A1A1A)),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -150,6 +157,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                                 ),
                                 const Icon(Icons.chevron_right_rounded, color: Color(0xFF999999)),
                               ],
+                            ),
                             ),
                           ),
                         ),
@@ -183,6 +191,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                     ],
                   ),
                 ),
+      ),
     );
   }
 
@@ -192,9 +201,70 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E0E0), width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: child,
+    );
+  }
+
+  Widget _buildErrorState(AppStrings? s) {
+    final isSw = s?.isSwahili ?? false;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.assessment_outlined,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isSw ? 'Imeshindwa kupakua ripoti' : 'Could not load report',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _error ?? '',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _loadReport,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1A1A1A),
+                  side: const BorderSide(color: Color(0xFFE5E5E5)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
+                child: Text(s?.retry ?? 'Retry'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

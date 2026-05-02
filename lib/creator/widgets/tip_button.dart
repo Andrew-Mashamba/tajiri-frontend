@@ -25,42 +25,48 @@ class TipButton extends StatelessWidget {
     final s = AppStringsScope.of(context);
 
     if (compact) {
-      return InkWell(
-        onTap: () => _openTipSheet(context),
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A).withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.favorite_rounded, size: 14, color: Color(0xFF4CAF50)),
-              const SizedBox(width: 4),
-              Text(
-                s?.tip ?? 'Tip',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openTipSheet(context),
+          borderRadius: BorderRadius.circular(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A).withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.favorite_rounded, size: 14, color: Color(0xFF1A1A1A)),
+                  const SizedBox(width: 4),
+                  Text(
+                    s?.tip ?? 'Tip',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );
     }
 
     return SizedBox(
-      height: 40,
+      height: 48,
       child: OutlinedButton.icon(
         onPressed: () => _openTipSheet(context),
-        icon: const Icon(Icons.favorite_rounded, size: 16, color: Color(0xFF4CAF50)),
+        icon: const Icon(Icons.favorite_rounded, size: 16, color: Color(0xFF1A1A1A)),
         label: Text(
           s?.sendTip ?? 'Send tip',
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFF1A1A1A),
-          side: const BorderSide(color: Color(0xFFE0E0E0)),
+          side: const BorderSide(color: Color(0xFFE5E5E5)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(horizontal: 14),
         ),
@@ -183,28 +189,35 @@ class _TipAmountSheetState extends State<_TipAmountSheet> {
 
   Widget _buildAmountChip(double amount) {
     final selected = _selected == amount;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        setState(() => _selected = amount);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1A1A1A) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? const Color(0xFF1A1A1A) : const Color(0xFFE0E0E0)),
-          boxShadow: [
-            if (!selected)
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Text(
-          'TSh ${amount.toStringAsFixed(0)}',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : const Color(0xFF1A1A1A),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() => _selected = amount);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF1A1A1A) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: selected ? const Color(0xFF1A1A1A) : const Color(0xFFE5E5E5)),
+              boxShadow: [
+                if (!selected)
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Text(
+              'TSh ${amount.toStringAsFixed(0)}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : const Color(0xFF1A1A1A),
+              ),
+            ),
           ),
         ),
       ),

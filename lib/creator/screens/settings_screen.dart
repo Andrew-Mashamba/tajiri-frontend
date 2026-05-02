@@ -154,13 +154,22 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
         body: SafeArea(
           child: _loading
               ? const Center(
-                  child: CircularProgressIndicator(color: _primary))
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _primary,
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   color: _primary,
                   onRefresh: _load,
                   child: ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
                     children: [
@@ -281,11 +290,21 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
         toggled: value,
         label: '$title. $subtitle',
         child: MergeSemantics(
-          child: Material(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
             color: _card,
             borderRadius: BorderRadius.circular(16),
-            elevation: 2,
-            shadowColor: Colors.black.withValues(alpha: 0.1),
+            elevation: 0,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 72),
               child: Padding(
@@ -352,30 +371,34 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
               ),
             ),
           ),
+          ),
         ),
       ),
     );
   }
 
   Widget _inlineErrorBanner(AppStrings? s) {
+    const Color errBg = Color(0xFFFFEBEE);
+    const Color errBorder = Color(0xFFEF9A9A);
+    const Color errFg = Color(0xFFC62828);
     return Semantics(
       liveRegion: true,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          border: Border.all(color: Colors.red.shade200),
+          color: errBg,
+          border: Border.all(color: errBorder),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            const Icon(Icons.error_outline, size: 20, color: Colors.red),
+            const Icon(Icons.error_outline_rounded, size: 18, color: errFg),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 _err(s),
-                style: const TextStyle(fontSize: 13, color: Colors.red),
+                style: const TextStyle(fontSize: 12, color: errFg),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -385,7 +408,7 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
               label: s?.close ?? 'Close',
               child: IconButton(
                 icon: const Icon(Icons.close_rounded,
-                    size: 18, color: Colors.red),
+                    size: 18, color: errFg),
                 onPressed: () => setState(() => _formError = null),
                 style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
               ),

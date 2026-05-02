@@ -44,6 +44,9 @@ import 'screens/shop/wishlist_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'creator/screens/sponsored_posts_screen.dart';
+import 'creator/screens/income_sources_screen.dart';
+import 'creator/screens/income_source_detail_screen.dart';
+import 'creator/screens/income_activity_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/settings/notification_settings_screen.dart';
@@ -439,6 +442,63 @@ class _TajiriAppState extends State<TajiriApp> {
                 },
               ),
             );
+
+          // ── lib/creator/ module routes ───────────────────────────────
+          // Landing for the creator module is IncomeSourcesScreen (Mapato).
+          //   /creator                    → IncomeSourcesScreen (landing)
+          //   /creator/source/:sourceId   → IncomeSourceDetailScreen
+          //   /creator/activity           → IncomeActivityScreen
+          // /mapato/* kept as alias for backward compatibility with any
+          // already-deployed deep links / FCM payloads in flight.
+          case 'creator':
+          case 'mapato': {
+            if (pathSegments.length == 1) {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    return IncomeSourcesScreen(creatorId: snapshot.data!);
+                  },
+                ),
+              );
+            }
+            if (pathSegments.length == 2 && pathSegments[1] == 'activity') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    return IncomeActivityScreen(creatorId: snapshot.data!);
+                  },
+                ),
+              );
+            }
+            if (pathSegments.length >= 3 && pathSegments[1] == 'source') {
+              final sourceId = pathSegments[2];
+              if (sourceId.isNotEmpty) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return IncomeSourceDetailScreen(
+                        creatorId: snapshot.data!,
+                        sourceId: sourceId,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            break;
+          }
 
           case 'create-post':
             return MaterialPageRoute(
