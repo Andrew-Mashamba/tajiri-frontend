@@ -169,10 +169,9 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
               children: [
                 if (_score != null)
                   CreatorTierBadge(tier: _score!.tier, multiplier: _score!.tierMultiplier),
-                if (_score != null && _streak != null) const SizedBox(width: 12),
-                if (_streak != null)
+                if (_score != null && _streak != null && _streak!.currentStreakDays > 0) const SizedBox(width: 12),
+                if (_streak != null && _streak!.currentStreakDays > 0) ...[
                   StreakIndicator(days: _streak!.currentStreakDays, isFrozen: _streak!.isFrozen),
-                if (_streak != null) ...[
                   const SizedBox(width: 4),
                   Text(
                     strings?.streakDays ?? 'day streak',
@@ -182,7 +181,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
               ],
             ),
             // Viewer streak row
-            if (_viewerStreak != null) ...[
+            if (_viewerStreak != null && _viewerStreak!.currentStreakDays > 0) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -223,7 +222,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                 ],
               ),
             ],
-            // Projected payout + ledger link
+            // Projected payout
             if (_projection != null) ...[
               const SizedBox(height: 12),
               Row(
@@ -239,31 +238,32 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreatorEarningsLedgerScreen(creatorId: widget.userId),
-                  ),
-                ),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        strings?.viewYourEarnings ?? 'View your earnings',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A1A)),
-                    ],
-                  ),
+            ],
+            // Earnings ledger link — always visible for creators
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreatorEarningsLedgerScreen(creatorId: widget.userId),
                 ),
               ),
-            ],
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      strings?.viewYourEarnings ?? 'View your earnings',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A1A)),
+                  ],
+                ),
+              ),
+            ),
             // Fund pool info
             if (_fundPool != null && !_fundPool!.isDistributed) ...[
               const SizedBox(height: 8),

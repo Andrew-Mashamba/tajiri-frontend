@@ -39,7 +39,6 @@ class StreakIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (days <= 0) return const SizedBox.shrink();
     final iconSize = _graduatedSize;
     final color = _graduatedColor;
     final fontWeight = _graduatedFontWeight;
@@ -54,7 +53,7 @@ class StreakIndicator extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1A1A1A).withOpacity(0.25),
+                  color: const Color(0xFF1A1A1A).withValues(alpha: 0.25),
                   blurRadius: 6,
                   spreadRadius: 1,
                 ),
