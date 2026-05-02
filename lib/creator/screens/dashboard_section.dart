@@ -12,6 +12,7 @@ import '../widgets/streak_indicator.dart';
 import '../widgets/collaboration_card.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'settings_screen.dart';
+import 'earnings_ledger_screen.dart';
 
 class CreatorDashboardSection extends StatefulWidget {
   final int userId;
@@ -222,7 +223,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                 ],
               ),
             ],
-            // Projected payout
+            // Projected payout + ledger link
             if (_projection != null) ...[
               const SizedBox(height: 12),
               Row(
@@ -237,6 +238,30 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreatorEarningsLedgerScreen(creatorId: widget.userId),
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        strings?.viewYourEarnings ?? 'View your earnings',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A1A)),
+                    ],
+                  ),
+                ),
               ),
             ],
             // Fund pool info
