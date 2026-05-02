@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../config/api_config.dart';
+import '../../config/api_config.dart';
 import '../models/flywheel_models.dart';
-import '../models/payment_models.dart';
+import '../../models/payment_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 

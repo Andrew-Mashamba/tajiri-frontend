@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/flywheel_models.dart';
-import '../l10n/app_strings_scope.dart';
+import '../../l10n/app_strings_scope.dart';
 
 class PostingNudgeCard extends StatelessWidget {
   final PostingNudge nudge;

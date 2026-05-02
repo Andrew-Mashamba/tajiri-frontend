@@ -1,10 +1,11 @@
-/// Configuration for profile tabs - order and visibility
+/// Configuration for profile tabs - order, visibility and category
 class ProfileTabConfig {
   final String id;
   final String label;
   final String icon;
   final bool enabled;
   final int order;
+  final String? categoryId;
 
   const ProfileTabConfig({
     required this.id,
@@ -12,6 +13,7 @@ class ProfileTabConfig {
     required this.icon,
     required this.enabled,
     required this.order,
+    this.categoryId,
   });
 
   ProfileTabConfig copyWith({
@@ -20,6 +22,7 @@ class ProfileTabConfig {
     String? icon,
     bool? enabled,
     int? order,
+    String? categoryId,
   }) {
     return ProfileTabConfig(
       id: id ?? this.id,
@@ -27,6 +30,7 @@ class ProfileTabConfig {
       icon: icon ?? this.icon,
       enabled: enabled ?? this.enabled,
       order: order ?? this.order,
+      categoryId: categoryId ?? this.categoryId,
     );
   }
 
@@ -37,16 +41,19 @@ class ProfileTabConfig {
       'icon': icon,
       'enabled': enabled,
       'order': order,
+      'categoryId': categoryId,
     };
   }
 
   factory ProfileTabConfig.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
     return ProfileTabConfig(
-      id: json['id'] as String,
+      id: id,
       label: json['label'] as String,
       icon: json['icon'] as String,
       enabled: json['enabled'] as bool? ?? true,
       order: json['order'] as int? ?? 0,
+      categoryId: json['categoryId'] as String? ?? ProfileTabDefaults.getDefaultCategoryId(id),
     );
   }
 
@@ -85,7 +92,10 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'live', label: 'Live', icon: 'live_tv', enabled: true, order: 4),
     ProfileTabConfig(id: 'groups', label: 'Groups', icon: 'group', enabled: true, order: 5),
     ProfileTabConfig(id: 'friends', label: 'Friends', icon: 'people', enabled: true, order: 6),
-    ProfileTabConfig(id: 'about', label: 'About', icon: 'info', enabled: true, order: 7),
+    ProfileTabConfig(id: 'saved', label: 'Saved', icon: 'bookmark', enabled: true, order: 7),
+    ProfileTabConfig(id: 'creator', label: 'Creator', icon: 'auto_awesome', enabled: true, order: 8),
+    ProfileTabConfig(id: 'settings', label: 'Settings', icon: 'settings', enabled: true, order: 9),
+    ProfileTabConfig(id: 'about', label: 'About', icon: 'info', enabled: true, order: 10),
 
     // ── Commerce ────────────────────────────────────────────────────
     ProfileTabConfig(id: 'shop', label: 'Shop', icon: 'storefront', enabled: true, order: 8),
@@ -279,7 +289,7 @@ class ProfileTabDefaults {
     ProfileTabCategory(
       id: 'social',
       label: '', // No header for social — it's the top section
-      tabIds: ['posts', 'photos', 'videos', 'music', 'live', 'groups', 'friends', 'about'],
+      tabIds: ['posts', 'photos', 'videos', 'music', 'live', 'groups', 'friends', 'saved', 'creator', 'settings', 'about'],
     ),
     ProfileTabCategory(
       id: 'commerce',
@@ -371,6 +381,25 @@ class ProfileTabDefaults {
   ];
 
   static List<ProfileTabConfig> getDefaults() {
-    return List.from(defaultTabs);
+    return defaultTabs.map((tab) {
+      final catId = getDefaultCategoryId(tab.id);
+      return tab.copyWith(categoryId: catId);
+    }).toList();
   }
+
+  /// Look up the default category ID for a tab from the static category definitions.
+  static String getDefaultCategoryId(String tabId) {
+    for (final category in categories) {
+      if (category.tabIds.contains(tabId)) return category.id;
+    }
+    return 'more';
+  }
+
+  /// Tab IDs that should only appear when the viewer is on their own profile.
+  /// Filtered out of the grid for visitors viewing other users.
+  static const Set<String> ownProfileOnlyTabIds = {
+    'saved',
+    'creator',
+    'settings',
+  };
 }

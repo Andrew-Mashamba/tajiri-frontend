@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/registration_models.dart';
 import '../models/profile_tab_config.dart';
@@ -13,6 +15,11 @@ class LocalStorageService {
   static const String _themeModeKey = 'theme_mode';
   static const String _languageKey = 'language_code';
   static const String _authTokenKey = 'auth_token';
+  static const String _userCategoriesKey = 'user_categories';
+  static const String _appLockEnabledKey = 'app_lock_enabled';
+  static const String _appLockBiometricKey = 'app_lock_biometric';
+  static const String _appLockTimeoutKey = 'app_lock_timeout';
+  static const String _appLockPinKey = 'app_lock_pin_hash';
 
   static LocalStorageService? _instance;
   late Box _userBox;
@@ -106,7 +113,10 @@ class LocalStorageService {
       final existingIds = tabs.map((t) => t.id).toSet();
       for (final defaultTab in ProfileTabDefaults.defaultTabs) {
         if (!existingIds.contains(defaultTab.id)) {
-          tabs.add(defaultTab.copyWith(order: tabs.length));
+          tabs.add(defaultTab.copyWith(
+            order: tabs.length,
+            categoryId: ProfileTabDefaults.getDefaultCategoryId(defaultTab.id),
+          ));
         }
       }
 
@@ -121,6 +131,31 @@ class LocalStorageService {
   // Reset profile tabs to defaults
   Future<void> resetProfileTabs() async {
     await _userBox.delete(_profileTabsKey);
+    await _userBox.delete(_userCategoriesKey);
+  }
+
+  // ── User-defined profile tab categories ────────────────────────────────────
+
+  /// Persist user category overrides: custom labels and new category IDs.
+  Future<void> saveUserCategories(List<String> ids, Map<String, String> labels) async {
+    await _userBox.put(_userCategoriesKey, jsonEncode({
+      'ids': ids,
+      'labels': labels,
+    }));
+  }
+
+  /// Load user category overrides. Returns `([], {})` if nothing stored.
+  ({List<String> ids, Map<String, String> labels}) getUserCategories() {
+    final jsonString = _userBox.get(_userCategoriesKey);
+    if (jsonString == null) return (ids: <String>[], labels: <String, String>{});
+    try {
+      final json = jsonDecode(jsonString as String) as Map<String, dynamic>;
+      final ids = (json['ids'] as List<dynamic>?)?.cast<String>() ?? <String>[];
+      final labels = (json['labels'] as Map<String, dynamic>?)?.cast<String, String>() ?? <String, String>{};
+      return (ids: ids, labels: labels);
+    } catch (_) {
+      return (ids: <String>[], labels: <String, String>{});
+    }
   }
 
   ThemeMode getThemeMode() {
@@ -224,5 +259,56 @@ class LocalStorageService {
     } catch (_) {
       return true;
     }
+  }
+
+  // ── App Lock (device-level PIN + biometric) ───────────────────────────────
+
+  static const _secureStorage = FlutterSecureStorage();
+
+  bool getAppLockEnabled() {
+    return _userBox.get(_appLockEnabledKey, defaultValue: false) == true;
+  }
+
+  Future<void> setAppLockEnabled(bool value) async {
+    await _userBox.put(_appLockEnabledKey, value);
+  }
+
+  bool getAppLockBiometric() {
+    return _userBox.get(_appLockBiometricKey, defaultValue: false) == true;
+  }
+
+  Future<void> setAppLockBiometric(bool value) async {
+    await _userBox.put(_appLockBiometricKey, value);
+  }
+
+  int getAppLockTimeout() {
+    return _userBox.get(_appLockTimeoutKey, defaultValue: 300) as int;
+  }
+
+  Future<void> setAppLockTimeout(int seconds) async {
+    await _userBox.put(_appLockTimeoutKey, seconds);
+  }
+
+  /// Store PIN as SHA-256 hash in secure storage.
+  Future<void> setAppLockPin(String pin) async {
+    final hash = sha256.convert(utf8.encode(pin)).toString();
+    await _secureStorage.write(key: _appLockPinKey, value: hash);
+  }
+
+  /// Verify a PIN against the stored hash.
+  Future<bool> verifyAppLockPin(String pin) async {
+    final stored = await _secureStorage.read(key: _appLockPinKey);
+    if (stored == null) return false;
+    final hash = sha256.convert(utf8.encode(pin)).toString();
+    return stored == hash;
+  }
+
+  Future<bool> hasAppLockPin() async {
+    final stored = await _secureStorage.read(key: _appLockPinKey);
+    return stored != null;
+  }
+
+  Future<void> removeAppLockPin() async {
+    await _secureStorage.delete(key: _appLockPinKey);
   }
 }

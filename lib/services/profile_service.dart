@@ -16,9 +16,24 @@ class _CachedProfile {
 
 class ProfileService {
   // In-memory profile cache: 5-min TTL, max 50 entries
+  // (Per docs/SQLITE_ADOPTION_ROADMAP.md the user profile is explicitly
+  //  not worth SQLite — small payload, 5 min TTL is enough.)
   static final Map<int, _CachedProfile> _cache = {};
   static const int _maxCacheSize = 50;
   static const Duration _cacheTtl = Duration(minutes: 5);
+
+  /// Drop the cached profile for [userId] so the next [getProfile] call
+  /// hits the network. Call this from any screen that mutates the profile
+  /// (edit profile, edit email, edit location, etc.) so the change is
+  /// visible immediately instead of after the 5-min TTL expires.
+  static void invalidate(int userId) {
+    _cache.remove(userId);
+  }
+
+  /// Drop the entire cache (called on logout).
+  static void clearCache() {
+    _cache.clear();
+  }
 
   /// Get full profile for a user
   Future<ProfileResult> getProfile({
@@ -189,9 +204,11 @@ class ProfileService {
   }
 
   /// Update username
+  /// Update or clear the user's @handle.
+  /// Pass `username: null` to remove it (CRUD delete).
   Future<UsernameUpdateResult> updateUsername({
     required int userId,
-    required String username,
+    required String? username,
   }) async {
     try {
       final response = await http.put(
@@ -205,13 +222,42 @@ class ProfileService {
       if (response.statusCode == 200 && data['success'] == true) {
         return UsernameUpdateResult(
           success: true,
-          username: data['data']['username'],
+          username: data['data']?['username'],
           message: data['message'],
         );
       }
-      return UsernameUpdateResult(success: false, message: data['message'] ?? 'Failed to update username');
+      // 422 from Laravel returns `{success: false, errors: {username: [...]}}`.
+      // Surface the first field error if present so the UI can show it.
+      String? message = data['message'] as String?;
+      if (data['errors'] is Map && data['errors']['username'] is List) {
+        final firstErr = (data['errors']['username'] as List).first?.toString();
+        if (firstErr != null && firstErr.isNotEmpty) message = firstErr;
+      }
+      return UsernameUpdateResult(success: false, message: message ?? 'Failed to update username');
     } catch (e) {
       return UsernameUpdateResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Live availability check: hits `POST /users/check-handle`.
+  /// Returns `null` on network error so the UI can fall back to "ask
+  /// later" instead of falsely declaring the handle taken.
+  Future<bool?> checkHandleAvailability(String handle) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/check-handle'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': handle}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return data['available'] == true;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

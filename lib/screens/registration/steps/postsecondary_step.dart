@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/app_strings_scope.dart';
 import '../../../models/education_models.dart';
 import '../../../services/education_service.dart';
 
@@ -58,7 +59,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Imeshindwa kupakia aina za vyuo';
+        _error = 'institutionTypes';
         _isLoading = false;
       });
     }
@@ -78,7 +79,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Imeshindwa kupakia vyuo';
+        _error = 'institutions';
         _isLoadingInstitutions = false;
       });
     }
@@ -113,6 +114,17 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+    final String? errorMessage;
+    if (_error == 'institutionTypes') {
+      errorMessage = s?.pickerErrLoadInstitutionTypes ??
+          'Could not load institution types';
+    } else if (_error == 'institutions') {
+      errorMessage = s?.pickerErrLoadInstitutions ??
+          'Could not load institutions';
+    } else {
+      errorMessage = _error;
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -122,7 +134,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
 
           // Header
           Text(
-            'Elimu ya Ufundi/Chuo',
+            s?.pickerPostsecondaryHeader ?? 'Vocational / College education',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -130,7 +142,8 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Chagua chuo au taasisi uliyosoma baada ya sekondari',
+            s?.pickerPostsecondarySubheader ??
+                'Select the college or institution you attended after secondary',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
                 ),
@@ -144,11 +157,12 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
             Center(
               child: Column(
                 children: [
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  Text(errorMessage ?? '',
+                      style: const TextStyle(color: Colors.red)),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadCategories,
-                    child: const Text('Jaribu tena'),
+                    child: Text(s?.pickerTryAgain ?? 'Try again'),
                   ),
                 ],
               ),
@@ -158,7 +172,8 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Tafuta chuo...',
+                hintText: s?.pickerSearchInstitutionHint ??
+                    'Search institution…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _isSearching
                     ? const Padding(
@@ -187,7 +202,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
 
             // Category chips
             Text(
-              'Au chagua aina:',
+              s?.pickerOrSelectType ?? 'Or pick a type:',
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 12),
@@ -218,7 +233,8 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
               const Center(child: CircularProgressIndicator())
             else if (_institutions.isNotEmpty) ...[
               Text(
-                'Vyuo (${_institutions.length})',
+                s?.pickerInstitutionsCount(_institutions.length) ??
+                    'Institutions (${_institutions.length})',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 12),
@@ -261,14 +277,14 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
             if (_selectedInstitution != null) ...[
               const SizedBox(height: 24),
               Text(
-                'Mwaka wa kuanza',
+                s?.pickerStartYear ?? 'Start year',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: _startYear,
-                decoration: const InputDecoration(
-                  hintText: 'Chagua mwaka',
+                decoration: InputDecoration(
+                  hintText: s?.pickerSelectYearHint ?? 'Select year',
                 ),
                 items: _years.map((year) {
                   return DropdownMenuItem(
@@ -282,14 +298,14 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Mwaka wa kuhitimu',
+                s?.pickerGraduationYear ?? 'Graduation year',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: _graduationYear,
-                decoration: const InputDecoration(
-                  hintText: 'Chagua mwaka',
+                decoration: InputDecoration(
+                  hintText: s?.pickerSelectYearHint ?? 'Select year',
                 ),
                 items: _years.map((year) {
                   return DropdownMenuItem(
@@ -312,7 +328,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: widget.onSkip,
-                  child: const Text('Ruka'),
+                  child: Text(s?.pickerSkip ?? 'Skip'),
                 ),
               ),
               const SizedBox(width: 16),
@@ -320,7 +336,7 @@ class _PostsecondaryStepState extends State<PostsecondaryStep> {
                 flex: 2,
                 child: FilledButton(
                   onPressed: _selectedInstitution != null ? _handleContinue : null,
-                  child: const Text('Endelea'),
+                  child: Text(s?.pickerContinue ?? 'Continue'),
                 ),
               ),
             ],

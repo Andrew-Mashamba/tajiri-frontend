@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/sponsored_post_models.dart';
 import '../../services/sponsored_post_service.dart';
 import '../../services/local_storage_service.dart';
-import '../../widgets/creator_tier_badge.dart';
+import '../widgets/creator_tier_badge.dart';
 import '../../l10n/app_strings_scope.dart';
 
 class SponsoredPostsScreen extends StatefulWidget {

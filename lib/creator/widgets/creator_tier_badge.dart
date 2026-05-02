@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../l10n/app_strings_scope.dart';
+import '../../l10n/app_strings_scope.dart';
 
 class CreatorTierBadge extends StatelessWidget {
   final String tier;

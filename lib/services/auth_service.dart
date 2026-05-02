@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../config/api_config.dart';
 import '../config/certificate_pins.dart';
 import '../models/registration_models.dart';
+import '../services/biometric_auth_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/fcm_service.dart';
 import '../services/live_update_service.dart';
@@ -267,6 +268,72 @@ class AuthService {
     }
   }
 
+  // --- biometric quick-login (Flow 2 — passkey-style) ---
+
+  /// Sign in via the on-device biometric-bound EC keypair. The server
+  /// issues a one-time challenge, the device signs it (OS-level
+  /// biometric prompt during the signing operation), and the server
+  /// verifies the signature against the stored public key. On success
+  /// fresh access + refresh tokens come back with `is_biometric=true`.
+  ///
+  /// Implements docs/Bio.md §5 / Flow 2.
+  Future<AuthLoginResult> loginWithBiometric() async {
+    final result = await BiometricAuthService.instance.signIn();
+    if (!result.success) {
+      return AuthLoginResult(success: false, error: result.errorMessage);
+    }
+
+    await _storeTokens(
+      accessToken: result.accessToken!,
+      refreshToken: result.refreshToken!,
+      accessExpiresIn: result.accessExpiresIn ?? 86400,
+      refreshExpiresIn: result.refreshExpiresIn ?? 7776000,
+    );
+
+    RegistrationState? user;
+    if (result.user != null) {
+      user = _mapServerResponseToRegistrationState(result.user!);
+      final storage = await LocalStorageService.getInstance();
+      await storage.saveUser(user);
+    }
+    final userId = user?.userId ?? (result.user?['id'] as int?);
+    if (userId != null) {
+      try {
+        FcmService.instance.sendTokenToBackend(userId);
+      } catch (_) {}
+    }
+    return AuthLoginResult(success: true, user: user, userId: userId);
+  }
+
+  /// Enroll a fresh biometric-bound EC keypair on this device. Caller
+  /// is the Two-factor & biometric screen, which has just verified the
+  /// user's current PIN — the same PIN is forwarded to the server
+  /// /api/auth/biometric-enroll endpoint to prove ownership before the
+  /// public key is stored.
+  Future<({bool success, String? error})> enrollBiometric({
+    required int userId,
+    required String pin,
+    String? deviceName,
+  }) async {
+    final deviceId = await getDeviceId();
+    return BiometricAuthService.instance.enroll(
+      userId: userId,
+      pin: pin,
+      deviceId: deviceId,
+      deviceName: deviceName,
+    );
+  }
+
+  /// True iff biometric quick-login is currently armed on this device.
+  Future<bool> hasBiometricLogin() => BiometricAuthService.instance.isEnrolled();
+
+  /// Wipe the biometric credential — locally and server-side. Called
+  /// when the user disables the toggle, changes their PIN, or logs out.
+  /// Pass `userId` so we can also revoke the row in
+  /// `biometric_credentials` server-side.
+  Future<void> revokeBiometric({int? userId}) =>
+      BiometricAuthService.instance.revoke(userId: userId);
+
   /// Map server user JSON to RegistrationState.
   /// Replicates the logic from UserService._mapServerResponseToRegistrationState.
   RegistrationState _mapServerResponseToRegistrationState(
@@ -468,6 +535,14 @@ class AuthService {
     } catch (_) {}
     try {
       await MessageDatabase.instance.clearAll();
+    } catch (_) {}
+    try {
+      // Best-effort: try to read the cached user before tokens are
+      // cleared so we can revoke the biometric credential server-side
+      // too (passes user_id to /api/auth/biometric-revoke).
+      final cachedStorage = await LocalStorageService.getInstance();
+      final cachedUserId = cachedStorage.getUser()?.userId;
+      await BiometricAuthService.instance.revoke(userId: cachedUserId);
     } catch (_) {}
     await _clearTokens();
     try {

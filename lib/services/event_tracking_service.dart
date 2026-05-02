@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
-import '../models/flywheel_models.dart';
+import '../creator/models/flywheel_models.dart';
 import 'local_storage_service.dart';
 
 /// Singleton service that captures user behavior events for the Flywheel engine.

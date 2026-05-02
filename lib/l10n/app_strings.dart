@@ -130,6 +130,614 @@ class AppStrings {
   String get subscribe => isSwahili ? 'Jisajili' : 'Subscribe';
   String get tips => isSwahili ? 'Tuzo' : 'Tips';
   String get joined => isSwahili ? 'Alijiunga' : 'Joined';
+  // Profile info card (bio/about/contact sections)
+  String get aboutBasics => isSwahili ? 'Misingi' : 'Basics';
+  String get aboutLocationSection => isSwahili ? 'Mahali' : 'Location';
+  String get aboutWorkSection => isSwahili ? 'Kazi' : 'Work';
+  String get aboutEducationSection => isSwahili ? 'Elimu' : 'Education';
+  String get aboutContactSection => isSwahili ? 'Mawasiliano' : 'Contact';
+  String get sectorLabel => isSwahili ? 'Sekta' : 'Sector';
+  String get ownershipLabel => isSwahili ? 'Umiliki' : 'Ownership';
+  String get currentlyStudying => isSwahili ? 'Anasoma sasa' : 'Currently studying';
+  String get primarySchoolLabel => isSwahili ? 'Shule ya Msingi' : 'Primary';
+  String get secondarySchoolLabel => isSwahili ? 'Sekondari (Form 1-4)' : 'O-Level';
+  String get alevelLabel => isSwahili ? 'Sekondari ya Juu (Form 5-6)' : 'A-Level';
+  String get postsecondaryLabel => isSwahili ? 'Diploma' : 'College';
+  String get universityLabel => isSwahili ? 'Chuo Kikuu' : 'University';
+  String classOfYear(int year) => isSwahili ? 'Mwaka $year' : 'Class of $year';
+  String get email => isSwahili ? 'Barua pepe' : 'Email';
+  String get activeNow => isSwahili ? 'Yupo sasa' : 'Active now';
+  String lastSeenAgo(String ago) => isSwahili ? 'Mara ya mwisho $ago' : 'Last seen $ago';
+  String yearsOldShort(int years) => isSwahili ? 'Miaka $years' : '$years years';
+  String get genderMale => isSwahili ? 'Mwanaume' : 'Male';
+  String get genderFemale => isSwahili ? 'Mwanamke' : 'Female';
+  String get relationshipSingle => isSwahili ? 'Sijaoa/Sijaolewa' : 'Single';
+  String get relationshipMarried => isSwahili ? 'Nimeoa/Nimeolewa' : 'Married';
+  String get relationshipEngaged => isSwahili ? 'Nimechumbiwa' : 'Engaged';
+  String get relationshipComplicated => isSwahili ? 'Ni ngumu' : "It's complicated";
+  // Settings → Account edit screens
+  String get editEmailTitle => isSwahili ? 'Hariri Barua pepe' : 'Edit email';
+  String get emailHint => isSwahili ? 'jina@mfano.com' : 'name@example.com';
+  String get emailInvalid => isSwahili ? 'Barua pepe si sahihi' : 'Invalid email';
+  String get editWorkTitle => isSwahili ? 'Hariri Kazi' : 'Edit work';
+  String get sectorHint => isSwahili ? 'k.m. Afya, Elimu, Biashara' : 'e.g. Health, Education, Tech';
+  String get ownershipHint => isSwahili ? 'k.m. Binafsi, Serikali' : 'e.g. Private, Government';
+  String get editLocationTitle => isSwahili ? 'Hariri Mahali' : 'Edit location';
+  String get regionLabel => isSwahili ? 'Mkoa' : 'Region';
+  String get districtLabel => isSwahili ? 'Wilaya' : 'District';
+  String get wardLabel => isSwahili ? 'Kata' : 'Ward';
+  String get streetLabel => isSwahili ? 'Mtaa' : 'Street';
+  String get editEducationTitle => isSwahili ? 'Hariri Elimu' : 'Edit education';
+  String get schoolNameLabel => isSwahili ? 'Jina la shule' : 'School name';
+  String get institutionNameLabel => isSwahili ? 'Jina la chuo' : 'Institution name';
+  String get universityNameLabel => isSwahili ? 'Jina la chuo kikuu' : 'University name';
+  String get startYearLabel => isSwahili ? 'Mwaka wa kuanza' : 'Start year';
+  String get graduationYearLabel => isSwahili ? 'Mwaka wa kuhitimu' : 'Graduation year';
+  String get combinationLabel => isSwahili ? 'Mchanganyiko' : 'Combination';
+  String get programmeLabel => isSwahili ? 'Programu' : 'Programme';
+  String get degreeLevelLabel => isSwahili ? 'Daraja' : 'Degree level';
+  String get currentlyStudyingToggle => isSwahili ? 'Ninasoma sasa' : 'Currently studying';
+  String get nothingToSave => isSwahili ? 'Hakuna kilichobadilishwa' : 'Nothing to save';
+  // Per-field privacy section
+  String get privacyFieldsHeader => isSwahili
+      ? 'Onyesha taarifa hizi kwa'
+      : 'Show these fields to';
+  String get privacyDob => isSwahili ? 'Tarehe ya kuzaliwa' : 'Date of birth';
+  String get privacyGenderField => isSwahili ? 'Jinsia' : 'Gender';
+  String get privacyPhoneField => isSwahili ? 'Namba ya simu' : 'Phone number';
+  String get privacyEmailField => isSwahili ? 'Barua pepe' : 'Email';
+  String get privacyRelationshipField => isSwahili ? 'Hali ya uhusiano' : 'Relationship status';
+  String get privacyLocationField => isSwahili ? 'Mahali' : 'Location';
+  String get privacyEducationField => isSwahili ? 'Elimu' : 'Education';
+  String get privacyEmployerField => isSwahili ? 'Mwajiri' : 'Employer';
+  // TAJIRI provided email vs custom email picker
+  String get emailUseTajiri => isSwahili
+      ? 'Tumia barua pepe ya TAJIRI (@tajiri.co.tz)'
+      : 'Use TAJIRI email (@tajiri.co.tz)';
+  String get emailUseTajiriSubtitle => isSwahili
+      ? 'Anwani inayotokana na jina lako la mtumiaji'
+      : 'Address derived from your username';
+  String get emailUseCustom => isSwahili
+      ? 'Tumia barua pepe nyingine'
+      : 'Use a different email';
+  String get emailUseCustomSubtitle => isSwahili
+      ? 'k.m. Gmail, Yahoo, ya kazi'
+      : 'e.g. Gmail, Yahoo, work email';
+  String get emailRemove => isSwahili ? 'Ondoa barua pepe' : 'Remove email';
+  String get emailRemoveConfirm => isSwahili
+      ? 'Una uhakika unataka kuondoa barua pepe?'
+      : 'Remove your email address?';
+  String get emailRequiresUsername => isSwahili
+      ? 'Weka jina la mtumiaji kwanza ili upate anwani ya TAJIRI'
+      : 'Set a username first to get a TAJIRI address';
+  String get emailRemoved => isSwahili ? 'Barua pepe imeondolewa' : 'Email removed';
+  String get current => isSwahili ? 'Sasa' : 'Current';
+  // Education hub + sub-screens
+  String get educationHubSubtitle => isSwahili
+      ? 'Hariri kila kiwango cha elimu'
+      : 'Edit each level of education';
+  String get notSet => isSwahili ? 'Haijawekwa' : 'Not set';
+  String get editPrimarySchoolTitle => isSwahili ? 'Hariri Shule ya Msingi' : 'Edit Primary school';
+  String get editSecondarySchoolTitle => isSwahili ? 'Hariri Sekondari (Form 1-4)' : 'Edit O-Level';
+  String get editAlevelTitle => isSwahili ? 'Hariri Form 5-6' : 'Edit A-Level';
+  String get editPostsecondaryTitle => isSwahili ? 'Hariri Diploma' : 'Edit College / Diploma';
+  String get editUniversityTitle => isSwahili ? 'Hariri Chuo Kikuu' : 'Edit University';
+  String get currentlyShowing => isSwahili ? 'Sasa hivi' : 'Currently saved';
+  String get tapToReselect => isSwahili
+      ? 'Gusa hapa chini kuchagua tena'
+      : 'Pick again below to update';
+  String get clearSection => isSwahili ? 'Futa kiwango hiki' : 'Clear this level';
+  String get clearSectionConfirm => isSwahili
+      ? 'Una uhakika unataka kufuta data ya kiwango hiki?'
+      : 'Remove all data for this level?';
+  String get cleared => isSwahili ? 'Imefutwa' : 'Cleared';
+  String get pleaseSelectSchool => isSwahili
+      ? 'Chagua shule kwanza'
+      : 'Please pick a school first';
+  String get pleaseSelectInstitution => isSwahili
+      ? 'Chagua chuo kwanza'
+      : 'Please pick an institution first';
+  String get pleaseSelectUniversity => isSwahili
+      ? 'Chagua chuo kikuu na programu'
+      : 'Please pick a university and programme';
+  String get pleaseSelectCombination => isSwahili
+      ? 'Chagua mchanganyiko'
+      : 'Please pick a combination';
+  String get graduationYearRequired => isSwahili
+      ? 'Weka mwaka wa kuhitimu au washa "Ninasoma sasa"'
+      : 'Set a graduation year or toggle "Currently studying"';
+  // Picker chrome (used by SchoolPicker, SecondarySchoolPicker,
+  // AlevelSchoolPicker, UniversityProgrammePicker, and postsecondary step)
+  String get pickerBrowse => isSwahili ? 'Chagua' : 'Browse';
+  String get pickerSearch => isSwahili ? 'Tafuta' : 'Search';
+  String get pickerSkip => isSwahili ? 'Ruka' : 'Skip';
+  String get pickerContinue => isSwahili ? 'Endelea' : 'Continue';
+  String get pickerTryAgain => isSwahili ? 'Jaribu tena' : 'Try again';
+  String get pickerClearText => isSwahili ? 'Futa maandishi' : 'Clear text';
+  String get pickerClearSelection => isSwahili ? 'Ondoa uchaguzi' : 'Clear selection';
+  String get pickerNoData => isSwahili ? 'Hakuna data' : 'No data';
+  String get pickerSelectYearHint => isSwahili ? 'Chagua mwaka' : 'Select year';
+  String get pickerSelectRegion => isSwahili ? 'Chagua mkoa' : 'Select region';
+  String get pickerSelectDistrict => isSwahili ? 'Chagua wilaya' : 'Select district';
+  String get pickerSelectSchool => isSwahili ? 'Chagua shule' : 'Select school';
+  String get pickerSelectCollege => isSwahili ? 'Chagua shule au chuo' : 'Select school or college';
+  String get pickerSelectDepartment => isSwahili ? 'Chagua idara' : 'Select department';
+  String get pickerSelectUniversity => isSwahili ? 'Chagua chuo kikuu' : 'Select university';
+  String get pickerSelectProgramme => isSwahili ? 'Chagua programu' : 'Select programme';
+  String get pickerSchool => isSwahili ? 'Shule' : 'School';
+  String get pickerCollegeOrSchool => isSwahili ? 'Shule/Chuo' : 'School/College';
+  String get pickerDepartment => isSwahili ? 'Idara' : 'Department';
+  String get pickerUniversity => isSwahili ? 'Chuo Kikuu' : 'University';
+  String get pickerProgramme => isSwahili ? 'Programu' : 'Programme';
+  String get pickerOwnershipGovernment => isSwahili ? 'Serikali' : 'Government';
+  String get pickerOwnershipPrivate => isSwahili ? 'Binafsi' : 'Private';
+  String get pickerSearchSchoolHint => isSwahili
+      ? 'Andika jina la shule au code'
+      : 'Type school name or code';
+  String get pickerSearchSecondaryHint => isSwahili
+      ? 'Andika jina la shule, mkoa au wilaya'
+      : 'Type school name, region or district';
+  String get pickerSearchAlevelHint => isSwahili ? 'Andika jina la shule…' : 'Type school name…';
+  String get pickerSearchUniversityHint => isSwahili
+      ? 'Tafuta chuo kikuu…'
+      : 'Search university…';
+  String get pickerSearchInstitutionHint => isSwahili ? 'Tafuta chuo…' : 'Search institution…';
+  String get pickerSearchProgrammeHint => isSwahili
+      ? 'Tafuta programu (mfano: Economics, Medicine)…'
+      : 'Search programme (e.g. Economics, Medicine)…';
+  String get pickerSearchSchoolField => isSwahili ? 'Tafuta shule' : 'Search schools';
+  String get pickerSearchProgrammeToggle => isSwahili ? 'Tafuta Programu' : 'Search programmes';
+  String get pickerSelectionSummary => isSwahili ? 'Ulichochagua' : 'Your selection';
+  String pickerDurationYears(int n) => isSwahili ? 'Muda: miaka $n' : 'Duration: $n years';
+  String get pickerStartYear => isSwahili ? 'Mwaka wa Kuanza' : 'Start year';
+  String get pickerGraduationYear => isSwahili ? 'Mwaka wa Kuhitimu' : 'Graduation year';
+  String get pickerStartYearForm5 => isSwahili ? 'Mwaka wa Kuanza Form 5' : 'Form 5 start year';
+  String get pickerEndYearForm6 => isSwahili ? 'Mwaka wa Kumaliza Form 6' : 'Form 6 end year';
+  String get pickerCategoryScience => isSwahili ? 'SAYANSI' : 'SCIENCE';
+  String get pickerCategoryBusiness => isSwahili ? 'BIASHARA' : 'BUSINESS';
+  String get pickerCategoryArts => isSwahili ? 'SANAA' : 'ARTS';
+  String get pickerCategoryLanguage => isSwahili ? 'LUGHA' : 'LANGUAGE';
+  String get pickerCategoryReligion => isSwahili ? 'DINI' : 'RELIGION';
+  String get pickerSelectUniversityHeader => isSwahili
+      ? 'Chagua chuo kikuu na programu uliyosoma'
+      : 'Select the university and programme you studied';
+  String get pickerPostsecondaryHeader => isSwahili
+      ? 'Elimu ya Ufundi/Chuo'
+      : 'Vocational / College education';
+  String get pickerPostsecondarySubheader => isSwahili
+      ? 'Chagua chuo au taasisi uliyosoma baada ya sekondari'
+      : 'Select the college or institution you attended after secondary';
+  String get pickerOrSelectType => isSwahili ? 'Au chagua aina:' : 'Or pick a type:';
+  String pickerInstitutionsCount(int n) =>
+      isSwahili ? 'Vyuo ($n)' : 'Institutions ($n)';
+  String get pickerErrLoadRegions => isSwahili
+      ? 'Imeshindwa kupakia mikoa. Jaribu tena.'
+      : 'Could not load regions. Try again.';
+  String get pickerErrLoadRegionsTap => isSwahili
+      ? 'Imeshindwa kupakua mikoa. Gusa kujaribu tena.'
+      : 'Could not load regions. Tap to try again.';
+  String get pickerErrLoadDistricts => isSwahili
+      ? 'Imeshindwa kupakia wilaya. Jaribu tena.'
+      : 'Could not load districts. Try again.';
+  String get pickerErrLoadSchools => isSwahili
+      ? 'Imeshindwa kupakia shule. Jaribu tena.'
+      : 'Could not load schools. Try again.';
+  String get pickerErrLoadUniversities => isSwahili
+      ? 'Imeshindwa kupakia vyuo vikuu'
+      : 'Could not load universities';
+  String get pickerErrLoadInstitutionTypes => isSwahili
+      ? 'Imeshindwa kupakia aina za vyuo'
+      : 'Could not load institution types';
+  String get pickerErrLoadInstitutions => isSwahili
+      ? 'Imeshindwa kupakia vyuo'
+      : 'Could not load institutions';
+  // Location settings (Edit location screen)
+  String get locFailedLoadRegions => isSwahili
+      ? 'Imeshindwa kupakia mikoa. Gonga kurudia.'
+      : 'Could not load regions. Tap to try again.';
+  String get locFailedLoadDistricts => isSwahili
+      ? 'Imeshindwa kupakia wilaya. Gonga kurudia.'
+      : 'Could not load districts. Tap to try again.';
+  String get locFailedLoadWards => isSwahili
+      ? 'Imeshindwa kupakia kata. Gonga kurudia.'
+      : 'Could not load wards. Tap to try again.';
+  String get locFailedLoadStreets => isSwahili
+      ? 'Imeshindwa kupakia mitaa. Gonga kurudia.'
+      : 'Could not load streets. Tap to try again.';
+  String get locClearSelectionSemantics => isSwahili ? 'Ondoa uchaguzi' : 'Clear selection';
+  // Work settings (Edit work screen)
+  String get workEmployerLabel => isSwahili ? 'Mwajiri' : 'Employer';
+  String get workSelectEmployer => isSwahili ? 'Chagua mwajiri' : 'Select employer';
+  String get workCustomEmployer => isSwahili ? 'Mwajiri si kwenye orodha?' : 'Employer not in the list?';
+  String get workCustomEmployerToggle => isSwahili ? 'Andika jina la mwajiri' : 'Type employer name';
+  String get workPickFromList => isSwahili ? 'Chagua kutoka orodha' : 'Pick from the list';
+  String get workSelectSector => isSwahili ? 'Chagua sekta' : 'Select sector';
+  String get workSelectOwnership => isSwahili ? 'Chagua umiliki' : 'Select ownership';
+  String get workEnterEmployerName => isSwahili ? 'Andika jina la mwajiri' : 'Type employer name';
+  String get workFailedLoadBusinesses => isSwahili
+      ? 'Imeshindwa kupakia waajiri. Gonga kurudia.'
+      : 'Could not load employers. Tap to try again.';
+  String get workFailedLoadSectors => isSwahili
+      ? 'Imeshindwa kupakia sekta. Gonga kurudia.'
+      : 'Could not load sectors. Tap to try again.';
+  String get workFailedLoadOwnership => isSwahili
+      ? 'Imeshindwa kupakia aina za umiliki.'
+      : 'Could not load ownership types.';
+  String get workEmployerRequired => isSwahili
+      ? 'Tafadhali chagua mwajiri au andika jina'
+      : 'Please pick an employer or type a name';
+  String get workSectorBadge => isSwahili ? 'Sekta' : 'Sector';
+  String get workOwnershipBadge => isSwahili ? 'Umiliki' : 'Ownership';
+  // Username helper text — only one new getter; the rest already exist
+  // in the pre-existing username section near the bottom of this file.
+  String usernameHelperText(int min, int max) => isSwahili
+      ? 'Herufi ndogo, nambari na _ tu, $min–$max herufi. Inaanza na herufi.'
+      : 'Lowercase letters, numbers and _, $min–$max chars. Must start with a letter.';
+  String get usernameAvailable => isSwahili ? 'Inapatikana' : 'Available';
+  String get usernameTaken => isSwahili ? 'Imechukuliwa' : 'Already taken';
+  String get usernameChecking => isSwahili ? 'Inathibitisha…' : 'Checking…';
+  String get usernameMustStartWithLetter => isSwahili
+      ? 'Inapaswa kuanza na herufi'
+      : 'Must start with a letter';
+  String get usernameRemove => isSwahili ? 'Ondoa jina la mtumiaji' : 'Remove username';
+  String get usernameRemoveConfirm => isSwahili
+      ? 'Una uhakika unataka kuondoa jina lako la mtumiaji?'
+      : 'Remove your username?';
+  String get usernameRemoved => isSwahili ? 'Jina la mtumiaji limeondolewa' : 'Username removed';
+  // Settings page tiles + dialogs
+  String get notificationsSubtitle => isSwahili
+      ? 'Dhibiti arifa za ujumbe, simu, na zaidi'
+      : 'Manage notifications for messages, calls, and more';
+  String get accountProtection => isSwahili ? 'Ulinzi wa Akaunti' : 'Account protection';
+  String get accountProtectionSubtitle => isSwahili
+      ? 'Arifa za kuingia na vifaa vilivyoingia'
+      : 'Login alerts & active sessions';
+  String get chatBridges => isSwahili ? 'Madaraja ya Mazungumzo' : 'Chat bridges';
+  String get chatBridgesSubtitle => isSwahili
+      ? 'Matrix, RCS, SMS, Barua pepe'
+      : 'Matrix, RCS, SMS, Email';
+  String get logoutAllDevices => isSwahili ? 'Toka kwenye vifaa vyote' : 'Log out of all devices';
+  String get logoutAllDevicesMessage => isSwahili
+      ? 'Utatolewa kwenye vifaa vyote vilivyoingia akaunti yako.'
+      : 'You will be logged out of every device signed into your account.';
+  String get biometricFailure => isSwahili
+      ? 'Uthibitisho umeshindwa'
+      : 'Authentication failed';
+  String get deleteAccountFailure => isSwahili
+      ? 'Imeshindwa kufuta akaunti'
+      : 'Could not delete account — try again.';
+  String get preferenceSyncFailed => isSwahili
+      ? 'Imeshindwa kuhifadhi mabadiliko'
+      : 'Could not save change — try again.';
+  // Notification preferences screen
+  String get notifSectionMessages => isSwahili ? 'Arifa za Ujumbe' : 'Message notifications';
+  String get notifMessagesTitle => isSwahili ? 'Ujumbe' : 'Messages';
+  String get notifMessagesSubtitle => isSwahili ? 'Arifa za ujumbe mpya' : 'Get alerts for new messages';
+  String get notifGroupsTitle => isSwahili ? 'Vikundi' : 'Groups';
+  String get notifGroupsSubtitle => isSwahili ? 'Arifa za vikundi' : 'Group activity alerts';
+  String get notifReactionsTitle => isSwahili ? 'Majibu' : 'Reactions';
+  String get notifReactionsSubtitle => isSwahili
+      ? 'Arifa za majibu kwenye ujumbe'
+      : 'When someone reacts to your messages';
+  String get notifMentionsTitle => isSwahili ? 'Kutajwa' : 'Mentions';
+  String get notifMentionsSubtitle => isSwahili ? 'Arifa unapotajwa' : 'When someone @-mentions you';
+  String get notifSectionCalls => isSwahili ? 'Simu' : 'Calls';
+  String get notifCallsTitle => isSwahili ? 'Simu zinazoingia' : 'Incoming calls';
+  String get notifCallsSubtitle => isSwahili
+      ? 'Arifa za simu zinazoingia'
+      : 'Alerts for incoming voice and video calls';
+  String get notifSectionSocial => isSwahili ? 'Mitandao' : 'Social';
+  String get notifSocialTitle => isSwahili ? 'Wafuasi na Maoni' : 'Followers & comments';
+  String get notifSocialSubtitle => isSwahili
+      ? 'Arifa za wafuasi wapya na maoni'
+      : 'New followers, comments, and post reactions';
+  String get notifSectionSystem => isSwahili ? 'Mfumo' : 'System';
+  String get notifSystemTitle => isSwahili ? 'Arifa za mfumo' : 'System alerts';
+  String get notifSystemSubtitle => isSwahili
+      ? 'Masasisho ya programu na mfumo'
+      : 'App updates and important system messages';
+  String get notifSectionSoundVibration => isSwahili ? 'Sauti na Mtetemo' : 'Sound & vibration';
+  String get notifVibrateTitle => isSwahili ? 'Mtetemo' : 'Vibrate';
+  String get notifVibrateSubtitle => isSwahili
+      ? 'Washa mtetemo kwa arifa'
+      : 'Vibrate the device on each alert';
+  String get notifSoundTitle => isSwahili ? 'Sauti ya arifa' : 'Notification sound';
+  String get notifSoundSubtitle => isSwahili
+      ? 'Chagua sauti unayotaka kwa arifa'
+      : 'Pick the alert sound you prefer';
+  String get notifSectionQuietHours => isSwahili ? 'Masaa ya Utulivu' : 'Quiet hours';
+  String get notifQuietHoursTitle => isSwahili ? 'Washa masaa ya utulivu' : 'Enable quiet hours';
+  String get notifQuietHoursSubtitle => isSwahili
+      ? 'Hutapokea arifa wakati huu, isipokuwa simu'
+      : "You won't get alerts during this window, except for calls";
+  String get notifQuietStartLabel => isSwahili ? 'Kuanzia' : 'From';
+  String get notifQuietEndLabel => isSwahili ? 'Hadi' : 'Until';
+  String get notifFailedLoad => isSwahili
+      ? 'Imeshindwa kupakia mipangilio'
+      : 'Could not load notification preferences';
+  String get notifFailedSave => isSwahili
+      ? 'Imeshindwa kuhifadhi mabadiliko'
+      : 'Could not save change — try again.';
+  String get notifNotSignedIn => isSwahili
+      ? 'Hujaingia. Tafadhali ingia tena.'
+      : 'You are not signed in. Please sign in again.';
+  String get notifResetDefaults => isSwahili ? 'Rejesha Chaguo-Msingi' : 'Reset to defaults';
+  String get notifResetConfirm => isSwahili
+      ? 'Una uhakika unataka kurejesha mipangilio yote ya arifa?'
+      : 'Reset all notification preferences to their defaults?';
+  // Sound options (used in the picker)
+  String get notifSoundDefault => isSwahili ? 'Chaguo-Msingi' : 'Default';
+  String get notifSoundChime => isSwahili ? 'Mlio' : 'Chime';
+  String get notifSoundBell => isSwahili ? 'Kengele' : 'Bell';
+  String get notifSoundNone => isSwahili ? 'Bila Sauti' : 'Silent';
+
+  // Channel headers (Push / Email / SMS / In-app columns)
+  String get notifChannelPush => isSwahili ? 'Tahadhari' : 'Push';
+  String get notifChannelEmail => isSwahili ? 'Barua' : 'Email';
+  String get notifChannelSms => isSwahili ? 'SMS' : 'SMS';
+  String get notifChannelInApp => isSwahili ? 'Programu' : 'In-app';
+
+  // Category labels & subtitles
+  String get notifCatMessaging => isSwahili ? 'Ujumbe' : 'Direct messages';
+  String get notifCatMessagingSub => isSwahili ? 'Ujumbe wa moja kwa moja' : 'One-to-one chat';
+  String get notifCatGroups => isSwahili ? 'Vikundi' : 'Groups';
+  String get notifCatGroupsSub => isSwahili ? 'Mazungumzo ya vikundi na simu za kikundi' : 'Group chats and group calls';
+  String get notifCatCalls => isSwahili ? 'Simu' : 'Calls';
+  String get notifCatCallsSub => isSwahili ? 'Simu za moja kwa moja na zilizopangwa' : 'Direct and scheduled calls';
+  String get notifCatSocial => isSwahili ? 'Kijamii' : 'Social';
+  String get notifCatSocialSub => isSwahili ? 'Mlikes, maoni, kutajwa, kufuatwa' : 'Reactions, comments, mentions, follows';
+  String get notifCatMarketplace => isSwahili ? 'Biashara' : 'Marketplace';
+  String get notifCatMarketplaceSub => isSwahili ? 'Ankara, oda, RFQ' : 'Invoices, orders, quotes (RFQ)';
+  String get notifCatBookings => isSwahili ? 'Miadi' : 'Bookings';
+  String get notifCatBookingsSub => isSwahili ? 'Miadi, huduma, makazi, safari, bima' : 'Appointments, services, real-estate, travel, insurance';
+  String get notifCatClients => isSwahili ? 'Wateja' : 'Clients (CRM)';
+  String get notifCatClientsSub => isSwahili ? 'Vikumbusho na muhtasari wa wateja' : 'Reminders and client summaries';
+  String get notifCatCreator => isSwahili ? 'Muumbaji' : 'Creator';
+  String get notifCatCreatorSub => isSwahili ? 'Mafanikio, ripoti, mabattle, muhtasari' : 'Milestones, reports, battles, digests';
+  String get notifCatStreams => isSwahili ? 'Matangazo' : 'Live streams';
+  String get notifCatStreamsSub => isSwahili ? 'Walioanza, zawadi, super-chat' : 'Go-live, gifts, super-chats';
+  String get notifCatHealth => isSwahili ? 'Afya' : 'Health';
+  String get notifCatHealthSub => isSwahili ? 'My Circle, ujauzito, mtoto' : 'My Circle, pregnancy, baby';
+  String get notifCatMoney => isSwahili ? 'Pesa' : 'Money';
+  String get notifCatMoneySub => isSwahili ? 'Bajeti na Kikoba' : 'Budget and Kikoba';
+  String get notifCatSystem => isSwahili ? 'Mfumo' : 'System';
+  String get notifCatSystemSub => isSwahili ? 'Usalama na arifa muhimu' : 'Security and account essentials';
+
+  // Section headings on the new screen
+  String get notifSectionGlobals => isSwahili ? 'Sauti & Vibration' : 'Sound & vibration';
+  String get notifSectionCategories => isSwahili ? 'Aina za arifa' : 'Notification categories';
+  String get notifColumnsHint => isSwahili
+      ? 'Sanidi kila aina kwa kila njia ya kupokea'
+      : 'Configure each category per delivery channel';
+  String get notifSystemAlwaysOn => isSwahili
+      ? 'Arifa muhimu za usalama hutumika hata ukizima.'
+      : 'Critical security notifications are sent regardless of these toggles.';
+
+  // ——— Arifa cluster cards (sectioned home) ———
+  String get arifaClusterCommunication => isSwahili ? 'Mawasiliano' : 'Communication';
+  String get arifaClusterCommunicationSub => isSwahili
+      ? 'Ujumbe, vikundi, simu, kijamii'
+      : 'Messages, groups, calls, social';
+  String get arifaClusterBusiness => isSwahili ? 'Biashara' : 'Business';
+  String get arifaClusterBusinessSub => isSwahili
+      ? 'Biashara, miadi, wateja'
+      : 'Marketplace, bookings, clients';
+  String get arifaClusterCreator => isSwahili ? 'Muumbaji' : 'Creator';
+  String get arifaClusterCreatorSub => isSwahili
+      ? 'Mafanikio, matangazo'
+      : 'Milestones, live streams';
+  String get arifaClusterSensitive => isSwahili ? 'Nyeti' : 'Sensitive';
+  String get arifaClusterSensitiveSub => isSwahili
+      ? 'Afya na pesa'
+      : 'Health and money';
+  String get arifaClusterSystem => isSwahili ? 'Mfumo' : 'System';
+  String get arifaClusterSystemSub => isSwahili
+      ? 'Usalama na akaunti'
+      : 'Security and account';
+  String get arifaCardSound => isSwahili ? 'Sauti & Vibration' : 'Sound & vibration';
+  String get arifaCardSoundSub => isSwahili
+      ? 'Sauti ya arifa na mtetemo'
+      : 'Notification sound and vibration';
+  String get arifaCardQuiet => isSwahili ? 'Saa za Kimya' : 'Quiet hours';
+  String get arifaCardQuietSub => isSwahili
+      ? 'Zima arifa kwa muda wa usiku'
+      : 'Suppress notifications during a window';
+  String get arifaHomeChannelsHint => isSwahili
+      ? 'Sanidi kila aina kwa kila njia ya kupokea'
+      : 'Configure each category per delivery channel';
+
+  // ——— Usalama (Security) sectioned home + sub-pages ———
+  String get usalamaHomeSubtitle => isSwahili
+      ? 'Akaunti, vifaa, na shughuli zinazohusu usalama'
+      : 'Account, devices, and security activity';
+  String get usalamaCardTwoFactorBiometric => isSwahili
+      ? 'Hatua mbili na biometriki'
+      : 'Two-factor & biometric';
+  String get usalamaCardTwoFactorBiometricSub => isSwahili
+      ? 'Uthibitisho wa hatua mbili na uingiaji kwa biometriki'
+      : 'Two-factor authentication and biometric login';
+  String get usalamaCardChangePin => isSwahili ? 'Badilisha PIN' : 'Change PIN';
+  String get usalamaCardChangePinSub => isSwahili
+      ? 'PIN ya kuingia (sawa na ya kufunga programu)'
+      : 'Sign-in PIN (same as your app lock PIN)';
+  String get usalamaCardSessions => isSwahili ? 'Vifaa vilivyoingia' : 'Active sessions';
+  String get usalamaCardSessionsSub => isSwahili
+      ? 'Vifaa vyote vinavyoendelea kutumia akaunti yako'
+      : 'Devices that are currently signed in';
+  String get usalamaCardLoginAlerts => isSwahili ? 'Tahadhari za kuingia' : 'Login alerts';
+  String get usalamaCardLoginAlertsSub => isSwahili
+      ? 'Pata arifa kifaa kipya kinapoingia'
+      : 'Get notified when a new device signs in';
+  String get usalamaCardActivity => isSwahili ? 'Shughuli za usalama' : 'Security activity';
+  String get usalamaCardActivitySub => isSwahili
+      ? 'Historia ya mabadiliko na vipindi'
+      : 'History of changes and sign-ins';
+
+  // PIN change form
+  String get usalamaCurrentPin => isSwahili ? 'PIN ya sasa' : 'Current PIN';
+  String get usalamaNewPin => isSwahili ? 'PIN mpya' : 'New PIN';
+  String get usalamaConfirmNewPin => isSwahili ? 'Thibitisha PIN mpya' : 'Confirm new PIN';
+  String get usalamaPinRequired => isSwahili ? 'PIN inahitajika' : 'PIN is required';
+  String get usalamaPin4Digits => isSwahili
+      ? 'PIN lazima iwe nambari 4'
+      : 'PIN must be 4 digits';
+  String get usalamaPinsDoNotMatch => isSwahili
+      ? 'PIN hazilingani'
+      : 'PINs do not match';
+  String get usalamaPinSameAsCurrent => isSwahili
+      ? 'PIN mpya lazima iwe tofauti na ya sasa'
+      : 'New PIN must differ from your current PIN';
+  String get usalamaPinWeak => isSwahili
+      ? 'Epuka nambari za mfululizo au zinazojirudia (k.m. 1234, 1111)'
+      : 'Avoid sequential or repeated digits (e.g. 1234, 1111)';
+  String get usalamaPinSaveCta => isSwahili ? 'Hifadhi PIN' : 'Save PIN';
+  String get usalamaPinSaved => isSwahili
+      ? 'PIN imebadilishwa'
+      : 'PIN updated';
+  String get usalamaPinExplainer => isSwahili
+      ? 'PIN hii hutumika kuingia kwenye programu na pia kufungua programu kwenye kifaa hiki. Itahitajika sehemu zote mbili.'
+      : 'This PIN is used to sign in AND to unlock the app on this device. It is the same secret for both.';
+  String get usalamaPinAlsoLogin => isSwahili
+      ? 'Ukibadilisha PIN, utahitaji ile mpya wakati ujao utakapoingia kwenye kifaa kingine.'
+      : 'After changing your PIN, use the new one next time you sign in on another device.';
+
+  /// Shown when the user cancelled the biometric step-up prompt or the
+  /// server rejected the signed challenge.
+  String get usalamaStepUpCancelled => isSwahili
+      ? 'Uthibitisho wa biometriki haukukamilika. Jaribu tena.'
+      : 'Biometric confirmation was not completed. Please try again.';
+
+  // Two-factor screen status + helper copy
+  String get twoFAEnabled => isSwahili ? 'Imewashwa' : 'Enabled';
+  String get twoFADisabled => isSwahili ? 'Imezimwa' : 'Disabled';
+  String get twoFADescription => isSwahili
+      ? 'Msimbo wa nambari 6 kutoka kwenye programu yako ya uthibitisho'
+      : 'A 6-digit code from your authenticator app';
+  String get twoFAScanInstructions => isSwahili
+      ? 'Skani na programu yako ya uthibitisho'
+      : 'Scan with your authenticator app';
+  String get regenerateCodes => isSwahili
+      ? 'Tengeneza misimbo upya'
+      : 'Regenerate codes';
+
+  // Set / remove PIN modes (PIN screen)
+  String get usalamaSetPinTitle => isSwahili ? 'Weka PIN' : 'Set PIN';
+  String get usalamaPinSetExplainer => isSwahili
+      ? 'Chagua PIN ya nambari 4. Utaitumia kuingia kwenye programu na kufungua programu kwenye kifaa hiki.'
+      : 'Choose a 4-digit PIN. You will use it to sign in AND to unlock the app on this device.';
+  String get usalamaPinCreateCta => isSwahili ? 'Tengeneza PIN' : 'Create PIN';
+  String get usalamaPinCreated => isSwahili ? 'PIN imewekwa' : 'PIN created';
+  String get usalamaRemovePin => isSwahili ? 'Ondoa PIN' : 'Remove PIN';
+  String get usalamaRemovePinAction => isSwahili ? 'Ondoa' : 'Remove';
+  String get usalamaRemovePinConfirmTitle => isSwahili ? 'Ondoa PIN?' : 'Remove PIN?';
+  String get usalamaRemovePinConfirm => isSwahili
+      ? 'Ukiondoa PIN, mtu yeyote mwenye simu yako ataweza kuingia. Una uhakika?'
+      : 'Removing your PIN means anyone with your phone can sign in. Are you sure?';
+  String get usalamaPinRemovedSuccess => isSwahili ? 'PIN imeondolewa' : 'PIN removed';
+
+  // Two-factor & biometric screen
+  String get usalamaBiometricLogin => isSwahili ? 'Ufunguzi wa biometriki' : 'Biometric unlock';
+  String get usalamaBiometricSub => isSwahili
+      ? 'Tumia alama ya kidole au uso badala ya kuandika PIN unaporejea kwenye programu'
+      : 'Use fingerprint or face to skip PIN entry when reopening the app';
+  String get usalamaBiometricUnavailable => isSwahili
+      ? 'Hakuna kihisi cha biometriki kwenye kifaa hiki'
+      : 'No biometric sensor on this device';
+  String get usalamaBiometricNotEnrolled => isSwahili
+      ? 'Sajili alama ya kidole au uso kwenye mipangilio ya simu yako kwanza'
+      : 'Enroll a fingerprint or face in your phone settings first';
+  String get usalamaBiometricWeakOnly => isSwahili
+      ? 'Biometriki ya kifaa hiki si imara vya kutosha kwa kuingia'
+      : "Your device's biometric isn't strong enough for sign-in";
+  String get usalamaBiometricRequiresPin => isSwahili
+      ? 'Weka PIN kwanza kabla ya kuwasha biometriki.'
+      : 'Set a PIN before enabling biometric unlock.';
+  String get usalamaBiometricEnableTitle => isSwahili
+      ? 'Wezesha biometriki?'
+      : 'Enable biometric unlock?';
+  String get usalamaBiometricEnablePromptPin => isSwahili
+      ? 'Weka PIN yako ya sasa kuthibitisha'
+      : 'Enter your current PIN to confirm';
+  String get usalamaBiometricEnabledSuccess => isSwahili
+      ? 'Biometriki imewezeshwa'
+      : 'Biometric unlock enabled';
+  String get usalamaBiometricDisabledSuccess => isSwahili
+      ? 'Biometriki imezimwa'
+      : 'Biometric unlock disabled';
+  String get usalamaBiometricEnableFailed => isSwahili
+      ? 'Biometriki haijaweza kuwezeshwa. Jaribu tena.'
+      : 'Could not enable biometric unlock. Please try again.';
+  String get usalamaBiometricSignInWithFingerprint => isSwahili
+      ? 'Ingia kwa alama ya kidole'
+      : 'Sign in with fingerprint';
+  String get usalamaBiometricSignInWithFaceId => isSwahili
+      ? 'Ingia kwa Face ID'
+      : 'Sign in with Face ID';
+  String get usalamaBiometricSignInGeneric => isSwahili
+      ? 'Ingia kwa biometriki'
+      : 'Sign in with biometrics';
+  String get usalamaSetPinCta => isSwahili ? 'Weka PIN' : 'Set PIN';
+  String get usalamaAutoLockTitle => isSwahili
+      ? 'Funga programu baada ya muda'
+      : 'Auto-lock after inactivity';
+
+  // Sessions
+  String get usalamaSessionCurrent => isSwahili ? 'Kifaa hiki' : 'This device';
+  String get usalamaSessionRevoke => isSwahili ? 'Toa' : 'Sign out';
+  String get usalamaSessionsEmpty => isSwahili
+      ? 'Hakuna vifaa vingine vilivyoingia'
+      : 'No other devices are signed in';
+  String get usalamaRevokeAll => isSwahili
+      ? 'Toa vifaa vingine vyote'
+      : 'Sign out all other devices';
+  String get usalamaRevokeAllConfirm => isSwahili
+      ? 'Vifaa vingine vyote vitatolewa. Utaendelea kuwa umeingia kwenye kifaa hiki.'
+      : 'All other devices will be signed out. You will remain signed in on this device.';
+
+  // Activity feed
+  String get usalamaActivityEmpty => isSwahili
+      ? 'Hakuna shughuli ya usalama bado'
+      : 'No security activity yet';
+  String usalamaEventLabel(String eventType) {
+    final labels = isSwahili ? _kEventLabelsSw : _kEventLabelsEn;
+    return labels[eventType] ?? eventType;
+  }
+
+  static const Map<String, String> _kEventLabelsEn = {
+    'login': 'Signed in',
+    'logout': 'Signed out',
+    'password_changed': 'Password changed',
+    'password_change_failed': 'Password change failed (wrong current)',
+    '2fa_enabled': 'Two-factor enabled',
+    '2fa_disabled': 'Two-factor disabled',
+    '2fa_recovery_regen': 'Recovery codes regenerated',
+    '2fa_confirm_failed': 'Two-factor confirmation failed',
+    'app_lock_set': 'App lock PIN set',
+    'app_lock_changed': 'App lock PIN changed',
+    'app_lock_removed': 'App lock PIN removed',
+    'app_lock_failed': 'App lock unlock failed',
+    'session_revoked': 'Device signed out',
+    'sessions_revoked_all': 'All other devices signed out',
+    'smoke_test': 'Test event',
+  };
+  static const Map<String, String> _kEventLabelsSw = {
+    'login': 'Umeingia',
+    'logout': 'Umetoka',
+    'password_changed': 'Nenosiri limebadilishwa',
+    'password_change_failed': 'Kubadilisha nenosiri kumeshindwa',
+    '2fa_enabled': '2FA imewashwa',
+    '2fa_disabled': '2FA imezimwa',
+    '2fa_recovery_regen': 'Misimbo ya kurudishia imebadilishwa',
+    '2fa_confirm_failed': 'Uthibitisho wa 2FA umeshindwa',
+    'app_lock_set': 'PIN ya kufunga programu imewekwa',
+    'app_lock_changed': 'PIN ya kufunga programu imebadilishwa',
+    'app_lock_removed': 'PIN ya kufunga programu imeondolewa',
+    'app_lock_failed': 'Kufungua programu kumeshindwa',
+    'session_revoked': 'Kifaa kimetolewa',
+    'sessions_revoked_all': 'Vifaa vingine vyote vimetolewa',
+    'smoke_test': 'Tukio la mtihani',
+  };
+
   String get mutualFriendsCount => isSwahili ? 'Marafiki wa pamoja' : 'mutual friends';
   String get storyHighlights => isSwahili ? 'Viango vya Hadithi' : 'Story highlights';
   String get storyDefaultTitle => isSwahili ? 'Hadithi' : 'Story';
@@ -352,6 +960,9 @@ class AppStrings {
       case 'documents': return documents;
       case 'shop': return shopTab;
       case 'friends': return friends;
+      case 'saved': return isSwahili ? 'Hifadhi' : 'Saved';
+      case 'creator': return isSwahili ? 'Mwandishi' : 'Creator';
+      case 'settings': return settings;
       case 'about': return about;
       // Finance
       case 'budget': return isSwahili ? 'Bajeti' : 'Budget';
@@ -524,6 +1135,9 @@ class AppStrings {
   String get accept => isSwahili ? 'Kubali' : 'Accept';
   String get decline => isSwahili ? 'Kataa' : 'Decline';
   String get noFriends => isSwahili ? 'Hakuna marafiki' : 'No friends yet';
+  String get informationIsPrivate => isSwahili ? 'Taarifa hizi ni za faragha' : 'This information is private';
+  String get failedToLoadGroups => isSwahili ? 'Imeshindwa kupakia vikundi' : 'Failed to load groups';
+  String get notSignedIn => isSwahili ? 'Sijaingia' : 'Not signed in';
   String get noFollowers => isSwahili ? 'Hakuna wafuatao' : 'No followers yet';
   String get noFollowing => isSwahili ? 'Hafuatii mtu yeyote' : 'Not following anyone yet';
   String get noSubscribers => isSwahili ? 'Hakuna wanachukua huduma' : 'No subscribers yet';
@@ -984,6 +1598,66 @@ class AppStrings {
   String get savingSettings => isSwahili ? 'Inahifadhi...' : 'Saving...';
   String get failedToLoadSettings => isSwahili ? 'Imeshindwa kupakia mipangilio' : 'Failed to load settings';
 
+  // ——— Faragha (Privacy) home + sub-pages ———
+  String get faraghaCardProfile => isSwahili ? 'Wasifu' : 'Profile';
+  String get faraghaCardProfileSub => isSwahili ? 'Nani anaona kila sehemu ya wasifu wako' : 'Who sees each part of your profile';
+  String get faraghaCardConnections => isSwahili ? 'Mawasiliano' : 'Connections';
+  String get faraghaCardConnectionsSub => isSwahili ? 'Nani anaweza kukutumia ujumbe, kupiga simu, kukuongeza' : 'Who can message, call, add you';
+  String get faraghaCardActivity => isSwahili ? 'Hali ya uwepo' : 'Activity & presence';
+  String get faraghaCardActivitySub => isSwahili ? 'Alionekana mwisho, mtandaoni, kusoma' : 'Last seen, online status, read receipts';
+  String get faraghaCardDiscovery => isSwahili ? 'Ugunduzi' : 'Discovery';
+  String get faraghaCardDiscoverySub => isSwahili ? 'Jinsi watu wanavyokupata' : 'How people find you';
+  String get faraghaCardSensitive => isSwahili ? 'Data nyeti' : 'Sensitive data';
+  String get faraghaCardSensitiveSub => isSwahili ? 'Picha, biometriki, barua za masoko' : 'Face data, biometrics, marketing';
+  String get faraghaCardSecurity => isSwahili ? 'Usalama na data' : 'Security & data';
+  String get faraghaCardSecuritySub => isSwahili ? 'Vipindi, 2FA, usafirishaji wa data, futa akaunti' : 'Sessions, 2FA, data export, delete account';
+
+  // Connections sub-page
+  String get faraghaWhoCanCall => isSwahili ? 'Nani anaweza kukupigia simu' : 'Who can call you';
+  String get faraghaWhoCanAddToGroups => isSwahili ? 'Nani anaweza kukuongeza kwenye vikundi' : 'Who can add you to groups';
+  String get faraghaWhoCanResendStatus => isSwahili ? 'Nani anaweza kushiriki hali yako' : 'Who can reshare your status';
+  String get faraghaBlockedUsers => isSwahili ? 'Watumiaji uliozuia' : 'Blocked users';
+  String get faraghaBlockedEmpty => isSwahili ? 'Hujamzuia mtu yeyote' : 'You have not blocked anyone';
+  String get faraghaUnblock => isSwahili ? 'Ondoa zuio' : 'Unblock';
+  String get faraghaCloseFriends => isSwahili ? 'Marafiki wa karibu' : 'Close friends';
+  String get faraghaCloseFriendsSub => isSwahili ? 'Hadithi za "marafiki wa karibu" zinaonekana kwao tu' : 'Stories with audience "close friends" are visible to this list only';
+  String get faraghaCloseFriendsEmpty => isSwahili ? 'Hujasajili marafiki wa karibu' : 'No close friends added yet';
+  String get faraghaRemove => isSwahili ? 'Ondoa' : 'Remove';
+
+  // Activity sub-page
+  String get faraghaShowOnlineStatus => isSwahili ? 'Onyesha "yupo mtandaoni"' : 'Show online status';
+  String get faraghaShowReadReceipts => isSwahili ? 'Onyesha "amesoma"' : 'Show read receipts';
+
+  // Discovery sub-page
+  String get faraghaSearchableByPhone => isSwahili ? 'Watu wanaweza kunipata kwa namba ya simu' : 'People can find me by phone number';
+  String get faraghaSearchableByEmail => isSwahili ? 'Watu wanaweza kunipata kwa barua pepe' : 'People can find me by email';
+  String get faraghaDiscoverable => isSwahili ? 'Nionekane kwenye mapendekezo ya marafiki' : 'Show me in friend suggestions';
+  String get faraghaOptOutSponsored => isSwahili ? 'Niondoe kwenye mapendekezo ya wadhamini' : 'Exclude me from sponsor matches';
+  String get faraghaOptOutCollaboration => isSwahili ? 'Niondoe kwenye mapendekezo ya ushirikiano' : 'Exclude me from collab matches';
+  String get faraghaOptOutBattles => isSwahili ? 'Niondoe kwenye mialiko ya mashindano' : 'Exclude me from battle invites';
+  String get faraghaOptOutThreads => isSwahili ? 'Niondoe kwenye uvumi wa kiotomatiki' : 'Exclude me from auto-detected threads';
+
+  // Sensitive sub-page
+  String get faraghaFaceConsent => isSwahili ? 'Kibali cha kuhifadhi data ya uso' : 'Consent to store facial data';
+  String get faraghaFaceConsentSub => isSwahili ? 'Inatumika kwa kupendekeza tagi za picha. Ukifuta kibali, data iliyopo itafutwa.' : 'Used for tag suggestions. Revoking purges existing embeddings.';
+  String get faraghaMarketingEmail => isSwahili ? 'Pokea barua za masoko' : 'Receive marketing email';
+  String get faraghaMarketingEmailSub => isSwahili ? 'Tofauti na arifa za muamala' : 'Separate from transactional notifications';
+
+  // Security & data sub-page
+  String get faraghaSessions => isSwahili ? 'Vifaa vinavyoingia' : 'Active sessions';
+  String get faraghaTwoFactor => isSwahili ? 'Uthibitishaji wa hatua mbili' : 'Two-factor authentication';
+  String get faraghaAppLock => isSwahili ? 'Funga programu' : 'App lock';
+  String get faraghaLoginAlerts => isSwahili ? 'Tahadhari za kuingia' : 'Login alerts';
+  String get faraghaLoginAlertsSub => isSwahili ? 'Pata arifa kifaa kipya kinapoingia' : 'Get notified when a new device signs in';
+  String get faraghaDataExport => isSwahili ? 'Pakua data yangu' : 'Download my data';
+  String get faraghaDataExportSub => isSwahili ? 'Pakua kila kitu unachokimiliki kwenye TAJIRI (JSON)' : 'Export everything you own on TAJIRI (JSON)';
+  String get faraghaDataExporting => isSwahili ? 'Inakusanya...' : 'Collecting...';
+  String get faraghaDataExportReady => isSwahili ? 'Tayari kushea' : 'Ready to share';
+  String get faraghaDeleteAccount => isSwahili ? 'Futa akaunti' : 'Delete account';
+  String get faraghaDeleteAccountSub => isSwahili ? 'Akaunti yako itaondolewa baada ya siku 30 za kungoja' : 'Your account is purged 30 days after confirmation';
+  String get faraghaDeleteConfirm => isSwahili ? 'Una uhakika? Tutakutumia barua pepe ya kuthibitisha.' : 'Are you sure? We will email a confirmation link.';
+  String get faraghaDeleteRequested => isSwahili ? 'Ombi limetumwa. Angalia barua pepe yako.' : 'Request submitted. Check your email.';
+
   // ——— Username ———
   String get usernameSettings => isSwahili ? 'Jina la mtumiaji' : 'Username';
   String get setUsername => isSwahili ? 'Weka jina la mtumiaji' : 'Set username';
@@ -1008,18 +1682,105 @@ class AppStrings {
   String get settingsSaveFailed => isSwahili ? 'Imeshindwa kuhifadhi. Jaribu tena.' : 'Failed to save. Try again.';
   String get saveChanges => isSwahili ? 'Hifadhi Mabadiliko' : 'Save changes';
   String get atLeastOneTab => isSwahili ? 'Lazima kuwe na angalau tabo moja iliyowashwa' : 'At least one tab must be enabled';
-  String get profileTabsInstructions => isSwahili ? 'Buruta ili kubadilisha mpangilio. Gusa swichi kuwasha au kuzima tabo.' : 'Drag to reorder. Toggle switch to show or hide tabs.';
+  String get profileTabsInstructions => isSwahili ? 'Buruta ili kubadilisha mpangilio ndani ya kategoria. Gusa swichi kuwasha au kuzima tabo. Bofua menyu ya zaidi kuhamisha tabo kategoria nyingine.' : 'Drag to reorder within a category. Toggle switch to show or hide tabs. Tap the more menu to move a tab to another category.';
   String tabsEnabledCount(int on, int total) => isSwahili ? 'Tabo zilizowashwa: $on/$total' : 'Tabs enabled: $on/$total';
   String get dragToReorder => isSwahili ? 'Buruta kubadilisha mpangilio' : 'Drag to reorder';
   String get tabVisible => isSwahili ? 'Inaonekana' : 'Visible';
   String get tabHidden => isSwahili ? 'Imefichwa' : 'Hidden';
   String get savingEllipsis => isSwahili ? 'Inahifadhiwa...' : 'Saving...';
+  String get profileTabsSaved => isSwahili ? 'Mipangilio imehifadhiwa' : 'Settings saved';
+  String get profileTabsReset => isSwahili ? 'Mipangilio imerejeshwa' : 'Settings reset';
+  String get profileTabsSaveFailed => isSwahili ? 'Imeshindwa kuhifadhi mipangilio' : 'Failed to save settings';
+  String get minOneTab => isSwahili ? 'Lazima kuwe na angalau tabo moja iliyowashwa' : 'At least one tab must be enabled';
+  String get tabsEnabled => isSwahili ? 'Tabo zilizowashwa' : 'Tabs enabled';
+  String get moveToCategory => isSwahili ? 'Hamia kategoria' : 'Move to category';
+  String get addCategory => isSwahili ? 'Ongeza Kategoria' : 'Add Category';
+  String get editCategory => isSwahili ? 'Hariri Kategoria' : 'Edit Category';
+  String get deleteCategory => isSwahili ? 'Futa Kategoria' : 'Delete Category';
+  String get categoryName => isSwahili ? 'Jina la Kategoria' : 'Category Name';
+  String get categoryNameHint => isSwahili ? 'Weka jina la kategoria' : 'Enter category name';
+  String get categoryCannotBeEmpty => isSwahili ? 'Jina la kategoria haliwezi kuwa tupu' : 'Category name cannot be empty';
+  String get categoryDeleteConfirm => isSwahili ? 'Kategoria hii itafutwa. Tabo zilizomo zitahamia kategoria ya Zaidi. Endelea?' : 'This category will be deleted. Tabs in it will move to More. Continue?';
+  String get categoryNotEmpty => isSwahili ? 'Kategoria haina tabo - haiwezi kufutwa' : 'Category is not empty - cannot delete';
+
+  String profileTabCategoryLabel(String categoryId) {
+    switch (categoryId) {
+      case 'social': return isSwahili ? 'Mtandao' : 'Social';
+      case 'commerce': return isSwahili ? 'Biashara' : 'Commerce';
+      case 'finance': return isSwahili ? 'Fedha' : 'Finance';
+      case 'health': return isSwahili ? 'Afya' : 'Health';
+      case 'family': return isSwahili ? 'Wanawake & Familia' : 'Women & Family';
+      case 'work': return isSwahili ? 'Biashara' : 'Business';
+      case 'lifestyle': return isSwahili ? 'Maisha' : 'Lifestyle';
+      case 'official': return isSwahili ? 'Serikali & Sheria' : 'Government & Legal';
+      case 'faith': return isSwahili ? 'Imani' : 'Faith';
+      case 'my_cars': return isSwahili ? 'Magari Yangu' : 'My Cars';
+      case 'education': return isSwahili ? 'Elimu' : 'Education';
+      case 'security': return isSwahili ? 'Usalama' : 'Security';
+      case 'more': return isSwahili ? 'Zaidi' : 'More';
+      default: return categoryId;
+    }
+  }
+
+  // ——— Security / 2FA / PIN ———
+  String get twoFactorTitle => isSwahili ? 'Uthibitisho wa Hatua Mbili' : 'Two-Factor Authentication';
+  String get twoFactorEnabled => isSwahili ? 'Imewashwa' : 'Enabled';
+  String get twoFactorDisabled => isSwahili ? 'Imezimwa' : 'Disabled';
+  String get twoFactorEnabledDesc => isSwahili ? 'Akaunti yako imehifadhiwa na uthibitisho wa hatua mbili' : 'Your account is protected with two-factor authentication';
+  String get twoFactorDisabledDesc => isSwahili ? 'Ongeza kinga zaidi kwa akaunti yako' : 'Add an extra layer of security to your account';
+  String get enable2FA => isSwahili ? 'Washa 2FA' : 'Enable 2FA';
+  String get disable2FA => isSwahili ? 'Zima 2FA' : 'Disable 2FA';
+  String get confirm2FA => isSwahili ? 'Thibitisha 2FA' : 'Confirm 2FA';
+  String get twoFASetupTitle => isSwahili ? 'Weka' : 'Setup';
+  String get twoFASetupDesc => isSwahili ? 'Scan QR code kwa app ya uthibitisho (Google Authenticator, Authy, n.k.)' : 'Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)';
+  String get twoFAEnterCode => isSwahili ? 'Weka namba 6 kutoka kwa app yako ya uthibitisho:' : 'Enter the 6-digit code from your authenticator app:';
+  String get twoFAQrUnavailable => isSwahili ? 'QR code haipatikani' : 'QR code unavailable';
+  String get twoFACodeHint => isSwahili ? '000000' : '000000';
+  String get verifyAndEnable => isSwahili ? 'Thibitisha & Washa' : 'Verify & Enable';
+  String get twoFAEnabledSuccess => isSwahili ? '2FA imewashwa' : '2FA enabled';
+  String get twoFADisabledSuccess => isSwahili ? '2FA imezimwa' : '2FA disabled';
+  String get twoFAInvalidCode => isSwahili ? 'Namba si sahihi. Jaribu tena.' : 'Invalid code. Please try again.';
+  String get twoFAFailedEnable => isSwahili ? 'Imeshindwa kuwasha 2FA' : 'Failed to enable 2FA';
+  String get twoFAFailedDisable => isSwahili ? 'Imeshindwa kuzima 2FA' : 'Failed to disable 2FA';
+  String get twoFAFailedStatus => isSwahili ? 'Imeshindwa kuangalia hali ya 2FA' : 'Failed to check 2FA status';
+  String get recoveryCodes => isSwahili ? 'Misimbo ya Uokoaji' : 'Recovery Codes';
+  String get recoveryCodesDesc => isSwahili ? 'Hifadhi misimbo hii mahali salama. Unaweza kuitumia kufikia akaunti yako ukipoteza uthibitisho wako.' : 'Save these codes in a safe place. You can use them to access your account if you lose your authenticator.';
+  String get copyRecoveryCodes => isSwahili ? 'Nakili' : 'Copy';
+  String get recoveryCodesCopied => isSwahili ? 'Misimbo yamenakiliwa' : 'Recovery codes copied';
+  String get regenerateRecoveryCodes => isSwahili ? 'Tengeneza Misimbo Upya' : 'Regenerate Recovery Codes';
+  String get regenerateFailed => isSwahili ? 'Imeshindwa kutengeneza misimbo' : 'Failed to regenerate codes';
+  String get disable2FAConfirmTitle => isSwahili ? 'Zima 2FA' : 'Disable 2FA';
+  String get disable2FAConfirmMessage => isSwahili ? 'Una uhakika unataka kuzima uthibitisho wa hatua mbili? Hii itapunguza usalama wa akaunti yako.' : 'Are you sure you want to disable two-factor authentication? This will reduce your account security.';
+
+  String get appLockTitle => isSwahili ? 'Kufungua kwa PIN' : 'App Lock';
+  String get appLockDesc => isSwahili ? 'Linda programu kwa PIN au alama ya kipekee' : 'Protect the app with a PIN or biometric';
+  String get appLockEnabled => isSwahili ? 'Kufungua kwa PIN imewashwa' : 'App lock enabled';
+  String get appLockDisabled => isSwahili ? 'Kufungua kwa PIN imezimwa' : 'App lock disabled';
+  String get setPin => isSwahili ? 'Weka PIN' : 'Set PIN';
+  String get changePin => isSwahili ? 'Badilisha PIN' : 'Change PIN';
+  String get removePin => isSwahili ? 'Ondoa PIN' : 'Remove PIN';
+  String get pinHint => isSwahili ? 'Weka PIN ya tarakimu 4' : 'Enter 4-digit PIN';
+  String get pinConfirmHint => isSwahili ? 'Thibitisha PIN' : 'Confirm PIN';
+  String get pinCurrentHint => isSwahili ? 'Weka PIN ya sasa' : 'Enter current PIN';
+  String get pinNewHint => isSwahili ? 'Weka PIN mpya' : 'Enter new PIN';
+  String get pinMismatch => isSwahili ? 'PIN hazilingani' : 'PINs do not match';
+  String get pinWrong => isSwahili ? 'PIN si sahihi' : 'Incorrect PIN';
+  String get pinSetSuccess => isSwahili ? 'PIN imewekwa' : 'PIN set';
+  String get pinChangedSuccess => isSwahili ? 'PIN imebadilishwa' : 'PIN changed';
+  String get pinRemovedSuccess => isSwahili ? 'PIN imeondolewa' : 'PIN removed';
+  String get useBiometric => isSwahili ? 'Tumia alama ya kipekee' : 'Use biometric';
+  String get lockTimeout => isSwahili ? 'Muda wa kufunga' : 'Lock timeout';
+  String get lockTimeoutImmediate => isSwahili ? 'Mara moja' : 'Immediately';
+  String get lockTimeout1Min => isSwahili ? 'Dakika 1' : '1 minute';
+  String get lockTimeout5Min => isSwahili ? 'Dakika 5' : '5 minutes';
+  String get lockTimeout15Min => isSwahili ? 'Dakika 15' : '15 minutes';
 
   // ——— Location / Registration steps ———
   String get selectRegion => isSwahili ? 'Chagua mkoa' : 'Select region';
   String get selectDistrict => isSwahili ? 'Chagua wilaya' : 'Select district';
   String get selectWard => isSwahili ? 'Chagua kata' : 'Select ward';
   String get selectStreet => isSwahili ? 'Chagua mtaa' : 'Select street';
+  String get selectRegionAndDistrict => isSwahili ? 'Tafadhali chagua mkoa na wilaya' : 'Please select a region and district';
   String get selectSchool => isSwahili ? 'Chagua shule' : 'Select school';
   String get searchSchool => isSwahili ? 'Tafuta shule' : 'Search school';
   String get noSchoolSelected => isSwahili ? 'Hakuna shule iliyochaguliwa' : 'No school selected';

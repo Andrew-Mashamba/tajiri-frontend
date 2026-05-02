@@ -12,6 +12,7 @@ class FullProfile {
   final String lastName;
   final String? username;
   final String? phoneNumber;
+  final String? email; // Own profile only — backend gates this
   final DateTime? dateOfBirth;
   final String? gender;
   final String? bio;
@@ -29,8 +30,11 @@ class FullProfile {
   final ProfileEmployer? currentEmployer;
   final FriendshipStatus? friendshipStatus;
   final int? mutualFriendsCount;
+  final bool isFollowing;
+  final bool isFollowedBy;
   final List<Post> recentPosts;
   final List<Photo> recentPhotos;
+  final DateTime? lastActiveAt;
   final DateTime createdAt;
 
   FullProfile({
@@ -39,6 +43,7 @@ class FullProfile {
     required this.lastName,
     this.username,
     this.phoneNumber,
+    this.email,
     this.dateOfBirth,
     this.gender,
     this.bio,
@@ -56,8 +61,11 @@ class FullProfile {
     this.currentEmployer,
     this.friendshipStatus,
     this.mutualFriendsCount,
+    this.isFollowing = false,
+    this.isFollowedBy = false,
     this.recentPosts = const [],
     this.recentPhotos = const [],
+    this.lastActiveAt,
     required this.createdAt,
   });
 
@@ -116,6 +124,7 @@ class FullProfile {
       lastName: json['last_name'] ?? '',
       username: json['username'],
       phoneNumber: json['phone_number'],
+      email: json['email'],
       dateOfBirth: json['date_of_birth'] != null
           ? DateTime.tryParse(json['date_of_birth'])
           : null,
@@ -149,8 +158,13 @@ class FullProfile {
           : null,
       friendshipStatus: friendshipStatus,
       mutualFriendsCount: json['mutual_friends_count'],
+      isFollowing: json['is_following'] == true,
+      isFollowedBy: json['is_followed_by'] == true,
       recentPosts: _parsePostList(json['recent_posts']),
       recentPhotos: _parsePhotoList(json['recent_photos']),
+      lastActiveAt: json['last_active_at'] != null
+          ? DateTime.tryParse(json['last_active_at'])
+          : null,
       createdAt: DateTime.parse(json['created_at']),
     );
   }
@@ -218,6 +232,17 @@ class FullProfile {
       postsecondaryEducation != null ||
       universityEducation != null;
 
+  /// Computed age in whole years from date_of_birth, or null if DOB unknown.
+  int? get age {
+    if (dateOfBirth == null) return null;
+    final now = DateTime.now();
+    var years = now.year - dateOfBirth!.year;
+    final beforeBirthday = now.month < dateOfBirth!.month ||
+        (now.month == dateOfBirth!.month && now.day < dateOfBirth!.day);
+    if (beforeBirthday) years -= 1;
+    return years < 0 ? null : years;
+  }
+
   String? get genderLabel {
     if (gender == 'male') return 'Mwanaume';
     if (gender == 'female') return 'Mwanamke';
@@ -273,11 +298,13 @@ class ProfileLocation {
   final String? regionName;
   final String? districtName;
   final String? wardName;
+  final String? streetName;
 
   ProfileLocation({
     this.regionName,
     this.districtName,
     this.wardName,
+    this.streetName,
   });
 
   factory ProfileLocation.fromJson(Map<String, dynamic> json) {
@@ -285,11 +312,13 @@ class ProfileLocation {
       regionName: json['region_name'],
       districtName: json['district_name'],
       wardName: json['ward_name'],
+      streetName: json['street_name'],
     );
   }
 
   String get displayText {
     final parts = <String>[];
+    if (streetName != null) parts.add(streetName!);
     if (wardName != null) parts.add(wardName!);
     if (districtName != null) parts.add(districtName!);
     if (regionName != null) parts.add(regionName!);
@@ -301,19 +330,28 @@ class ProfileEducation {
   final String? schoolName;
   final int? graduationYear;
   final String? combinationCode;
+  final String? combinationName;
+  final String? subjects;
 
   ProfileEducation({
     this.schoolName,
     this.graduationYear,
     this.combinationCode,
+    this.combinationName,
+    this.subjects,
   });
 
   factory ProfileEducation.fromJson(Map<String, dynamic> json) {
+    final rawSubjects = json['subjects'];
     return ProfileEducation(
       // Handle different field names: school_name or institution_name
       schoolName: json['school_name'] ?? json['institution_name'],
       graduationYear: json['graduation_year'],
       combinationCode: json['combination_code'],
+      combinationName: json['combination_name'],
+      subjects: rawSubjects is List
+          ? rawSubjects.map((e) => e.toString()).join(', ')
+          : rawSubjects?.toString(),
     );
   }
 }
@@ -323,12 +361,14 @@ class ProfileUniversityEducation {
   final String? programmeName;
   final String? degreeLevel;
   final int? graduationYear;
+  final bool isCurrentStudent;
 
   ProfileUniversityEducation({
     this.universityName,
     this.programmeName,
     this.degreeLevel,
     this.graduationYear,
+    this.isCurrentStudent = false,
   });
 
   factory ProfileUniversityEducation.fromJson(Map<String, dynamic> json) {
@@ -337,6 +377,7 @@ class ProfileUniversityEducation {
       programmeName: json['programme_name'],
       degreeLevel: json['degree_level'],
       graduationYear: json['graduation_year'],
+      isCurrentStudent: json['is_current_student'] == true,
     );
   }
 }
@@ -344,13 +385,11 @@ class ProfileUniversityEducation {
 class ProfileEmployer {
   final String? employerName;
   final String? sector;
-  final String? jobTitle;
   final String? ownership;
 
   ProfileEmployer({
     this.employerName,
     this.sector,
-    this.jobTitle,
     this.ownership,
   });
 
@@ -358,7 +397,6 @@ class ProfileEmployer {
     return ProfileEmployer(
       employerName: json['employer_name'],
       sector: json['sector'],
-      jobTitle: json['job_title'],
       ownership: json['ownership'],
     );
   }

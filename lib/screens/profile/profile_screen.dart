@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../models/profile_models.dart';
@@ -41,10 +42,10 @@ import '../../models/file_models.dart';
 import '../../services/group_service.dart';
 import '../../services/file_service.dart';
 import 'profile_stats_bottom_sheet.dart';
-import 'creator_dashboard_section.dart';
+import '../../creator/screens/dashboard_section.dart';
 import 'edit_profile_screen.dart';
-import '../../services/creator_service.dart';
-import '../../models/flywheel_models.dart';
+import '../../creator/services/creator_service.dart';
+import '../../creator/models/flywheel_models.dart';
 import '../../utils/face_validator.dart';
 import '../../budget/budget_module.dart';
 import '../../kikoba/kikoba_module.dart';
@@ -240,6 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Tab configuration
   List<ProfileTabConfig> _allTabs = [];
   List<ProfileTabConfig> _enabledTabs = [];
+  Map<String, String> _customCategoryLabels = {};
 
   // Profile photo upload
   bool _isUploadingPhoto = false;
@@ -254,6 +256,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Viral assists count (own profile or when > 0)
   int _viralAssistsCount = 0;
 
+  // Cached LocalStorageService (Hive) — initialised on first use, reused after.
+  LocalStorageService? _storage;
+  Future<LocalStorageService> _ensureStorage() async {
+    return _storage ??= await LocalStorageService.getInstance();
+  }
+
   int get _currentUserId => widget.currentUserId ?? widget.userId;
   bool get _isOwnProfile => widget.userId == _currentUserId;
 
@@ -266,12 +274,16 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _loadTabsAndProfile() async {
     debugPrint('[ProfileScreen] _loadTabsAndProfile started for userId: ${widget.userId}');
 
-    final storage = await LocalStorageService.getInstance();
+    final storage = await _ensureStorage();
     if (!mounted) return;
     debugPrint('[ProfileScreen] LocalStorageService loaded');
 
     _allTabs = storage.getProfileTabs();
-    _enabledTabs = _allTabs.where((t) => t.enabled).toList();
+    _enabledTabs = _allTabs
+        .where((t) => t.enabled)
+        .where((t) => _isOwnProfile || !ProfileTabDefaults.ownProfileOnlyTabIds.contains(t.id))
+        .toList();
+    _customCategoryLabels = storage.getUserCategories().labels;
     debugPrint('[ProfileScreen] Tabs: ${_allTabs.length} total, ${_enabledTabs.length} enabled');
 
     // Dispose any controller from a previous run before reassigning. This is
@@ -301,9 +313,13 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _refreshTabs() async {
     if (!mounted) return;
 
-    final storage = await LocalStorageService.getInstance();
+    final storage = await _ensureStorage();
     final newTabs = storage.getProfileTabs();
-    final newEnabledTabs = newTabs.where((t) => t.enabled).toList();
+    final newEnabledTabs = newTabs
+        .where((t) => t.enabled)
+        .where((t) => _isOwnProfile || !ProfileTabDefaults.ownProfileOnlyTabIds.contains(t.id))
+        .toList();
+    _customCategoryLabels = storage.getUserCategories().labels;
 
     // Check if tabs have actually changed
     final tabsChanged = _enabledTabs.length != newEnabledTabs.length ||
@@ -399,7 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _loadViralAssists() async {
     try {
-      final storage = await LocalStorageService.getInstance();
+      final storage = await _ensureStorage();
       final token = storage.getAuthToken();
       final creatorService = CreatorService();
       final count = await creatorService.getViralAssists(
@@ -458,7 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     if (result.success) {
       // Update local user so profile photo reflects across the app
-      final storage = await LocalStorageService.getInstance();
+      final storage = await _ensureStorage();
       final user = storage.getUser();
       if (user != null && result.photoUrl != null && user.userId == widget.userId) {
         user.applyServerProfile({'profile_photo_url': result.photoUrl});
@@ -550,6 +566,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (result) {
           EventTrackingService.getInstance().then((tracker) {
             tracker.trackEvent(eventType: 'follow', creatorId: widget.userId);
+          }).catchError((e, st) {
+            debugPrint('[ProfileScreen] follow tracking failed: $e\n$st');
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(AppStringsScope.of(context)?.friendRequestSent ?? 'Friend request sent')),
@@ -624,6 +642,8 @@ class _ProfileScreenState extends State<ProfileScreen>
               if (mounted && result) {
                 EventTrackingService.getInstance().then((tracker) {
                   tracker.trackEvent(eventType: 'unfollow', creatorId: widget.userId);
+                }).catchError((e, st) {
+                  debugPrint('[ProfileScreen] unfollow tracking failed: $e\n$st');
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(s?.friendRemoved ?? 'Friend removed')),
@@ -782,6 +802,26 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// Contains all profile tabs for navigation
   /// Open a tab as a full page
   void _openTabPage(ProfileTabConfig tab) {
+    // Saved + Settings already exist as full-Scaffold screens. Pushing them
+    // through _ProfileTabPage would produce duplicate AppBars, so we route
+    // directly to the existing screens instead.
+    switch (tab.id) {
+      case 'saved':
+        Navigator.pushNamed(context, '/saved-posts');
+        return;
+      case 'settings':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SettingsScreen(currentUserId: _currentUserId)),
+        ).then((_) {
+          if (mounted) {
+            _refreshTabs();
+            _loadProfile();
+          }
+        });
+        return;
+    }
+
     final s = AppStringsScope.of(context);
     final label = _isOwnProfile
         ? (s?.profileTabLabelOwn(tab.id) ?? tab.label)
@@ -1142,6 +1182,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'handshake': return Icons.handshake_outlined;
       case 'people': return Icons.people_outlined;
       case 'info': return Icons.info_outlined;
+      case 'bookmark': return Icons.bookmark_outline;
+      case 'auto_awesome': return Icons.auto_awesome_outlined;
+      case 'settings': return Icons.settings_outlined;
       // Finance
       case 'account_balance_wallet': return Icons.account_balance_wallet_outlined;
       case 'savings': return Icons.savings_outlined;
@@ -1357,63 +1400,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       ],
       const SizedBox(height: sectionSpacing),
 
-      // 2. Me page: quick links (Edit left, Settings center, Wallet right) — each in Expanded for bounded layout
-      if (_isOwnProfile) ...[
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _MeQuickLink(
-                  icon: Icons.edit_outlined,
-                  label: AppStringsScope.of(context)?.edit ?? 'Edit',
-                  onTap: _showEditProfileDialog,
-                ),
-              ),
-              Expanded(
-                child: Center(
-                  child: _MeQuickLink(
-                    icon: Icons.settings_outlined,
-                    label: AppStringsScope.of(context)?.settings ?? 'Settings',
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SettingsScreen(currentUserId: _currentUserId),
-                        ),
-                      );
-                      if (mounted) {
-                        _loadProfile();
-                        _refreshTabs();
-                      }
-                    },
-                  ),
-                ),
-              ),
-              Expanded(
-                child: _MeQuickLink(
-                  icon: Icons.payments_rounded,
-                  label: 'Tajiri Pay',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MyWalletModule(userId: _currentUserId),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: sectionSpacing),
-      ],
-
-      // Creator dashboard (own profile only)
-      if (_isOwnProfile) ...[
-        CreatorDashboardSection(userId: widget.userId),
-        const SizedBox(height: sectionSpacing),
-      ],
-
       // Spec §G.4 — service-due dashboard (customer-side)
       if (_isOwnProfile) ...[
         ServiceDueDashboard(userId: widget.userId),
@@ -1549,33 +1535,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       ],
 
-      // 6. Info section (location, work, education, relationship, joined, mutual friends)
-      if (_profile?.location != null ||
-          _profile?.currentEmployer != null ||
-          _profile?.universityEducation != null ||
-          _profile?.relationshipStatus != null) ...[
-        const SizedBox(height: sectionSpacing),
-        if (_profile?.location != null)
-          _buildInfoItem(Icons.location_on_outlined, _profile!.location!.displayText),
-        if (_profile?.currentEmployer != null)
-          _buildInfoItem(
-            Icons.work_outline,
-            _profile!.currentEmployer!.jobTitle != null
-                ? '${_profile!.currentEmployer!.jobTitle} - ${_profile!.currentEmployer!.employerName}'
-                : _profile!.currentEmployer!.employerName ?? '',
-          ),
-        if (_profile?.universityEducation != null)
-          _buildInfoItem(
-            Icons.school_outlined,
-            _profile!.universityEducation!.universityName ?? '',
-          ),
-        if (_profile?.relationshipStatus != null)
-          _buildInfoItem(Icons.favorite_border, _profile!.relationshipStatusLabel ?? ''),
-      ],
-      _buildInfoItem(
-        Icons.calendar_today_outlined,
-        '${AppStringsScope.of(context)?.joined ?? 'Joined'} ${_formatDate(_profile?.createdAt ?? DateTime.now())}',
-      ),
+      // 6. Info rows — location, basics, work, education, contact, joined.
+      //    Each row is conditionally rendered by _buildAboutRows().
+      ..._buildAboutRows(),
 
       // Tab menu - grid of four, directly under joined date
       const SizedBox(height: sectionSpacing),
@@ -1636,23 +1598,45 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   /// Categorized flat grid: profile tabs grouped by life domain with thin dividers.
   /// Social tabs first (no header), then service categories with hairline + label.
+  /// Uses stored [ProfileTabConfig.categoryId] so user-customised category moves are respected.
   Widget _buildTabMenuGrid() {
-    final enabledSet = _enabledTabs.map((t) => t.id).toSet();
-    final tabMap = {for (final t in _enabledTabs) t.id: t};
+    final s = AppStringsScope.of(context);
+
+    // Group enabled tabs by their stored category ID.
+    final groups = <String, List<ProfileTabConfig>>{};
+    for (final tab in _enabledTabs) {
+      final catId = tab.categoryId ?? ProfileTabDefaults.getDefaultCategoryId(tab.id);
+      groups.putIfAbsent(catId, () => []).add(tab);
+    }
+
+    // Sort categories by the default category order.
+    final defaultOrder = {
+      for (int i = 0; i < ProfileTabDefaults.categories.length; i++)
+        ProfileTabDefaults.categories[i].id: i,
+    };
+    final sortedCategoryIds = groups.keys.toList()
+      ..sort((a, b) => (defaultOrder[a] ?? 999).compareTo(defaultOrder[b] ?? 999));
 
     final children = <Widget>[];
     bool isFirst = true;
 
-    for (final category in ProfileTabDefaults.categories) {
-      final categoryTabs = category.tabIds
-          .where(enabledSet.contains)
-          .map((id) => tabMap[id]!)
-          .toList();
+    for (final catId in sortedCategoryIds) {
+      final categoryTabs = groups[catId]!
+        ..sort((a, b) {
+          final cmp = a.order.compareTo(b.order);
+          if (cmp != 0) return cmp;
+          return a.id.compareTo(b.id);
+        });
       if (categoryTabs.isEmpty) continue;
 
       // Category header with hairline divider (skip for first/social section)
-      if (!isFirst && category.label.isNotEmpty) {
-        children.add(_buildCategoryDivider(category.label));
+      if (!isFirst && catId != 'social') {
+        final label = _customCategoryLabels[catId] ??
+            s?.profileTabCategoryLabel(catId) ??
+            ProfileTabDefaults.categories
+                .firstWhere((c) => c.id == catId, orElse: () => ProfileTabCategory(id: catId, label: catId.toUpperCase(), tabIds: []))
+                .label;
+        children.add(_buildCategoryDivider(label));
       }
       isFirst = false;
 
@@ -1809,14 +1793,14 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildInfoItem(IconData icon, String text) {
+  Widget _buildInfoItem(IconData icon, String text, {VoidCallback? onTap}) {
     if (text.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Row(
         children: [
           Icon(icon, size: 18, color: Colors.grey.shade600),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
@@ -1824,11 +1808,269 @@ class _ProfileScreenState extends State<ProfileScreen>
                 fontSize: 14,
                 color: Colors.grey.shade700,
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (onTap != null)
+            Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey.shade400),
         ],
       ),
     );
+    if (onTap == null) return row;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: row,
+      ),
+    );
+  }
+
+  /// Builds the conditional info rows shown under bio + interests, grouped
+  /// into 4 visual sections (basics, work/education, contact, account)
+  /// separated by hairline dividers. Empty groups are skipped entirely.
+  List<Widget> _buildAboutRows() {
+    final s = AppStringsScope.of(context);
+    final p = _profile;
+    if (p == null) return [];
+
+    // ── Group 1: Basics (location, age+gender, relationship, last active) ──
+    final basics = <Widget>[];
+    if (p.location != null) {
+      basics.add(_buildInfoItem(Icons.location_on_outlined, p.location!.displayText));
+    }
+    final ageStr = p.age != null
+        ? (s?.yearsOldShort(p.age!) ?? '${p.age} years')
+        : null;
+    final genderStr = _localizedGender(p.gender);
+    final ageGenderParts = <String>[
+      if (ageStr != null && ageStr.isNotEmpty) ageStr,
+      if (genderStr != null && genderStr.isNotEmpty) genderStr,
+    ];
+    if (ageGenderParts.isNotEmpty) {
+      basics.add(_buildInfoItem(Icons.cake_outlined, ageGenderParts.join(' · ')));
+    }
+    final relLabel = _localizedRelationship(p.relationshipStatus);
+    if (relLabel != null && relLabel.isNotEmpty) {
+      basics.add(_buildInfoItem(Icons.favorite_border, relLabel));
+    }
+    if (!_isOwnProfile && p.lastActiveAt != null) {
+      basics.add(_buildInfoItem(Icons.access_time_rounded, _formatRelativeAgo(p.lastActiveAt!)));
+    }
+
+    // ── Group 2: Work & Education ──
+    final workEdu = <Widget>[];
+    if (p.currentEmployer != null) {
+      final emp = p.currentEmployer!;
+      final tags = <String>[
+        if (emp.sector != null && emp.sector!.isNotEmpty) emp.sector!,
+        if (emp.ownership != null && emp.ownership!.isNotEmpty) emp.ownership!,
+      ];
+      final empText = (emp.employerName ?? '').isEmpty
+          ? ''
+          : (tags.isEmpty ? emp.employerName! : '${emp.employerName} · ${tags.join(' · ')}');
+      if (empText.isNotEmpty) workEdu.add(_buildInfoItem(Icons.work_outline, empText));
+    }
+    if (p.universityEducation != null && (p.universityEducation!.universityName ?? '').isNotEmpty) {
+      final u = p.universityEducation!;
+      final parts = <String>[u.universityName!];
+      if (u.programmeName != null && u.programmeName!.isNotEmpty) parts.add(u.programmeName!);
+      if (u.degreeLevel != null && u.degreeLevel!.isNotEmpty) parts.add(u.degreeLevel!);
+      if (u.isCurrentStudent) {
+        parts.add(s?.currentlyStudying ?? 'Currently studying');
+      } else if (u.graduationYear != null) {
+        parts.add(s?.classOfYear(u.graduationYear!) ?? 'Class of ${u.graduationYear}');
+      }
+      workEdu.add(_buildInfoItem(Icons.school_outlined, parts.join(' · ')));
+    }
+    workEdu.addAll(_educationLevelRow(p.postsecondaryEducation, s?.postsecondaryLabel ?? 'College'));
+    workEdu.addAll(_educationLevelRow(p.alevelEducation, s?.alevelLabel ?? 'A-Level',
+        combinationName: p.alevelEducation?.combinationName,
+        combinationCode: p.alevelEducation?.combinationCode,
+        subjects: p.alevelEducation?.subjects));
+    workEdu.addAll(_educationLevelRow(p.secondarySchool, s?.secondarySchoolLabel ?? 'O-Level'));
+    workEdu.addAll(_educationLevelRow(p.primarySchool, s?.primarySchoolLabel ?? 'Primary'));
+
+    // ── Group 3: Contact (tappable, gated) ──
+    final contact = <Widget>[];
+    if (p.phoneNumber != null && p.phoneNumber!.isNotEmpty &&
+        (_isOwnProfile || p.friendshipStatus == FriendshipStatus.friends)) {
+      contact.add(_buildInfoItem(
+        Icons.phone_outlined,
+        p.phoneNumber!,
+        onTap: () => _showPhoneActions(p.phoneNumber!),
+      ));
+    }
+    if (_isOwnProfile && p.email != null && p.email!.isNotEmpty) {
+      contact.add(_buildInfoItem(
+        Icons.email_outlined,
+        p.email!,
+        onTap: () => _launchUri('mailto:${p.email}'),
+      ));
+    }
+
+    // ── Group 4: Account (joined date) ──
+    final account = <Widget>[
+      _buildInfoItem(
+        Icons.calendar_today_outlined,
+        '${s?.joined ?? 'Joined'} ${_formatDate(p.createdAt)}',
+      ),
+    ];
+
+    final groups = [basics, workEdu, contact, account].where((g) => g.isNotEmpty).toList();
+    if (groups.isEmpty) return [];
+
+    final out = <Widget>[const SizedBox(height: 20.0)];
+    for (var i = 0; i < groups.length; i++) {
+      if (i > 0) {
+        out.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Divider(height: 1, thickness: 0.5, color: Colors.grey.shade200),
+        ));
+      }
+      out.addAll(groups[i]);
+    }
+    return out;
+  }
+
+  void _showPhoneActions(String phone) {
+    final s = AppStringsScope.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Text(
+                  phone,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.call_rounded),
+                title: Text(s?.isSwahili ?? false ? 'Piga simu' : 'Call'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _launchUri('tel:$phone');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sms_rounded),
+                title: Text(s?.isSwahili ?? false ? 'Tuma ujumbe' : 'Send message'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _launchUri('sms:$phone');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: Text(s?.isSwahili ?? false ? 'Nakili' : 'Copy'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await Clipboard.setData(ClipboardData(text: phone));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(s?.isSwahili ?? false ? 'Imenakiliwa' : 'Copied')),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchUri(String uri) async {
+    final parsed = Uri.tryParse(uri);
+    if (parsed == null) return;
+    try {
+      await launchUrl(parsed);
+    } catch (e) {
+      debugPrint('[ProfileScreen] launchUrl failed for $uri: $e');
+    }
+  }
+
+  List<Widget> _educationLevelRow(
+    ProfileEducation? edu,
+    String levelLabel, {
+    String? combinationName,
+    String? combinationCode,
+    String? subjects,
+  }) {
+    if (edu == null || (edu.schoolName ?? '').isEmpty) return [];
+    final s = AppStringsScope.of(context);
+    final parts = <String>['$levelLabel: ${edu.schoolName}'];
+    final combo = combinationName ?? combinationCode;
+    if (combo != null && combo.isNotEmpty) parts.add(combo);
+    if (subjects != null && subjects.isNotEmpty) parts.add(subjects);
+    if (edu.graduationYear != null) {
+      parts.add(s?.classOfYear(edu.graduationYear!) ?? 'Class of ${edu.graduationYear}');
+    }
+    return [_buildInfoItem(Icons.school_outlined, parts.join(' · '))];
+  }
+
+  String? _localizedGender(String? raw) {
+    if (raw == null) return null;
+    final s = AppStringsScope.of(context);
+    if (s == null) return raw;
+    switch (raw.toLowerCase()) {
+      case 'male': return s.genderMale;
+      case 'female': return s.genderFemale;
+      default: return raw;
+    }
+  }
+
+  String? _localizedRelationship(String? raw) {
+    if (raw == null) return null;
+    final s = AppStringsScope.of(context);
+    if (s == null) return raw;
+    switch (raw.toLowerCase()) {
+      case 'single': return s.relationshipSingle;
+      case 'married': return s.relationshipMarried;
+      case 'engaged': return s.relationshipEngaged;
+      case 'complicated': return s.relationshipComplicated;
+      default: return raw;
+    }
+  }
+
+  String _formatRelativeAgo(DateTime time) {
+    final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 5) return s?.activeNow ?? 'Active now';
+    String agoStr;
+    if (diff.inHours < 1) {
+      final m = diff.inMinutes;
+      agoStr = isSw ? 'dakika $m zilizopita' : '$m min ago';
+    } else if (diff.inDays < 1) {
+      final h = diff.inHours;
+      agoStr = isSw ? 'saa $h zilizopita' : '${h}h ago';
+    } else if (diff.inDays < 7) {
+      final d = diff.inDays;
+      agoStr = isSw ? 'siku $d zilizopita' : '${d}d ago';
+    } else if (diff.inDays < 30) {
+      final w = (diff.inDays / 7).floor();
+      agoStr = isSw ? 'wiki $w zilizopita' : '${w}w ago';
+    } else if (diff.inDays < 365) {
+      final mo = (diff.inDays / 30).floor();
+      agoStr = isSw ? 'miezi $mo iliyopita' : '${mo}mo ago';
+    } else {
+      final y = (diff.inDays / 365).floor();
+      agoStr = isSw ? 'mwaka $y zilizopita' : '${y}y ago';
+    }
+    return s?.lastSeenAgo(agoStr) ?? 'Last seen $agoStr';
   }
 
   String _getFollowButtonLabel() {
@@ -1917,56 +2159,6 @@ String _localizedMonth(int monthOneBased, {required bool isSw}) {
   return (isSw ? _monthsSw : _monthsEn)[i];
 }
 
-/// Me page: compact quick link (Settings, Wallet, Calls). DESIGN.md §13.4 — 48dp min height.
-class _MeQuickLink extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _MeQuickLink({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 22, color: Colors.grey.shade700),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade700,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.clip,
-                    textAlign: TextAlign.start,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Full page wrapper for profile tab content
 class _ProfileTabPage extends StatelessWidget {
   final String title;
@@ -2018,6 +2210,26 @@ class _ProfileTabPage extends StatelessWidget {
         centerTitle: true,
       ),
       body: _buildContent(context),
+    );
+  }
+
+  Widget _privateInfoPlaceholder(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              AppStringsScope.of(context)?.informationIsPrivate ?? 'This information is private',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2110,61 +2322,17 @@ class _ProfileTabPage extends StatelessWidget {
       // ── Women & Family Care ──────────────────────────────────────
       case 'my_circle':
         if (!isOwnProfile) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text('This information is private',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                    textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          );
+          return _privateInfoPlaceholder(context);
         }
         return MyCircleModule(userId: userId);
       case 'my_pregnancy':
         if (!isOwnProfile) {
-          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                    textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          );
+          return _privateInfoPlaceholder(context);
         }
         return MyPregnancyModule(userId: userId);
       case 'my_baby':
         if (!isOwnProfile) {
-          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                    textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          );
+          return _privateInfoPlaceholder(context);
         }
         return MyBabyModule(userId: userId);
       case 'family':
@@ -2314,6 +2482,12 @@ class _ProfileTabPage extends StatelessWidget {
         return _ProfileFriendsPage(
           userId: userId,
           profile: profile,
+        );
+      case 'creator':
+        if (!isOwnProfile) return _privateInfoPlaceholder(context);
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: CreatorDashboardSection(userId: userId),
         );
       case 'about':
         return _ProfileAboutPage(
@@ -3199,7 +3373,7 @@ class _ProfileGroupsPageState extends State<_ProfileGroupsPage> {
         if (result.success) {
           _allGroups = result.groups;
         } else {
-          _error = result.message ?? 'Imeshindwa kupakia vikundi';
+          _error = result.message ?? (AppStringsScope.of(context)?.failedToLoadGroups ?? 'Failed to load groups');
         }
       });
     }
@@ -5074,7 +5248,7 @@ class _ProfileFriendsPageState extends State<_ProfileFriendsPage> {
             Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
-              'Hakuna marafiki',
+              AppStringsScope.of(context)?.noFriends ?? 'No friends yet',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -5243,9 +5417,19 @@ class _ProfileAboutPage extends StatelessWidget {
               icon: Icons.work,
               children: [
                 _buildRow(
-                  profile!.currentEmployer!.jobTitle ?? 'Kazi',
+                  isSw ? 'Mwajiri' : 'Employer',
                   profile!.currentEmployer!.employerName ?? '',
                 ),
+                if (profile!.currentEmployer!.sector != null)
+                  _buildRow(
+                    isSw ? 'Sekta' : 'Sector',
+                    profile!.currentEmployer!.sector!,
+                  ),
+                if (profile!.currentEmployer!.ownership != null)
+                  _buildRow(
+                    isSw ? 'Umiliki' : 'Ownership',
+                    profile!.currentEmployer!.ownership!,
+                  ),
               ],
             ),
           ],
@@ -5464,7 +5648,7 @@ class _MyJobTokenWrapper extends StatelessWidget {
         }
         final token = snap.data;
         if (token == null || token.isEmpty) {
-          return const Center(child: Text('Sijaingia'));
+          return Center(child: Text(AppStringsScope.of(context)?.notSignedIn ?? 'Not signed in'));
         }
         return myjob_home.MyJobPage(token: token);
       },

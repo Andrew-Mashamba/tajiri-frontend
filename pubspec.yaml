@@ -54,6 +54,17 @@ dependencies:
   # Biometric authentication (Face ID / fingerprint / device PIN)
   local_auth: ^2.3.0
 
+  # Passkey-style biometric sign-in (docs/Bio.md Flow 2):
+  # OS-level biometric-gated storage for the EC P-256 private key.
+  # On iOS this becomes a Keychain item with kSecAccessControlBiometryCurrentSet;
+  # on Android, a Keystore-backed AES key with setUserAuthenticationRequired(true).
+  # The cryptographic operation is enforced by the secure enclave / TEE — a
+  # rooted-device attacker cannot extract the key, and a Frida hook on the
+  # Flutter biometric prompt cannot bypass the OS-level signing requirement.
+  biometric_storage: ^5.0.1
+  # Pure-Dart EC P-256 keypair generation + ECDSA-SHA256 signing.
+  cryptography: ^2.7.0
+
   # Device ID generation (UUID v4)
   uuid: ^4.5.1
 

@@ -5,6 +5,7 @@
 // GET /api/alevel-schools/{id}/combinations (combination per school).
 
 import 'package:flutter/material.dart';
+import '../l10n/app_strings_scope.dart';
 import '../models/secondary_models.dart';
 import '../services/secondary_service.dart';
 
@@ -262,16 +263,21 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
 
   @override
   Widget build(BuildContext context) {
+    // Stage 1 (no school yet): show toggle + cascade. Stage 2 (school
+    // picked): collapse cascade, show selected-school chip + combination
+    // grid + years. Tapping the X on the chip clears school + combination
+    // + years to start over.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (_loadError != null) _buildErrorBanner(),
-        // Chagua / Tafuta toggle — min 48dp height
-        _buildModeToggle(),
-        const SizedBox(height: 16),
-        if (_useSearch) ..._buildSearchSection() else ..._buildBrowseSection(),
-        if (_selectedSchool != null) ...[
+        if (_selectedSchool == null) ...[
+          _buildModeToggle(),
+          const SizedBox(height: 16),
+          if (_useSearch) ..._buildSearchSection() else ..._buildBrowseSection(),
+        ] else ...[
+          _buildSelectedSchoolChip(),
           const SizedBox(height: 24),
           _buildCombinationSection(),
         ],
@@ -286,6 +292,64 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
           _buildSummaryCard(),
         ],
       ],
+    );
+  }
+
+  Widget _buildSelectedSchoolChip() {
+    final s = AppStringsScope.of(context);
+    final school = _selectedSchool!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _kSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kAccent),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline, color: _kPrimaryText, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  school.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _kPrimaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (school.code.isNotEmpty)
+                  Text(
+                    'Code: ${school.code}',
+                    style: const TextStyle(fontSize: 12, color: _kSecondaryText),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          Semantics(
+            label: s?.pickerClearSelection ?? 'Clear selection',
+            child: IconButton(
+              icon: const Icon(Icons.close, color: _kPrimaryText, size: 20),
+              onPressed: () => setState(() {
+                _selectedSchool = null;
+                _selectedCombination = null;
+                _notifySelection();
+              }),
+              style: IconButton.styleFrom(
+                minimumSize: const Size(_kMinTouchTarget, _kMinTouchTarget),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -332,6 +396,7 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   Widget _buildModeToggle() {
+    final s = AppStringsScope.of(context);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFEEEEEE),
@@ -363,7 +428,7 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'Chagua',
+                    s?.pickerBrowse ?? 'Browse',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight:
@@ -399,7 +464,7 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'Tafuta',
+                    s?.pickerSearch ?? 'Search',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight:
@@ -417,11 +482,12 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   List<Widget> _buildSearchSection() {
+    final s = AppStringsScope.of(context);
     return [
       TextField(
         controller: _searchController,
         decoration: InputDecoration(
-          hintText: 'Andika jina la shule...',
+          hintText: s?.pickerSearchAlevelHint ?? 'Type school name…',
           hintStyle: const TextStyle(color: _kSecondaryText),
           prefixIcon: const Icon(Icons.search, color: _kPrimaryText),
           suffixIcon: _isSearching
@@ -527,10 +593,11 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   List<Widget> _buildBrowseSection() {
+    final s = AppStringsScope.of(context);
     return [
       _buildDropdown<SecondaryRegion>(
-        label: 'Mkoa',
-        hint: 'Chagua mkoa',
+        label: s?.regionLabel ?? 'Region',
+        hint: s?.pickerSelectRegion ?? 'Select region',
         value: _selectedRegion,
         items: _regions,
         isLoading: _isLoadingRegions,
@@ -546,8 +613,8 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
       ),
       const SizedBox(height: 16),
       _buildDropdown<SecondaryDistrict>(
-        label: 'Wilaya',
-        hint: 'Chagua wilaya',
+        label: s?.districtLabel ?? 'District',
+        hint: s?.pickerSelectDistrict ?? 'Select district',
         value: _selectedDistrict,
         items: _districts,
         isLoading: _isLoadingDistricts,
@@ -569,8 +636,8 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
       ),
       const SizedBox(height: 16),
       _buildDropdown<AlevelSchool>(
-        label: 'Shule',
-        hint: 'Chagua shule',
+        label: s?.pickerSchool ?? 'School',
+        hint: s?.pickerSelectSchool ?? 'Select school',
         value: _selectedSchool,
         items: _schools,
         isLoading: _isLoadingSchools,
@@ -718,26 +785,28 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   String _categoryLabel(String category) {
+    final s = AppStringsScope.of(context);
     switch (category) {
       case 'science':
-        return 'SAYANSI';
+        return s?.pickerCategoryScience ?? 'SCIENCE';
       case 'business':
-        return 'BIASHARA';
+        return s?.pickerCategoryBusiness ?? 'BUSINESS';
       case 'arts':
-        return 'SANAA';
+        return s?.pickerCategoryArts ?? 'ARTS';
       case 'language':
-        return 'LUGHA';
+        return s?.pickerCategoryLanguage ?? 'LANGUAGE';
       case 'religious':
-        return 'DINI';
+        return s?.pickerCategoryReligion ?? 'RELIGION';
       default:
         return category.toUpperCase();
     }
   }
 
   Widget _buildStartYearDropdown() {
+    final s = AppStringsScope.of(context);
     return _buildDropdown<int>(
-      label: 'Mwaka wa Kuanza Form 5',
-      hint: 'Chagua mwaka',
+      label: s?.pickerStartYearForm5 ?? 'Form 5 start year',
+      hint: s?.pickerSelectYearHint ?? 'Select year',
       value: _startYear,
       items: _graduationYears,
       itemLabel: (y) => y.toString(),
@@ -749,9 +818,10 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   Widget _buildGraduationYearDropdown() {
+    final s = AppStringsScope.of(context);
     return _buildDropdown<int>(
-      label: 'Mwaka wa Kumaliza Form 6',
-      hint: 'Chagua mwaka',
+      label: s?.pickerEndYearForm6 ?? 'Form 6 end year',
+      hint: s?.pickerSelectYearHint ?? 'Select year',
       value: _graduationYear,
       items: _graduationYears,
       itemLabel: (y) => y.toString(),
@@ -918,6 +988,7 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
   }
 
   Widget _buildTypeChip(String type) {
+    final s = AppStringsScope.of(context);
     final isGovernment = type == 'government';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -928,7 +999,9 @@ class _AlevelSchoolPickerState extends State<AlevelSchoolPicker> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        isGovernment ? 'Serikali' : 'Binafsi',
+        isGovernment
+            ? (s?.pickerOwnershipGovernment ?? 'Government')
+            : (s?.pickerOwnershipPrivate ?? 'Private'),
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,

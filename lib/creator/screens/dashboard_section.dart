@@ -1,16 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../models/flywheel_models.dart';
-import '../../models/collaboration_models.dart';
-import '../../services/creator_service.dart';
-import '../../services/collaboration_service.dart';
+import '../models/flywheel_models.dart';
+import '../models/collaboration_models.dart';
+import '../services/creator_service.dart';
+import '../services/collaboration_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../models/payment_models.dart';
-import '../../widgets/creator_tier_badge.dart';
-import '../../widgets/streak_indicator.dart';
-import '../../widgets/collaboration_card.dart';
+import '../widgets/creator_tier_badge.dart';
+import '../widgets/streak_indicator.dart';
+import '../widgets/collaboration_card.dart';
 import '../../l10n/app_strings_scope.dart';
+import 'settings_screen.dart';
 
 class CreatorDashboardSection extends StatefulWidget {
   final int userId;
@@ -100,10 +101,66 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: Creator Dashboard title
-            Text(
-              strings?.creatorDashboard ?? 'Creator Dashboard',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+            // Header: title + a small preferences entry-point. Tapping
+            // "Preferences" opens the canonical creator-settings screen
+            // (also reachable from Settings → Creator and the Faragha →
+            // Discovery sub-page; all three write the same backend
+            // columns).
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    strings?.creatorDashboard ?? 'Creator Dashboard',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Semantics(
+                  button: true,
+                  label: strings?.creatorSettings ?? 'Creator settings',
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CreatorSettingsScreen(currentUserId: widget.userId),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.tune_rounded,
+                              size: 14, color: Color(0xFF666666)),
+                          const SizedBox(width: 4),
+                          Text(
+                            (strings?.isSwahili == true)
+                                ? 'Mipangilio'
+                                : 'Preferences',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF666666),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             // Tier badge + streak row

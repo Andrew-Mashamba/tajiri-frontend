@@ -15,7 +15,7 @@ import 'screens/feed/post_detail_screen.dart';
 import 'screens/feed/thread_viewer_screen.dart';
 import 'screens/feed/digest_screen.dart';
 import 'screens/feed/saved_posts_screen.dart';
-import 'screens/profile/weekly_report_screen.dart';
+import 'creator/screens/weekly_report_screen.dart';
 import 'screens/feed/musicgallerywidget_screen.dart';
 import 'screens/michangogallerywidget_screen.dart';
 import 'screens/friends/friends_screen.dart';
@@ -43,8 +43,17 @@ import 'screens/shop/checkout_screen.dart';
 import 'screens/shop/wishlist_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
-import 'screens/sponsored/sponsored_posts_screen.dart';
+import 'creator/screens/sponsored_posts_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/settings/settings_screen.dart';
+import 'screens/settings/notification_settings_screen.dart';
+import 'screens/settings/privacy_settings_screen.dart';
+import 'screens/settings/security/security_settings_screen.dart';
+import 'screens/settings/security/security_activity_screen.dart';
+import 'screens/settings/security/sessions_screen.dart';
+import 'screens/settings/security/two_factor_biometric_screen.dart';
+import 'screens/settings/security/pin_change_screen.dart';
+import 'creator/screens/settings_screen.dart';
 import 'screens/feed/tea_chat_screen.dart';
 import 'screens/biashara/biashara_home_screen.dart';
 import 'screens/biashara/create_ad_campaign_screen.dart';
@@ -951,6 +960,51 @@ class _TajiriAppState extends State<TajiriApp> {
             return MaterialPageRoute(
               builder: (_) => const OnboardingScreen(),
             );
+
+          case 'settings': {
+            // /settings, /settings/notifications, /settings/privacy,
+            // /settings/security, /settings/security/activity,
+            // /settings/security/sessions, /settings/security/biometric,
+            // /settings/security/pin
+            final sub1 = pathSegments.length > 1 ? pathSegments[1] : null;
+            final sub2 = pathSegments.length > 2 ? pathSegments[2] : null;
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final uid = snapshot.data!;
+                  switch (sub1) {
+                    case null:
+                      return SettingsScreen(currentUserId: uid);
+                    case 'notifications':
+                      return NotificationSettingsScreen(currentUserId: uid);
+                    case 'privacy':
+                      return PrivacySettingsScreen(currentUserId: uid);
+                    case 'creator':
+                      return CreatorSettingsScreen(currentUserId: uid);
+                    case 'security':
+                      switch (sub2) {
+                        case 'activity':
+                          return SecurityActivityScreen(currentUserId: uid);
+                        case 'sessions':
+                          return SessionsScreen(currentUserId: uid);
+                        case 'biometric':
+                          return TwoFactorBiometricScreen(currentUserId: uid);
+                        case 'pin':
+                          return PinChangeScreen(currentUserId: uid);
+                        default:
+                          return SecuritySettingsScreen(currentUserId: uid);
+                      }
+                    default:
+                      return SettingsScreen(currentUserId: uid);
+                  }
+                },
+              ),
+            );
+          }
         }
 
         // Default fallback

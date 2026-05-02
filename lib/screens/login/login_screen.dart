@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_auth_service.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../home/home_screen.dart';
 
@@ -22,7 +23,58 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
   bool _isLoading = false;
+  bool _bioLoading = false;
+  bool _bioAvailable = false;
+  BiometricKind _bioKind = BiometricKind.generic;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailability();
+  }
+
+  /// Detect whether the user has armed biometric quick-login on this
+  /// device. If yes, surface the shortcut button above the PIN entry.
+  Future<void> _checkBiometricAvailability() async {
+    final enrolled = await AuthService.instance.hasBiometricLogin();
+    if (!enrolled) return;
+    final kind = await BiometricAuthService.instance.kind();
+    if (!mounted) return;
+    setState(() {
+      _bioAvailable = true;
+      _bioKind = kind;
+    });
+  }
+
+  Future<void> _signInWithBiometric() async {
+    setState(() {
+      _bioLoading = true;
+      _error = null;
+    });
+    final result = await AuthService.instance.loginWithBiometric();
+    if (!mounted) return;
+    if (result.success && result.userId != null && result.userId! > 0) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(currentUserId: result.userId!),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+    setState(() {
+      _bioLoading = false;
+      _error = result.error;
+      // If the saved token was rejected the service has already wiped
+      // it; reflect that in the UI so the button disappears.
+    });
+    final stillEnrolled = await AuthService.instance.hasBiometricLogin();
+    if (!mounted) return;
+    if (!stillEnrolled) {
+      setState(() => _bioAvailable = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -135,6 +187,82 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Biometric quick-login (only when armed on this device)
+                      if (_bioAvailable) ...[
+                        SizedBox(
+                          height: 56,
+                          child: OutlinedButton.icon(
+                            onPressed: _bioLoading ? null : _signInWithBiometric,
+                            icon: _bioLoading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: _primary,
+                                    ),
+                                  )
+                                : Icon(_bioKind == BiometricKind.face
+                                    ? Icons.face_outlined
+                                    : Icons.fingerprint_rounded,
+                                    color: _primary),
+                            label: Text(
+                              _bioKind == BiometricKind.face
+                                  ? (s?.isSwahili == true
+                                      ? 'Ingia kwa Face ID'
+                                      : 'Sign in with Face ID')
+                                  : _bioKind == BiometricKind.fingerprint
+                                      ? (s?.isSwahili == true
+                                          ? 'Ingia kwa alama ya kidole'
+                                          : 'Sign in with fingerprint')
+                                      : (s?.isSwahili == true
+                                          ? 'Ingia kwa biometriki'
+                                          : 'Sign in with biometrics'),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: _primary,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: _primary, width: 1.5),
+                              backgroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 1,
+                                color: _secondaryText.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                s?.isSwahili == true ? 'au' : 'or',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: _secondaryText,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Container(
+                                height: 1,
+                                color: _secondaryText.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
                       // Phone input
                       TextField(
                         controller: _phoneController,

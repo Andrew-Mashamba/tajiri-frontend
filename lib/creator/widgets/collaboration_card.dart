@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/collaboration_models.dart';
 import '../widgets/creator_tier_badge.dart';
-import '../l10n/app_strings_scope.dart';
+import '../../l10n/app_strings_scope.dart';
 
 /// Card showing a suggested collaboration partner with accept/dismiss actions.
 class CollaborationCard extends StatelessWidget {

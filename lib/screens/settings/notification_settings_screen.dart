@@ -1,14 +1,23 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../../config/api_config.dart';
-import '../../services/local_storage_service.dart';
 
-/// Notification Settings screen.
-/// Navigation: Settings → Arifa (Notifications).
+import '../../l10n/app_strings_scope.dart';
+import '../../services/notification_preferences_service.dart';
+import 'notifications/_arifa_widgets.dart';
+import 'notifications/category_cluster_screen.dart';
+import 'notifications/quiet_hours_screen.dart';
+import 'notifications/sound_vibration_screen.dart';
+
+/// Arifa (Notifications) — sectioned home page.
+///
+/// Replaces the 900-line monolith. Each card opens a focused sub-page:
+///   • 5 cluster screens (Communication, Business, Creator, Sensitive, System)
+///     each rendering its categories with the 4 channel toggles per category.
+///   • Sound & vibration sub-page for the device-level audio prefs.
+///   • Quiet hours sub-page for the time-window opt-out.
+///   • Reset-to-defaults action at the bottom — calls the atomic reset
+///     endpoint and pops back so any open sub-page reloads on its own.
 class NotificationSettingsScreen extends StatefulWidget {
   final int currentUserId;
-
   const NotificationSettingsScreen({super.key, required this.currentUserId});
 
   @override
@@ -16,451 +25,212 @@ class NotificationSettingsScreen extends StatefulWidget {
       _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState
-    extends State<NotificationSettingsScreen> {
-  static const Color _backgroundColor = Color(0xFFFAFAFA);
-  static const Color _cardBackground = Color(0xFFFFFFFF);
-  static const Color _primaryText = Color(0xFF1A1A1A);
-  static const Color _secondaryText = Color(0xFF666666);
-  static const Color _iconBackground = Color(0xFF1A1A1A);
-
-  bool _isLoading = true;
-  String? _error;
-
-  // Message notifications
-  bool _messagesEnabled = true;
-  bool _groupsEnabled = true;
-  bool _reactionsEnabled = true;
-  bool _mentionsEnabled = true;
-
-  // Calls
-  bool _callsEnabled = true;
-
-  // Social
-  bool _socialEnabled = true;
-
-  // System
-  bool _systemEnabled = true;
-
-  // Sound & Vibration
-  bool _globalVibrate = true;
-
-  // Quiet Hours
-  bool _quietHoursEnabled = false;
-  TimeOfDay _quietHoursStart = const TimeOfDay(hour: 22, minute: 0);
-  TimeOfDay _quietHoursEnd = const TimeOfDay(hour: 7, minute: 0);
+class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
+  late final NotificationPreferencesService _service;
+  bool _resetting = false;
+  String? _formError;
 
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
+    _service = NotificationPreferencesService(widget.currentUserId);
   }
 
-  Future<void> _loadPreferences() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storage = await LocalStorageService.getInstance();
-      final token = storage.getAuthToken();
-      if (token == null) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _error = 'Hujaingia. Tafadhali ingia tena.';
-          });
-        }
-        return;
-      }
-
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/notification-preferences'),
-        headers: ApiConfig.authHeaders(token),
-      );
-
-      if (!mounted) return;
-
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final prefs = data['preferences'] as Map<String, dynamic>? ?? data;
-        setState(() {
-          _messagesEnabled = prefs['messages_enabled'] ?? true;
-          _groupsEnabled = prefs['groups_enabled'] ?? true;
-          _reactionsEnabled = prefs['reactions_enabled'] ?? true;
-          _mentionsEnabled = prefs['mentions_enabled'] ?? true;
-          _callsEnabled = prefs['calls_enabled'] ?? true;
-          _socialEnabled = prefs['social_enabled'] ?? true;
-          _systemEnabled = prefs['system_enabled'] ?? true;
-          _globalVibrate = prefs['global_vibrate'] ?? true;
-          _quietHoursEnabled = prefs['quiet_hours_enabled'] ?? false;
-          _quietHoursStart =
-              _parseTime(prefs['quiet_hours_start'] as String?) ??
-                  const TimeOfDay(hour: 22, minute: 0);
-          _quietHoursEnd =
-              _parseTime(prefs['quiet_hours_end'] as String?) ??
-                  const TimeOfDay(hour: 7, minute: 0);
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _isLoading = false;
-          _error = 'Imeshindwa kupakia mipangilio (${resp.statusCode})';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = 'Imeshindwa kupakia mipangilio';
-        });
-      }
-    }
-  }
-
-  TimeOfDay? _parseTime(String? time) {
-    if (time == null || time.isEmpty) return null;
-    final parts = time.split(':');
-    if (parts.length < 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return TimeOfDay(hour: hour, minute: minute);
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  Future<void> _updatePreference(String key, dynamic value) async {
-    try {
-      final storage = await LocalStorageService.getInstance();
-      final token = storage.getAuthToken();
-      if (token == null) return;
-
-      await http.patch(
-        Uri.parse('${ApiConfig.baseUrl}/notification-preferences'),
-        headers: {
-          ...ApiConfig.authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({key: value}),
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Imeshindwa kuhifadhi mipangilio'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickTime({required bool isStart}) async {
-    final initial = isStart ? _quietHoursStart : _quietHoursEnd;
-    final picked = await showTimePicker(
+  Future<void> _reset(AppStrings s) async {
+    final ok = await showDialog<bool>(
       context: context,
-      initialTime: initial,
+      builder: (ctx) => AlertDialog(
+        content: Semantics(liveRegion: true, child: Text(s.notifResetConfirm)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              s.notifResetDefaults,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
     );
-    if (picked == null || !mounted) return;
-
+    if (ok != true || !mounted) return;
     setState(() {
-      if (isStart) {
-        _quietHoursStart = picked;
-      } else {
-        _quietHoursEnd = picked;
-      }
+      _resetting = true;
+      _formError = null;
     });
-
-    final key = isStart ? 'quiet_hours_start' : 'quiet_hours_end';
-    _updatePreference(key, _formatTime(picked));
+    final updated = await _service.resetToDefaults();
+    if (!mounted) return;
+    setState(() {
+      _resetting = false;
+      if (updated == null) _formError = 'save_failed';
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        title: const Text('Arifa'),
-        backgroundColor: _cardBackground,
-        foregroundColor: _primaryText,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? _buildErrorWithRetry()
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Messages section
-                        _buildSectionHeader('Arifa za Ujumbe'),
-                        _buildSwitchTile(
-                          icon: Icons.message_outlined,
-                          title: 'Ujumbe',
-                          subtitle: 'Arifa za ujumbe mpya',
-                          value: _messagesEnabled,
-                          onChanged: (v) {
-                            setState(() => _messagesEnabled = v);
-                            _updatePreference('messages_enabled', v);
-                          },
-                        ),
-                        _buildSwitchTile(
-                          icon: Icons.group_outlined,
-                          title: 'Vikundi',
-                          subtitle: 'Arifa za vikundi',
-                          value: _groupsEnabled,
-                          onChanged: (v) {
-                            setState(() => _groupsEnabled = v);
-                            _updatePreference('groups_enabled', v);
-                          },
-                        ),
-                        _buildSwitchTile(
-                          icon: Icons.emoji_emotions_outlined,
-                          title: 'Majibu',
-                          subtitle: 'Arifa za majibu kwenye ujumbe',
-                          value: _reactionsEnabled,
-                          onChanged: (v) {
-                            setState(() => _reactionsEnabled = v);
-                            _updatePreference('reactions_enabled', v);
-                          },
-                        ),
-                        _buildSwitchTile(
-                          icon: Icons.alternate_email,
-                          title: 'Kutajwa',
-                          subtitle: 'Arifa unapotajwa',
-                          value: _mentionsEnabled,
-                          onChanged: (v) {
-                            setState(() => _mentionsEnabled = v);
-                            _updatePreference('mentions_enabled', v);
-                          },
-                        ),
+    final s = AppStringsScope.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: kArifaBg,
+        appBar: AppBar(
+          title: Text(s?.notifications ?? 'Notifications'),
+          backgroundColor: kArifaCard,
+          foregroundColor: kArifaPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+        ),
+        body: SafeArea(
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            children: [
+              ArifaInlineErrorBanner(
+                message: _formError == null
+                    ? null
+                    : (s?.notifFailedSave ?? 'Could not save change'),
+                onDismiss: () => setState(() => _formError = null),
+                closeLabel: s?.close ?? 'Close',
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                child: Text(
+                  s?.arifaHomeChannelsHint ?? 'Configure each category per delivery channel',
+                  style: const TextStyle(fontSize: 12, color: kArifaSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
 
-                        // Calls section
-                        _buildSectionHeader('Simu'),
-                        _buildSwitchTile(
-                          icon: Icons.call_outlined,
-                          title: 'Simu',
-                          subtitle: 'Arifa za simu zinazoingia',
-                          value: _callsEnabled,
-                          onChanged: (v) {
-                            setState(() => _callsEnabled = v);
-                            _updatePreference('calls_enabled', v);
-                          },
-                        ),
+              _clusterCard(
+                context,
+                icon: Icons.chat_bubble_outline,
+                title: s?.arifaClusterCommunication ?? 'Communication',
+                subtitle: s?.arifaClusterCommunicationSub ?? 'Messages, groups, calls, social',
+                cluster: ArifaCluster.communication,
+              ),
+              _clusterCard(
+                context,
+                icon: Icons.storefront_outlined,
+                title: s?.arifaClusterBusiness ?? 'Business',
+                subtitle: s?.arifaClusterBusinessSub ?? 'Marketplace, bookings, clients',
+                cluster: ArifaCluster.business,
+              ),
+              _clusterCard(
+                context,
+                icon: Icons.auto_awesome_outlined,
+                title: s?.arifaClusterCreator ?? 'Creator',
+                subtitle: s?.arifaClusterCreatorSub ?? 'Milestones, live streams',
+                cluster: ArifaCluster.creator,
+              ),
+              _clusterCard(
+                context,
+                icon: Icons.health_and_safety_outlined,
+                title: s?.arifaClusterSensitive ?? 'Sensitive',
+                subtitle: s?.arifaClusterSensitiveSub ?? 'Health and money',
+                cluster: ArifaCluster.sensitive,
+              ),
+              _clusterCard(
+                context,
+                icon: Icons.shield_outlined,
+                title: s?.arifaClusterSystem ?? 'System',
+                subtitle: s?.arifaClusterSystemSub ?? 'Security and account',
+                cluster: ArifaCluster.system,
+              ),
 
-                        // Social section
-                        _buildSectionHeader('Mitandao'),
-                        _buildSwitchTile(
-                          icon: Icons.people_outlined,
-                          title: 'Wafuasi na Maoni',
-                          subtitle: 'Arifa za wafuasi wapya na maoni',
-                          value: _socialEnabled,
-                          onChanged: (v) {
-                            setState(() => _socialEnabled = v);
-                            _updatePreference('social_enabled', v);
-                          },
-                        ),
+              const SizedBox(height: 8),
+              _navCard(
+                context,
+                icon: Icons.music_note_outlined,
+                title: s?.arifaCardSound ?? 'Sound & vibration',
+                subtitle: s?.arifaCardSoundSub ?? 'Notification sound and vibration',
+                onTap: () => _push(SoundVibrationScreen(currentUserId: widget.currentUserId)),
+              ),
+              _navCard(
+                context,
+                icon: Icons.bedtime_outlined,
+                title: s?.arifaCardQuiet ?? 'Quiet hours',
+                subtitle: s?.arifaCardQuietSub ?? 'Suppress notifications during a window',
+                onTap: () => _push(QuietHoursScreen(currentUserId: widget.currentUserId)),
+              ),
 
-                        // System section
-                        _buildSectionHeader('Mfumo'),
-                        _buildSwitchTile(
-                          icon: Icons.settings_outlined,
-                          title: 'Arifa za mfumo',
-                          subtitle: 'Masasisho ya programu na mfumo',
-                          value: _systemEnabled,
-                          onChanged: (v) {
-                            setState(() => _systemEnabled = v);
-                            _updatePreference('system_enabled', v);
-                          },
-                        ),
-
-                        // Sound & Vibration section
-                        _buildSectionHeader('Sauti na Mtetemo'),
-                        _buildSwitchTile(
-                          icon: Icons.vibration,
-                          title: 'Mtetemo',
-                          subtitle: 'Washa mtetemo kwa arifa',
-                          value: _globalVibrate,
-                          onChanged: (v) {
-                            setState(() => _globalVibrate = v);
-                            _updatePreference('global_vibrate', v);
-                          },
-                        ),
-
-                        // Quiet Hours section
-                        _buildSectionHeader('Masaa ya Utulivu'),
-                        _buildSwitchTile(
-                          icon: Icons.bedtime_outlined,
-                          title: 'Washa masaa ya utulivu',
-                          subtitle:
-                              'Hutapokea arifa wakati wa masaa ya utulivu, isipokuwa simu',
-                          value: _quietHoursEnabled,
-                          onChanged: (v) {
-                            setState(() => _quietHoursEnabled = v);
-                            _updatePreference('quiet_hours_enabled', v);
-                          },
-                        ),
-                        if (_quietHoursEnabled) ...[
-                          _buildTimeTile(
-                            icon: Icons.schedule,
-                            title: 'Kuanzia',
-                            time: _quietHoursStart,
-                            onTap: () => _pickTime(isStart: true),
-                          ),
-                          _buildTimeTile(
-                            icon: Icons.schedule,
-                            title: 'Hadi',
-                            time: _quietHoursEnd,
-                            onTap: () => _pickTime(isStart: false),
-                          ),
-                        ],
-
-                        const SizedBox(height: 24),
-                      ],
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: TextButton.icon(
+                  onPressed: (_resetting || s == null) ? null : () => _reset(s),
+                  icon: _resetting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
+                        )
+                      : const Icon(Icons.restart_alt_rounded, color: Colors.red),
+                  label: Text(
+                    s?.notifResetDefaults ?? 'Reset to defaults',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ),
+              if (s != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+                  child: Text(
+                    s.notifSystemAlwaysOn,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: kArifaSecondary,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-      ),
-    );
-  }
-
-  Widget _buildErrorWithRetry() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              _error ?? 'Imeshindwa kupakia mipangilio',
-              style: const TextStyle(color: _secondaryText, fontSize: 14),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _loadPreferences,
-                child: const Text('Jaribu tena'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: _primaryText,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: _cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.1),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 72),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: _iconBackground,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _primaryText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: _secondaryText,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: value,
-                  onChanged: onChanged,
-                  activeTrackColor: _primaryText.withValues(alpha: 0.5),
-                  activeThumbColor: _primaryText,
-                ),
-              ],
-            ),
+              const SizedBox(height: 16),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTimeTile({
+  void _push(Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  Widget _clusterCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
-    required TimeOfDay time,
+    required String subtitle,
+    required ArifaCluster cluster,
+  }) {
+    return _navCard(
+      context,
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: () => _push(CategoryClusterScreen(
+        currentUserId: widget.currentUserId,
+        cluster: cluster,
+        title: title,
+      )),
+    );
+  }
+
+  Widget _navCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
     required VoidCallback onTap,
   }) {
-    final displayTime = time.format(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: _cardBackground,
+        color: kArifaCard,
         borderRadius: BorderRadius.circular(16),
         elevation: 2,
         shadowColor: Colors.black.withValues(alpha: 0.1),
@@ -470,42 +240,48 @@ class _NotificationSettingsScreenState
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 72),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: _iconBackground,
+                      color: kArifaIconBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(icon, color: Colors.white, size: 24),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: _primaryText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: kArifaPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: kArifaSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    displayTime,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: _secondaryText,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right, color: _secondaryText),
+                  const Icon(Icons.chevron_right, color: kArifaSecondary),
                 ],
               ),
             ),

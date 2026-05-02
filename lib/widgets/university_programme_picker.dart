@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_strings_scope.dart';
 import '../models/education_models.dart';
 import '../services/education_service.dart';
 
@@ -85,7 +86,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Imeshindwa kupakia vyuo vikuu';
+        _error = 'universities';
         _isLoading = false;
       });
     }
@@ -212,6 +213,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
@@ -219,7 +221,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         children: [
           const SizedBox(height: 20),
           Text(
-            'Chuo Kikuu',
+            s?.pickerUniversity ?? 'University',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: _textPrimary,
@@ -229,7 +231,8 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Chagua chuo kikuu na programu uliyosoma',
+            s?.pickerSelectUniversityHeader ??
+                'Select the university and programme you studied',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: _textSecondary,
                   fontSize: 12,
@@ -256,6 +259,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildModeToggle() {
+    final s = AppStringsScope.of(context);
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -282,7 +286,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'Chagua',
+                  s?.pickerBrowse ?? 'Browse',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontWeight:
@@ -306,7 +310,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'Tafuta Programu',
+                  s?.pickerSearchProgrammeToggle ?? 'Search programmes',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontWeight:
@@ -324,6 +328,10 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildError() {
+    final s = AppStringsScope.of(context);
+    final message = _error == 'universities'
+        ? (s?.pickerErrLoadUniversities ?? 'Could not load universities')
+        : (_error ?? '');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -340,7 +348,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
       child: Column(
         children: [
           Text(
-            _error!,
+            message,
             style: const TextStyle(color: _textPrimary, fontSize: 14),
             textAlign: TextAlign.center,
           ),
@@ -354,8 +362,11 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
               child: InkWell(
                 onTap: _loadUniversities,
                 borderRadius: BorderRadius.circular(16),
-                child: const Center(
-                  child: Text('Jaribu tena', style: TextStyle(fontSize: 14)),
+                child: Center(
+                  child: Text(
+                    s?.pickerTryAgain ?? 'Try again',
+                    style: const TextStyle(fontSize: 14),
+                  ),
                 ),
               ),
             ),
@@ -366,13 +377,15 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildProgrammeSearch() {
+    final s = AppStringsScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           controller: _programmeSearchController,
           decoration: InputDecoration(
-            hintText: 'Tafuta programu (mfano: Economics, Medicine)...',
+            hintText: s?.pickerSearchProgrammeHint ??
+                'Search programme (e.g. Economics, Medicine)…',
             hintStyle: const TextStyle(color: _textSecondary, fontSize: 12),
             prefixIcon: const Icon(Icons.search, color: _textPrimary),
             suffixIcon: _isSearching
@@ -463,22 +476,23 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildHierarchySelection() {
+    final s = AppStringsScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           controller: _searchController,
-          decoration: const InputDecoration(
-            hintText: 'Tafuta chuo kikuu...',
-            hintStyle: TextStyle(color: _textSecondary, fontSize: 12),
-            prefixIcon: Icon(Icons.search, color: _textPrimary),
+          decoration: InputDecoration(
+            hintText: s?.pickerSearchUniversityHint ?? 'Search university…',
+            hintStyle: const TextStyle(color: _textSecondary, fontSize: 12),
+            prefixIcon: const Icon(Icons.search, color: _textPrimary),
           ),
           onChanged: _searchUniversities,
         ),
         const SizedBox(height: 16),
         _buildDropdown<UniversityDetailed>(
-          label: 'Chuo Kikuu',
-          hint: 'Chagua chuo kikuu',
+          label: s?.pickerUniversity ?? 'University',
+          hint: s?.pickerSelectUniversity ?? 'Select university',
           value: _selectedUniversity,
           items: _universities,
           isLoading: _isLoading,
@@ -499,8 +513,8 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         if (_selectedUniversity != null) ...[
           const SizedBox(height: 16),
           _buildDropdown<UniversityCollege>(
-            label: 'Shule/Chuo',
-            hint: 'Chagua shule au chuo',
+            label: s?.pickerCollegeOrSchool ?? 'School/College',
+            hint: s?.pickerSelectCollege ?? 'Select school or college',
             value: _selectedCollege,
             items: _colleges,
             isLoading: _isLoadingColleges,
@@ -521,8 +535,8 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         if (_selectedCollege != null) ...[
           const SizedBox(height: 16),
           _buildDropdown<UniversityDepartment>(
-            label: 'Idara',
-            hint: 'Chagua idara',
+            label: s?.pickerDepartment ?? 'Department',
+            hint: s?.pickerSelectDepartment ?? 'Select department',
             value: _selectedDepartment,
             items: _departments,
             isLoading: _isLoadingDepartments,
@@ -541,13 +555,13 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         if (_selectedDepartment != null) ...[
           const SizedBox(height: 16),
           _buildDropdown<UniversityProgramme>(
-            label: 'Programu',
-            hint: 'Chagua programu',
+            label: s?.pickerProgramme ?? 'Programme',
+            hint: s?.pickerSelectProgramme ?? 'Select programme',
             value: _selectedProgramme,
             items: _programmes,
             isLoading: _isLoadingProgrammes,
             itemLabel: (p) => p.name,
-            itemSubtitle: (p) => '${p.levelLabel} • ${p.duration} miaka',
+            itemSubtitle: (p) => '${p.levelLabel} • ${p.duration} ${s?.isSwahili ?? false ? 'miaka' : 'years'}',
             onChanged: (prog) {
               setState(() => _selectedProgramme = prog);
             },
@@ -564,6 +578,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildSelectedSummary() {
+    final s = AppStringsScope.of(context);
     final prog = _selectedProgramme;
     final uni = _selectedUniversity;
     return Container(
@@ -580,9 +595,9 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
             children: [
               Icon(Icons.check_circle, color: _textPrimary, size: 20),
               const SizedBox(width: 8),
-              const Text(
-                'Ulichochagua',
-                style: TextStyle(
+              Text(
+                s?.pickerSelectionSummary ?? 'Your selection',
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: _textPrimary,
@@ -608,7 +623,8 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
               style: const TextStyle(color: _textSecondary, fontSize: 12),
             ),
             Text(
-              'Muda: ${prog.duration} miaka',
+              s?.pickerDurationYears(prog.duration) ??
+                  'Duration: ${prog.duration} years',
               style: const TextStyle(color: _textSecondary, fontSize: 11),
             ),
           ],
@@ -625,12 +641,13 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildYearSelection() {
+    final s = AppStringsScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Mwaka wa Kuanza',
-          style: TextStyle(
+        Text(
+          s?.pickerStartYear ?? 'Start year',
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: _textPrimary,
@@ -639,9 +656,9 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: _startYear,
-          decoration: const InputDecoration(
-            hintText: 'Chagua mwaka',
-            hintStyle: TextStyle(color: _textSecondary),
+          decoration: InputDecoration(
+            hintText: s?.pickerSelectYearHint ?? 'Select year',
+            hintStyle: const TextStyle(color: _textSecondary),
           ),
           items: _years
               .map((year) => DropdownMenuItem<int>(
@@ -654,9 +671,9 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
           },
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Mwaka wa Kuhitimu',
-          style: TextStyle(
+        Text(
+          s?.pickerGraduationYear ?? 'Graduation year',
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: _textPrimary,
@@ -665,9 +682,9 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: _graduationYear,
-          decoration: const InputDecoration(
-            hintText: 'Chagua mwaka',
-            hintStyle: TextStyle(color: _textSecondary),
+          decoration: InputDecoration(
+            hintText: s?.pickerSelectYearHint ?? 'Select year',
+            hintStyle: const TextStyle(color: _textSecondary),
           ),
           items: _years
               .map((year) => DropdownMenuItem<int>(
@@ -729,9 +746,9 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _accent),
             ),
-            child: const Text(
-              'Hakuna data',
-              style: TextStyle(color: _textSecondary, fontSize: 12),
+            child: Text(
+              AppStringsScope.of(context)?.pickerNoData ?? 'No data',
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           )
@@ -795,11 +812,12 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
   }
 
   Widget _buildActionButtons() {
+    final s = AppStringsScope.of(context);
     return Row(
       children: [
         Expanded(
           child: _buildButton(
-            label: 'Ruka',
+            label: s?.pickerSkip ?? 'Skip',
             onTap: widget.onSkip,
             outlined: true,
           ),
@@ -808,7 +826,7 @@ class _UniversityProgrammePickerState extends State<UniversityProgrammePicker> {
         Expanded(
           flex: 2,
           child: _buildButton(
-            label: 'Endelea',
+            label: s?.pickerContinue ?? 'Continue',
             onTap: _canContinue ? _handleContinue : null,
             outlined: false,
           ),

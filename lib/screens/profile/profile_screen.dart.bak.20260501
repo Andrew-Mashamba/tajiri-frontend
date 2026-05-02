@@ -1,0 +1,5473 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:heroicons/heroicons.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../l10n/app_strings_scope.dart';
+import '../../widgets/tajiri_app_bar.dart';
+import '../../models/profile_models.dart';
+import '../../models/post_models.dart';
+import '../../models/profile_tab_config.dart';
+import '../../services/profile_service.dart';
+import '../../services/post_service.dart';
+import '../../services/friend_service.dart';
+import '../../models/friend_models.dart' hide FriendshipStatus;
+import '../../services/message_service.dart';
+import '../../services/local_storage_service.dart';
+import '../../services/event_tracking_service.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/post_grid_cell.dart';
+import '../../widgets/cached_media_image.dart';
+import '../../widgets/gallery/photo_gallery_widget.dart';
+import '../../widgets/gallery/music_gallery_widget.dart';
+import '../../widgets/gallery/shop_gallery_widget.dart';
+import '../feed/livegallerywidget_screen.dart';
+import '../michangogallerywidget_screen.dart';
+import '../campaigns/create_campaign_screen.dart';
+import '../settings/settings_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
+import '../messages/callhistory_screen.dart';
+import '../feed/create_post_screen.dart';
+import '../feed/edit_post_screen.dart';
+import '../feed/post_detail_screen.dart';
+import '../feed/videogallerywidget_screen.dart';
+import '../groups/groups_screen.dart';
+import '../groups/create_group_screen.dart';
+import '../groups/group_detail_screen.dart';
+import '../../models/group_models.dart';
+import '../../models/file_models.dart';
+import '../../services/group_service.dart';
+import '../../services/file_service.dart';
+import 'profile_stats_bottom_sheet.dart';
+import 'creator_dashboard_section.dart';
+import 'edit_profile_screen.dart';
+import '../../services/creator_service.dart';
+import '../../models/flywheel_models.dart';
+import '../../utils/face_validator.dart';
+import '../../budget/budget_module.dart';
+import '../../kikoba/kikoba_module.dart';
+import '../../my_wallet/my_wallet_module.dart';
+import '../../investments/investments_module.dart';
+import '../../loans/loans_module.dart';
+import '../../doctor/doctor_module.dart';
+import '../../pharmacy/pharmacy_module.dart';
+import '../../insurance/insurance_module.dart';
+import '../../government/government_module.dart';
+import '../../lawyer/lawyer_module.dart';
+import '../../fitness/fitness_module.dart';
+import '../../my_circle/my_circle_module.dart';
+import '../../my_family/my_family_module.dart';
+import '../../my_pregnancy/my_pregnancy_module.dart';
+import '../../my_baby/my_baby_module.dart';
+import '../../skincare/skincare_module.dart';
+import '../../hair_nails/hair_nails_module.dart';
+import '../../business/business_module.dart';
+import '../../customer_orders/widgets/service_due_dashboard.dart';
+import '../../business/biz_tab_wrapper.dart';
+import '../../business/pages/business_documents_page.dart';
+import '../../business/pages/email/email_client_page.dart';
+import '../../business/pages/business_card_page.dart';
+import '../../business/pages/quotes_page.dart';
+import '../../business/pages/invoices_page.dart';
+import '../../business/pages/recurring_invoices_page.dart';
+import '../../business/pages/vfd_page.dart';
+
+// Recovered orphan modules — see "Recovered orphan modules" section in
+// profile_tab_config.dart. Imported with prefixes to avoid clashing with the
+// older lib/business/* pages of the same names.
+import '../../mafundi/pages/mafundi_home_page.dart' as mafundi_home;
+import '../../myjob/pages/my_job_page.dart' as myjob_home;
+import '../../clients/pages/clients_page.dart' as clients_v2;
+import '../../suppliers/pages/suppliers_page.dart' as suppliers_v2;
+import '../../vfd/pages/vfd_page.dart' as vfd_v2;
+import '../../business/pages/customers_page.dart';
+import '../../business/pages/debts_page.dart';
+import '../../business/pages/reminder_settings_page.dart';
+import '../../business/pages/expenses_page.dart';
+import '../../business/pages/tax_page.dart';
+import '../../business/pages/credit_report_page.dart';
+import '../../business/pages/employees_page.dart';
+import '../../business/pages/payroll_page.dart';
+import '../../business/pages/suppliers_page.dart';
+import '../../business/pages/purchase_orders_page.dart';
+import '../../business/pages/appointments_page.dart';
+import '../../tenders/tenders_module.dart';
+import '../../housing/housing_module.dart';
+import '../../bills/bills_module.dart';
+import '../../vehicle/vehicle_module.dart';
+import '../../food/food_module.dart';
+import '../../transport/transport_module.dart';
+import '../../fundi/fundi_module.dart';
+import '../../calendar/calendar_module.dart';
+import '../../notes/notes_module.dart';
+import '../../faith/faith_module.dart';
+import '../../community/community_module.dart';
+import '../../events/events_module.dart';
+import '../../travel/travel_module.dart';
+import '../../games/games_module.dart';
+import '../../barozi_wangu/barozi_wangu_module.dart';
+import '../../ofisi_mtaa/ofisi_mtaa_module.dart';
+import '../../dc/dc_module.dart';
+import '../../rc/rc_module.dart';
+import '../../katiba/katiba_module.dart';
+import '../../legal_gpt/legal_gpt_module.dart';
+import '../../nida/nida_module.dart';
+import '../../rita/rita_module.dart';
+import '../../tra/tra_module.dart';
+import '../../brela/brela_module.dart';
+import '../../passport/passport_module.dart';
+import '../../driving_licence/driving_licence_module.dart';
+import '../../land_office/land_office_module.dart';
+import '../../nhif/nhif_module.dart';
+import '../../nssf/nssf_module.dart';
+import '../../tanesco/tanesco_module.dart';
+import '../../dawasco/dawasco_module.dart';
+// My Cars
+import '../../my_cars/my_cars_module.dart';
+import '../../car_insurance/car_insurance_module.dart';
+import '../../buy_car/buy_car_module.dart';
+import '../../fuel_delivery/fuel_delivery_module.dart';
+import '../../service_garage/service_garage_module.dart';
+import '../../sell_car/sell_car_module.dart';
+import '../../rent_car/rent_car_module.dart';
+import '../../owners_club/owners_club_module.dart';
+import '../../spare_parts/spare_parts_module.dart';
+// Commerce + Health
+import '../../tajirika/tajirika_module.dart';
+import '../../ambulance/ambulance_module.dart';
+// Govt extra
+import '../../latra/latra_module.dart';
+import '../../tira/tira_module.dart';
+import '../../ewura/ewura_module.dart';
+import '../../heslb/heslb_module.dart';
+import '../../necta/necta_module.dart';
+// Faith
+import '../../my_faith/my_faith_module.dart';
+import '../../biblia/biblia_module.dart';
+import '../../sala/sala_module.dart';
+import '../../fungu_la_kumi/fungu_la_kumi_module.dart';
+import '../../kanisa_langu/kanisa_langu_module.dart';
+import '../../huduma/huduma_module.dart';
+import '../../jumuiya/jumuiya_module.dart';
+import '../../ibada/ibada_module.dart';
+import '../../shule_ya_jumapili/shule_ya_jumapili_module.dart';
+import '../../tafuta_kanisa/tafuta_kanisa_module.dart';
+import '../../wakati_wa_sala/wakati_wa_sala_module.dart';
+import '../../qibla/qibla_module.dart';
+import '../../quran/quran_module.dart';
+import '../../kalenda_hijri/kalenda_hijri_module.dart';
+import '../../ramadan/ramadan_module.dart';
+import '../../zaka/zaka_module.dart';
+import '../../dua/dua_module.dart';
+import '../../hadith/hadith_module.dart';
+import '../../tafuta_msikiti/tafuta_msikiti_module.dart';
+import '../../maulid/maulid_module.dart';
+// Security + Lifestyle
+import '../../police/police_module.dart';
+import '../../traffic/traffic_module.dart';
+import '../../neighbourhood_watch/neighbourhood_watch_module.dart';
+import '../../alerts/alerts_module.dart';
+import '../../nightlife/nightlife_module.dart';
+import '../../my_children/my_children_module.dart';
+import '../../my_parents/my_parents_module.dart';
+import '../../news/news_module.dart';
+import '../../reminders/reminders_module.dart';
+import '../../accounting/accounting_module.dart';
+// Education
+import '../../my_class/my_class_module.dart';
+import '../../timetable/timetable_module.dart';
+import '../../assignments/assignments_module.dart';
+import '../../class_chat/class_chat_module.dart';
+import '../../class_notes/class_notes_module.dart';
+import '../../exam_prep/exam_prep_module.dart';
+import '../../past_papers/past_papers_module.dart';
+import '../../newton/newton_module.dart';
+import '../../results/results_module.dart';
+import '../../fee_status/fee_status_module.dart';
+import '../../library/library_module.dart';
+import '../../campus_news/campus_news_module.dart';
+import '../../study_groups/study_groups_module.dart';
+import '../../career/career_module.dart';
+import '../../appointments/appointments_module.dart';
+import '../../calls/calls_module.dart';
+import '../../consultations/consultations_module.dart';
+import '../../crb/crb_module.dart';
+import '../../customer_orders/customer_orders_module.dart';
+import '../../debts/debts_module.dart';
+import '../../engagements/engagements_module.dart';
+import '../../expenses/expenses_module.dart';
+import '../../income/income_module.dart';
+import '../../invoices/invoices_module.dart';
+import '../../orders/orders_module.dart';
+import '../../payroll/payroll_module.dart';
+import '../../products/products_module.dart';
+import '../../projects/projects_module.dart';
+import '../../recurring/recurring_module.dart';
+import '../../revenue/revenue_module.dart';
+import '../../tax/tax_module.dart';
+import '../../team/team_module.dart';
+import '../../transactions/transactions_module.dart';
+import '../../biz_services/biz_services_module.dart';
+class ProfileScreen extends StatefulWidget {
+  final int userId;
+  final int? currentUserId;
+
+  const ProfileScreen({
+    super.key,
+    required this.userId,
+    this.currentUserId,
+  });
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  final ProfileService _profileService = ProfileService();
+  final FriendService _friendService = FriendService();
+  final MessageService _messageService = MessageService();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  TabController? _tabController;
+
+  FullProfile? _profile;
+  bool _isLoading = true;
+  String? _error;
+
+  // Tab configuration
+  List<ProfileTabConfig> _allTabs = [];
+  List<ProfileTabConfig> _enabledTabs = [];
+
+  // Profile photo upload
+  bool _isUploadingPhoto = false;
+  // Cover photo upload
+  bool _isUploadingCoverPhoto = false;
+  // Send friend request in progress
+  bool _isSendingFriendRequest = false;
+
+  // Streak data for profile (visible on all profiles)
+  CreatorStreak? _profileStreak;
+
+  // Viral assists count (own profile or when > 0)
+  int _viralAssistsCount = 0;
+
+  int get _currentUserId => widget.currentUserId ?? widget.userId;
+  bool get _isOwnProfile => widget.userId == _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTabsAndProfile();
+  }
+
+  Future<void> _loadTabsAndProfile() async {
+    debugPrint('[ProfileScreen] _loadTabsAndProfile started for userId: ${widget.userId}');
+
+    final storage = await LocalStorageService.getInstance();
+    if (!mounted) return;
+    debugPrint('[ProfileScreen] LocalStorageService loaded');
+
+    _allTabs = storage.getProfileTabs();
+    _enabledTabs = _allTabs.where((t) => t.enabled).toList();
+    debugPrint('[ProfileScreen] Tabs: ${_allTabs.length} total, ${_enabledTabs.length} enabled');
+
+    // Dispose any controller from a previous run before reassigning. This is
+    // defensive: in the normal mount->initState->_loadTabsAndProfile flow
+    // _tabController is null. It only becomes non-null here if _refreshTabs()
+    // ran (e.g. after returning from Settings), which means we're being
+    // re-entered after a tab-config change. Disposing first prevents a leak.
+    _tabController?.removeListener(_onTabChanged);
+    _tabController?.dispose();
+    _tabController = null;
+
+    if (_enabledTabs.isNotEmpty) {
+      _tabController = TabController(
+        length: _enabledTabs.length,
+        vsync: this,
+        animationDuration: const Duration(milliseconds: 280),
+      );
+      _tabController!.addListener(_onTabChanged);
+    } else {
+      debugPrint('[ProfileScreen] WARNING: No enabled tabs!');
+    }
+
+    setState(() {});
+    _loadProfile();
+  }
+
+  Future<void> _refreshTabs() async {
+    if (!mounted) return;
+
+    final storage = await LocalStorageService.getInstance();
+    final newTabs = storage.getProfileTabs();
+    final newEnabledTabs = newTabs.where((t) => t.enabled).toList();
+
+    // Check if tabs have actually changed
+    final tabsChanged = _enabledTabs.length != newEnabledTabs.length ||
+        !_enabledTabs.every((t) => newEnabledTabs.any((n) => n.id == t.id && n.order == t.order));
+
+    if (tabsChanged && mounted) {
+      // Store old controller to dispose after frame
+      final oldController = _tabController;
+
+      _allTabs = newTabs;
+      _enabledTabs = newEnabledTabs;
+
+      // Create new controller
+      _tabController = TabController(
+        length: _enabledTabs.length,
+        vsync: this,
+        animationDuration: const Duration(milliseconds: 280),
+      );
+      _tabController!.addListener(_onTabChanged);
+
+      setState(() {});
+
+      // Dispose old controller after the frame completes
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldController?.removeListener(_onTabChanged);
+        oldController?.dispose();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController?.removeListener(_onTabChanged);
+    _tabController?.dispose();
+    _tabController = null;
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (_tabController == null || _enabledTabs.isEmpty) return;
+    setState(() {}); // Update custom tab bar selected state (e.g. after swipe)
+    // Tab content widgets (_ProfilePostsPage, PhotoGalleryWidget, etc.) handle
+    // their own data loading and pagination internally.
+  }
+
+  Future<void> _loadProfile() async {
+    debugPrint('[ProfileScreen] _loadProfile started');
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    debugPrint('[ProfileScreen] Calling profileService.getProfile for userId: ${widget.userId}');
+    final result = await _profileService.getProfile(
+      userId: widget.userId,
+      currentUserId: _currentUserId,
+    );
+    debugPrint('[ProfileScreen] getProfile returned: success=${result.success}, message=${result.message}');
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _profile = result.profile;
+          debugPrint('[ProfileScreen] Profile loaded: ${_profile?.fullName}');
+          // Load streak for all profiles (visible to visitors)
+          _loadProfileStreak();
+          // Load viral assists count
+          _loadViralAssists();
+        } else {
+          _error = result.message;
+          debugPrint('[ProfileScreen] Profile error: $_error');
+        }
+      });
+    } else {
+      debugPrint('[ProfileScreen] Widget not mounted after profile load');
+    }
+  }
+
+  Future<void> _loadProfileStreak() async {
+    try {
+      final creatorService = CreatorService();
+      final streak = await creatorService.getCreatorStreak(creatorId: widget.userId);
+      if (mounted && streak != null) {
+        setState(() => _profileStreak = streak);
+      }
+    } catch (e, st) {
+      // Non-critical: streak badge just doesn't render. Log so it shows up
+      // in crashlytics/console rather than disappearing.
+      debugPrint('[ProfileScreen] _loadProfileStreak failed: $e\n$st');
+    }
+  }
+
+  Future<void> _loadViralAssists() async {
+    try {
+      final storage = await LocalStorageService.getInstance();
+      final token = storage.getAuthToken();
+      final creatorService = CreatorService();
+      final count = await creatorService.getViralAssists(
+        creatorId: widget.userId,
+        token: token,
+      );
+      if (mounted) {
+        setState(() => _viralAssistsCount = count);
+      }
+    } catch (e, st) {
+      // Non-critical: viral-assists badge just doesn't render.
+      debugPrint('[ProfileScreen] _loadViralAssists failed: $e\n$st');
+    }
+  }
+
+  Future<void> _updateProfilePhoto() async {
+    if (_isUploadingPhoto || !_isOwnProfile) return;
+
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+
+    if (image == null || !mounted) return;
+
+    setState(() => _isUploadingPhoto = true);
+
+    // Optional face detection (non-blocking). If detection fails the upload
+    // still proceeds; the server will fall back to its own auto-crop.
+    Map<String, int>? faceBbox;
+    try {
+      final bounds = await FaceValidator.detectLargestFace(File(image.path));
+      if (bounds != null) {
+        faceBbox = {
+          'x': bounds.left.round(),
+          'y': bounds.top.round(),
+          'width': bounds.width.round(),
+          'height': bounds.height.round(),
+        };
+      }
+    } catch (e, st) {
+      debugPrint('[ProfileScreen] FaceValidator failed (continuing without bbox): $e\n$st');
+    }
+
+    final result = await _profileService.updateProfilePhoto(
+      userId: widget.userId,
+      photo: File(image.path),
+      faceBbox: faceBbox,
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isUploadingPhoto = false);
+
+    if (result.success) {
+      // Update local user so profile photo reflects across the app
+      final storage = await LocalStorageService.getInstance();
+      final user = storage.getUser();
+      if (user != null && result.photoUrl != null && user.userId == widget.userId) {
+        user.applyServerProfile({'profile_photo_url': result.photoUrl});
+        await storage.saveUser(user);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStringsScope.of(context)?.photoUpdated ?? 'Photo updated')),
+      );
+      _loadProfile();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? (AppStringsScope.of(context)?.photoUpdateFailed ?? 'Failed to update photo'))),
+      );
+    }
+  }
+
+  Future<void> _updateCoverPhoto() async {
+    if (_isUploadingCoverPhoto || !_isOwnProfile) return;
+
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1080,
+      imageQuality: 85,
+    );
+
+    if (image == null || !mounted) return;
+
+    setState(() => _isUploadingCoverPhoto = true);
+
+    final result = await _profileService.updateCoverPhoto(
+      userId: widget.userId,
+      photo: File(image.path),
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isUploadingCoverPhoto = false);
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStringsScope.of(context)?.coverPhotoUpdated ?? 'Cover photo updated')),
+      );
+      _loadProfile();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message ?? (AppStringsScope.of(context)?.coverPhotoUpdateFailed ?? 'Failed to update photo'))),
+      );
+    }
+  }
+
+  Future<void> _openChatWithProfileUser() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final result = await _messageService.getPrivateConversation(
+      _currentUserId,
+      widget.userId,
+    );
+    if (!mounted) return;
+    if (result.success && result.conversation != null) {
+      navigator.pushNamed(
+        '/chat/${result.conversation!.id}',
+        arguments: <String, dynamic>{'conversation': result.conversation},
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(content: Text(result.message ?? 'Could not open chat')),
+      );
+    }
+  }
+
+  Future<void> _handleFriendAction() async {
+    final profile = _profile;
+    if (profile == null) return;
+
+    final status = profile.friendshipStatus;
+
+    switch (status) {
+      case FriendshipStatus.none:
+        // Send friend request
+        if (_isSendingFriendRequest) return;
+        setState(() => _isSendingFriendRequest = true);
+        final result = await _friendService.sendFriendRequest(
+          _currentUserId,
+          widget.userId,
+        );
+        if (!mounted) return;
+        setState(() => _isSendingFriendRequest = false);
+        if (result) {
+          EventTrackingService.getInstance().then((tracker) {
+            tracker.trackEvent(eventType: 'follow', creatorId: widget.userId);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppStringsScope.of(context)?.friendRequestSent ?? 'Friend request sent')),
+          );
+          _loadProfile();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppStringsScope.of(context)?.friendRequestFailed ?? 'Failed to send friend request. Try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        break;
+      case FriendshipStatus.pending:
+        // Accept friend request
+        final result = await _friendService.acceptFriendRequest(
+          _currentUserId,
+          widget.userId,
+        );
+        if (mounted && result) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppStringsScope.of(context)?.nowFriends ?? 'Now friends!')),
+          );
+          _loadProfile();
+        }
+        break;
+      case FriendshipStatus.requested:
+        // Cancel request
+        final result = await _friendService.cancelFriendRequest(
+          _currentUserId,
+          widget.userId,
+        );
+        if (mounted && result) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppStringsScope.of(context)?.requestCancelled ?? 'Request cancelled')),
+          );
+          _loadProfile();
+        }
+        break;
+      case FriendshipStatus.friends:
+        // Show unfriend dialog
+        _showUnfriendDialog();
+        break;
+      case FriendshipStatus.self:
+      case null:
+        // Edit profile
+        _showEditProfileDialog();
+        break;
+    }
+  }
+
+  void _showUnfriendDialog() {
+    final s = AppStringsScope.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s?.removeFriendTitle ?? 'Remove friend'),
+        content: Text(s?.removeFriendMessage(_profile?.firstName ?? '') ?? 'Are you sure you want to remove this friend?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(s?.no ?? 'No'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final result = await _friendService.removeFriend(
+                _currentUserId,
+                widget.userId,
+              );
+              if (mounted && result) {
+                EventTrackingService.getInstance().then((tracker) {
+                  tracker.trackEvent(eventType: 'unfollow', creatorId: widget.userId);
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(s?.friendRemoved ?? 'Friend removed')),
+                );
+                _loadProfile();
+              }
+            },
+            child: Text(s?.yes ?? 'Yes', style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(
+          currentUserId: _currentUserId,
+          initialProfile: _profile,
+        ),
+      ),
+    ).then((saved) {
+      if (saved == true && mounted) _loadProfile();
+    });
+  }
+
+  void _showLogoutDialog() {
+    final s = AppStringsScope.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(s?.logoutConfirmTitle ?? 'Log out'),
+        content: Text(s?.logoutConfirmMessage ?? 'Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(s?.no ?? 'No'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              if (context.mounted) {
+                await AuthService.instance.logout(context);
+              }
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade400),
+            child: Text(s?.yesLogout ?? 'Yes, log out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Format count for profile stats (e.g. 1200 → 1.2K, 1500000 → 1.5M)
+  List<String> _getMilestoneBadges(int followerCount) {
+    final badges = <String>[];
+    if (followerCount >= 100) badges.add('100');
+    if (followerCount >= 500) badges.add('500');
+    if (followerCount >= 1000) badges.add('1K');
+    if (followerCount >= 5000) badges.add('5K');
+    if (followerCount >= 10000) badges.add('10K');
+    if (followerCount >= 50000) badges.add('50K');
+    if (followerCount >= 100000) badges.add('100K');
+    return badges;
+  }
+
+  static String _formatStatCount(int value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}K';
+    return value.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final secondaryText = theme.colorScheme.onSurfaceVariant;
+
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: scaffoldBg,
+        body: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: scaffoldBg,
+        appBar: AppBar(backgroundColor: theme.colorScheme.surface),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: secondaryText.withValues(alpha: 0.6)),
+                  const SizedBox(height: 16),
+                  Text(
+                    _error!,
+                    style: TextStyle(color: secondaryText, fontSize: 14),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _loadProfile,
+                      child: Text(AppStringsScope.of(context)?.retry ?? 'Retry'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Wait for tabs to load
+    if (_tabController == null || _enabledTabs.isEmpty) {
+      return Scaffold(
+        backgroundColor: scaffoldBg,
+        body: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: scaffoldBg,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Main content
+            CustomScrollView(
+              slivers: [
+                _buildSliverAppBar(),
+                SliverToBoxAdapter(child: _buildProfileInfo()),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Floating mini sidebar - sticky on right side, from top to just above bottom nav
+  /// Contains all profile tabs for navigation
+  /// Open a tab as a full page
+  void _openTabPage(ProfileTabConfig tab) {
+    final s = AppStringsScope.of(context);
+    final label = _isOwnProfile
+        ? (s?.profileTabLabelOwn(tab.id) ?? tab.label)
+        : (s?.profileTabLabel(tab.id) ?? tab.label);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ProfileTabPage(
+          title: label,
+          icon: _tabIconData(tab.icon),
+          tabId: tab.id,
+          userId: widget.userId,
+          currentUserId: _currentUserId,
+          isOwnProfile: _isOwnProfile,
+          profile: _profile,
+          onRefresh: _loadProfile,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    final s = AppStringsScope.of(context);
+    return SliverAppBar(
+      expandedHeight: 280,
+      pinned: true,
+      backgroundColor: TajiriAppBar.surfaceColor,
+      foregroundColor: TajiriAppBar.primaryTextColor,
+      iconTheme: TajiriAppBar.iconTheme,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        _isOwnProfile ? (s?.profileTab ?? 'Me') : (_profile?.fullName ?? ''),
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+      actions: [
+        if (_isOwnProfile) ...[
+          TajiriAppBar.action(
+            icon: HeroIcons.cog6Tooth,
+            tooltip: AppStringsScope.of(context)?.settings ?? 'Settings',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SettingsScreen(currentUserId: _currentUserId),
+                ),
+              );
+              // Refresh profile (e.g. username) and tabs when returning from settings
+              if (mounted) {
+                _loadProfile();
+                _refreshTabs();
+              }
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: HeroIcon(
+              HeroIcons.ellipsisVertical,
+              style: HeroIconStyle.outline,
+              size: TajiriAppBar.actionIconSize,
+              color: TajiriAppBar.primaryTextColor,
+            ),
+            onSelected: (value) {
+              switch (value) {
+                case 'edit_profile':
+                  _showEditProfileDialog();
+                  break;
+                case 'wallet':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MyWalletModule(userId: _currentUserId),
+                    ),
+                  );
+                  break;
+                case 'calls':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CallHistoryScreen(currentUserId: _currentUserId),
+                    ),
+                  );
+                  break;
+                case 'saved':
+                  Navigator.pushNamed(context, '/saved-posts');
+                  break;
+                case 'logout':
+                  _showLogoutDialog();
+                  break;
+              }
+            },
+            itemBuilder: (ctx) {
+              final s = AppStringsScope.of(ctx);
+              return [
+                PopupMenuItem(
+                  value: 'edit_profile',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.edit),
+                      const SizedBox(width: 8),
+                      Text(s?.editProfile ?? 'Edit profile'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'wallet',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet),
+                      const SizedBox(width: 8),
+                      Text(s?.tajiriPay ?? 'Tajiri Pay'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'calls',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.phone),
+                      const SizedBox(width: 8),
+                      Text(s?.calls ?? 'Calls'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'saved',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.bookmark_outline_rounded),
+                      const SizedBox(width: 8),
+                      Text(s?.savedTitle ?? 'Saved'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.logout, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Text(s?.logout ?? 'Log out', style: const TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ];
+            },
+          ),
+        ],
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Cover Photo
+            _profile?.coverPhotoUrl != null && _profile!.coverPhotoUrl!.isNotEmpty
+                ? CachedMediaImage(
+                    imageUrl: _profile!.coverPhotoUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: _buildDefaultCover(),
+                  )
+                : _buildDefaultCover(),
+
+            // Gradient overlay
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.7),
+                  ],
+                ),
+              ),
+            ),
+
+            // Edit cover button (min 48dp touch target)
+            if (_isOwnProfile)
+              Positioned(
+                right: 16,
+                bottom: 100,
+                child: IconButton(
+                  onPressed: _updateCoverPhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(48, 48),
+                  ),
+                ),
+              ),
+
+            // Profile photo and name
+            Positioned(
+              left: 16,
+              bottom: 16,
+              right: 16,
+              child: Row(
+                children: [
+                  // Profile photo — circular display; whole avatar tappable (≥48dp)
+                  Semantics(
+                    button: _isOwnProfile,
+                    label: _isOwnProfile ? (AppStringsScope.of(context)?.changeProfilePhoto ?? 'Change profile photo') : null,
+                    child: GestureDetector(
+                      onTap: _isOwnProfile ? _updateProfilePhoto : null,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 4),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: _profile?.profilePhotoUrl != null &&
+                                      _profile!.profilePhotoUrl!.isNotEmpty
+                                  ? CachedMediaImage(
+                                      imageUrl: _profile!.profilePhotoUrl!,
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : CircleAvatar(
+                                      radius: 50,
+                                      backgroundColor: Theme.of(context).colorScheme.primary,
+                                      child: Text(
+                                        _profile?.initials ?? '?',
+                                        style: const TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          if (_isOwnProfile)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          if (_isUploadingPhoto)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black54,
+                                ),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 32,
+                                    height: 32,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Name and username
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _profile?.fullName ?? '',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_profile?.username != null)
+                          Text(
+                            '@${_profile!.username}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultCover() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.secondary,
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Custom horizontal icon + label tab row (no Material TabBar = no overlay/ripple).
+  static IconData _tabIconData(String iconName) {
+    switch (iconName) {
+      case 'article': return Icons.article_outlined;
+      case 'photo_library': return Icons.photo_library_outlined;
+      case 'video_library': return Icons.video_library_outlined;
+      case 'music_note': return Icons.music_note_outlined;
+      case 'live_tv': return Icons.live_tv_outlined;
+      case 'volunteer_activism': return Icons.volunteer_activism_outlined;
+      case 'group': return Icons.group_outlined;
+      case 'folder': return Icons.folder_outlined;
+      case 'storefront': return Icons.storefront_outlined;
+      case 'handshake': return Icons.handshake_outlined;
+      case 'people': return Icons.people_outlined;
+      case 'info': return Icons.info_outlined;
+      // Finance
+      case 'account_balance_wallet': return Icons.account_balance_wallet_outlined;
+      case 'savings': return Icons.savings_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'trending_up': return Icons.trending_up_rounded;
+      case 'request_quote': return Icons.request_quote_outlined;
+      // Health
+      case 'medical_services': return Icons.medical_services_outlined;
+      case 'local_pharmacy': return Icons.local_pharmacy_outlined;
+      case 'health_and_safety': return Icons.health_and_safety_outlined;
+      case 'fitness_center': return Icons.fitness_center_outlined;
+      // Family & Education
+      case 'family_restroom': return Icons.family_restroom_outlined;
+      case 'school': return Icons.school_outlined;
+      case 'child_care': return Icons.child_care_outlined;
+      case 'menu_book': return Icons.menu_book_outlined;
+      // Work
+      case 'work': return Icons.work_outline;
+      case 'business_center': return Icons.business_center_outlined;
+      // Daily Life
+      case 'restaurant': return Icons.restaurant_outlined;
+      case 'directions_car': return Icons.directions_car_outlined;
+      case 'home_repair_service': return Icons.home_repair_service_outlined;
+      case 'home': return Icons.home_outlined;
+      case 'receipt_long': return Icons.receipt_long_outlined;
+      case 'two_wheeler': return Icons.two_wheeler_outlined;
+      // Planning
+      case 'calendar_month': return Icons.calendar_month_outlined;
+      case 'edit_note': return Icons.edit_note_outlined;
+      // Government & Legal
+      case 'assured_workload': return Icons.assured_workload_outlined;
+      case 'gavel': return Icons.gavel_outlined;
+      case 'person_pin': return Icons.person_pin_outlined;
+      case 'location_city': return Icons.location_city_outlined;
+      case 'account_balance': return Icons.account_balance_outlined;
+      case 'domain': return Icons.domain_outlined;
+      case 'description': return Icons.description_outlined;
+      case 'business': return Icons.business_outlined;
+      case 'card_travel': return Icons.card_travel_outlined;
+      case 'credit_card': return Icons.credit_card_outlined;
+      case 'landscape': return Icons.landscape_outlined;
+      case 'security': return Icons.security_outlined;
+      case 'bolt': return Icons.bolt_outlined;
+      case 'water_drop': return Icons.water_drop_outlined;
+      case 'directions_bus': return Icons.directions_bus_outlined;
+      case 'policy': return Icons.policy_outlined;
+      case 'gas_meter': return Icons.gas_meter_outlined;
+      case 'grading': return Icons.grading_outlined;
+      // Community & Lifestyle
+      case 'mosque': return Icons.mosque_outlined;
+      case 'diversity_3': return Icons.diversity_3_outlined;
+      case 'nightlife': return Icons.nightlife_outlined;
+      case 'event': return Icons.event_outlined;
+      case 'flight': return Icons.flight_outlined;
+      case 'sports_esports': return Icons.sports_esports_outlined;
+      // Women & Family Care
+      case 'spa': return Icons.spa_outlined;
+      case 'face': return Icons.face_outlined;
+      case 'content_cut': return Icons.content_cut_outlined;
+      // Business
+      case 'email': return Icons.email_outlined;
+      case 'app_registration': return Icons.app_registration_outlined;
+      case 'qr_code_2': return Icons.qr_code_2_rounded;
+      case 'repeat': return Icons.repeat_rounded;
+      case 'verified': return Icons.verified_outlined;
+      case 'notifications_active': return Icons.notifications_active_outlined;
+      case 'money_off': return Icons.money_off_csred_outlined;
+      case 'calculate': return Icons.calculate_outlined;
+      case 'credit_score': return Icons.credit_score_outlined;
+      case 'badge': return Icons.badge_outlined;
+      case 'payments': return Icons.payments_outlined;
+      case 'local_shipping': return Icons.local_shipping_outlined;
+      case 'shopping_cart': return Icons.shopping_cart_outlined;
+      // Health (new)
+      case 'emergency': return Icons.emergency_outlined;
+      // My Cars
+      case 'directions_car_filled': return Icons.directions_car_filled_outlined;
+      case 'verified_user': return Icons.verified_user_outlined;
+      case 'time_to_leave': return Icons.time_to_leave_outlined;
+      case 'local_gas_station': return Icons.local_gas_station_outlined;
+      case 'car_repair': return Icons.car_repair_outlined;
+      case 'car_rental': return Icons.car_rental_outlined;
+      case 'groups': return Icons.groups_outlined;
+      case 'handyman': return Icons.handyman_outlined;
+      // Faith — shared
+      case 'favorite': return Icons.favorite_outlined;
+      // Faith — Christian
+      case 'back_hand': return Icons.back_hand_outlined;
+      case 'church': return Icons.church_outlined;
+      case 'record_voice_over': return Icons.record_voice_over_outlined;
+      case 'location_on': return Icons.location_on_outlined;
+      // Faith — Islamic
+      case 'schedule': return Icons.schedule_outlined;
+      case 'explore': return Icons.explore_outlined;
+      case 'auto_stories': return Icons.auto_stories_outlined;
+      case 'dark_mode': return Icons.dark_mode_outlined;
+      case 'self_improvement': return Icons.self_improvement_outlined;
+      case 'format_quote': return Icons.format_quote_outlined;
+      case 'celebration': return Icons.celebration_outlined;
+      // Education
+      case 'calendar_today': return Icons.calendar_today_outlined;
+      case 'assignment': return Icons.assignment_outlined;
+      case 'forum': return Icons.forum_outlined;
+      case 'note_alt': return Icons.note_alt_outlined;
+      case 'quiz': return Icons.quiz_outlined;
+      case 'grade': return Icons.grade_outlined;
+      case 'local_library': return Icons.local_library_outlined;
+      case 'campaign': return Icons.campaign_outlined;
+      case 'work_outline': return Icons.work_outline;
+      case 'history_edu': return Icons.history_edu_outlined;
+      case 'psychology': return Icons.psychology_outlined;
+      // Security
+      case 'local_police': return Icons.local_police_outlined;
+      case 'traffic': return Icons.traffic_outlined;
+      case 'shield': return Icons.shield_outlined;
+      default: return Icons.circle_outlined;
+    }
+  }
+
+  Widget _buildProfileInfo() {
+    const cardRadius = 24.0;
+    const horizontalPadding = 20.0;
+    const sectionSpacing = 20.0;
+
+    final followersCount = _profile?.stats.followersCount ?? 0;
+    final followingCount = _profile?.stats.followingCount ?? 0;
+    final subscribersCount = _profile?.stats.subscribersCount ?? 0;
+    final friendsCount = _profile?.stats.friendsCount ?? 0;
+
+    final milestoneBadges = _getMilestoneBadges(followersCount);
+
+    final List<Widget> columnChildren = <Widget>[
+      // 1. Stats row
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            _buildStatItem(
+              _formatStatCount(followersCount),
+              AppStringsScope.of(context)?.followers ?? 'Followers',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.followers, followersCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(followingCount),
+              AppStringsScope.of(context)?.following ?? 'Following',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.following, followingCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(subscribersCount),
+              AppStringsScope.of(context)?.subscribers ?? 'Subscribers',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.subscribers, subscribersCount),
+            ),
+            _buildStatDivider(),
+            _buildStatItem(
+              _formatStatCount(friendsCount),
+              AppStringsScope.of(context)?.friends ?? 'Friends',
+              onTap: () => _openStatsBottomSheet(ProfileStatsType.friends, friendsCount),
+            ),
+            if (_isOwnProfile || _viralAssistsCount > 0) ...[
+              _buildStatDivider(),
+              _buildStatItem(
+                _formatStatCount(_viralAssistsCount),
+                AppStringsScope.of(context)?.viralAssists ?? 'Viral Assists',
+              ),
+            ],
+          ],
+        ),
+      ),
+      // Streak badge (visible on all profiles)
+      if (_profileStreak != null && _profileStreak!.currentStreakDays > 0) ...[
+        const SizedBox(height: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_fire_department_rounded, size: 14, color: const Color(0xFF1A1A1A)),
+            const SizedBox(width: 2),
+            Text(
+              '${_profileStreak!.currentStreakDays}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              AppStringsScope.of(context)?.streakDays ?? 'day streak',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
+            ),
+          ],
+        ),
+      ],
+      // Follower milestone badge
+      if (milestoneBadges.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.verified_rounded, size: 12, color: Colors.white),
+              const SizedBox(width: 2),
+              Text(
+                milestoneBadges.last,
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
+      const SizedBox(height: sectionSpacing),
+
+      // 2. Me page: quick links (Edit left, Settings center, Wallet right) — each in Expanded for bounded layout
+      if (_isOwnProfile) ...[
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _MeQuickLink(
+                  icon: Icons.edit_outlined,
+                  label: AppStringsScope.of(context)?.edit ?? 'Edit',
+                  onTap: _showEditProfileDialog,
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: _MeQuickLink(
+                    icon: Icons.settings_outlined,
+                    label: AppStringsScope.of(context)?.settings ?? 'Settings',
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(currentUserId: _currentUserId),
+                        ),
+                      );
+                      if (mounted) {
+                        _loadProfile();
+                        _refreshTabs();
+                      }
+                    },
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _MeQuickLink(
+                  icon: Icons.payments_rounded,
+                  label: 'Tajiri Pay',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MyWalletModule(userId: _currentUserId),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: sectionSpacing),
+      ],
+
+      // Creator dashboard (own profile only)
+      if (_isOwnProfile) ...[
+        CreatorDashboardSection(userId: widget.userId),
+        const SizedBox(height: sectionSpacing),
+      ],
+
+      // Spec §G.4 — service-due dashboard (customer-side)
+      if (_isOwnProfile) ...[
+        ServiceDueDashboard(userId: widget.userId),
+        const SizedBox(height: sectionSpacing),
+      ],
+
+      // 3. Action buttons (when viewing someone else)
+      if (!_isOwnProfile)
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: ElevatedButton.icon(
+                    onPressed: _isSendingFriendRequest ? null : _handleFriendAction,
+                    icon: _isSendingFriendRequest
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(_getActionIcon(), size: 18),
+                    label: Text(
+                      _isSendingFriendRequest
+                          ? (AppStringsScope.of(context)?.sending ?? 'Sending...')
+                          : _getFollowButtonLabel(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      backgroundColor: _getActionButtonColor(),
+                      foregroundColor: _getActionButtonForegroundColor(),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SubscribeToCreatorScreen(
+                            creatorId: widget.userId,
+                            currentUserId: _currentUserId,
+                            creatorDisplayName: _profile?.fullName,
+                          ),
+                        ),
+                      );
+                      if (result == true && mounted) _loadProfile();
+                    },
+                    icon: const Icon(Icons.card_membership, size: 18),
+                    label: const Text('Subscribe'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: OutlinedButton.icon(
+                    onPressed: _openChatWithProfileUser,
+                    icon: const Icon(Icons.message_outlined, size: 18),
+                    label: const Text('Message'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+      // 4. Bio
+      if (_profile?.bio != null && _profile!.bio!.isNotEmpty) ...[
+        const SizedBox(height: sectionSpacing),
+        Text(
+          _profile!.bio!,
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.4,
+            color: Colors.grey.shade700,
+          ),
+        ),
+      ],
+
+      // 5. Interests
+      if (_profile?.interests != null && _profile!.interests!.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _profile!.interests!
+              .map<Widget>((String interest) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      interest,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ),
+      ],
+
+      // 6. Info section (location, work, education, relationship, joined, mutual friends)
+      if (_profile?.location != null ||
+          _profile?.currentEmployer != null ||
+          _profile?.universityEducation != null ||
+          _profile?.relationshipStatus != null) ...[
+        const SizedBox(height: sectionSpacing),
+        if (_profile?.location != null)
+          _buildInfoItem(Icons.location_on_outlined, _profile!.location!.displayText),
+        if (_profile?.currentEmployer != null)
+          _buildInfoItem(
+            Icons.work_outline,
+            _profile!.currentEmployer!.jobTitle != null
+                ? '${_profile!.currentEmployer!.jobTitle} - ${_profile!.currentEmployer!.employerName}'
+                : _profile!.currentEmployer!.employerName ?? '',
+          ),
+        if (_profile?.universityEducation != null)
+          _buildInfoItem(
+            Icons.school_outlined,
+            _profile!.universityEducation!.universityName ?? '',
+          ),
+        if (_profile?.relationshipStatus != null)
+          _buildInfoItem(Icons.favorite_border, _profile!.relationshipStatusLabel ?? ''),
+      ],
+      _buildInfoItem(
+        Icons.calendar_today_outlined,
+        '${AppStringsScope.of(context)?.joined ?? 'Joined'} ${_formatDate(_profile?.createdAt ?? DateTime.now())}',
+      ),
+
+      // Tab menu - grid of four, directly under joined date
+      const SizedBox(height: sectionSpacing),
+      _buildTabMenuGrid(),
+
+      if (!_isOwnProfile &&
+          _profile?.mutualFriendsCount != null &&
+          _profile!.mutualFriendsCount! > 0) ...[
+        const SizedBox(height: 14),
+        Material(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(Icons.people_outline, size: 18, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  '${_profile!.mutualFriendsCount} ${AppStringsScope.of(context)?.mutualFriendsCount ?? 'mutual friends'}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(cardRadius),
+          topRight: Radius.circular(cardRadius),
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: columnChildren,
+      ),
+    );
+  }
+
+  /// Categorized flat grid: profile tabs grouped by life domain with thin dividers.
+  /// Social tabs first (no header), then service categories with hairline + label.
+  Widget _buildTabMenuGrid() {
+    final enabledSet = _enabledTabs.map((t) => t.id).toSet();
+    final tabMap = {for (final t in _enabledTabs) t.id: t};
+
+    final children = <Widget>[];
+    bool isFirst = true;
+
+    for (final category in ProfileTabDefaults.categories) {
+      final categoryTabs = category.tabIds
+          .where(enabledSet.contains)
+          .map((id) => tabMap[id]!)
+          .toList();
+      if (categoryTabs.isEmpty) continue;
+
+      // Category header with hairline divider (skip for first/social section)
+      if (!isFirst && category.label.isNotEmpty) {
+        children.add(_buildCategoryDivider(category.label));
+      }
+      isFirst = false;
+
+      // 4-column grid for this category's tabs
+      children.add(
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 4,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 0,
+          childAspectRatio: 0.88,
+          children: categoryTabs.map((t) => _buildTabMenuItem(t)).toList(),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  /// Thin hairline divider with uppercase category label.
+  Widget _buildCategoryDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 1, thickness: 0.5, color: Color(0xFFE0E0E0)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 0, 4),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF999999),
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Single tab menu item - icon + label, opens full page on tap (no background)
+  Widget _buildTabMenuItem(ProfileTabConfig tab) {
+    final s = AppStringsScope.of(context);
+    final label = _isOwnProfile
+        ? (s?.profileTabLabelOwn(tab.id) ?? tab.label)
+        : (s?.profileTabLabel(tab.id) ?? tab.label);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openTabPage(tab),
+        borderRadius: BorderRadius.circular(16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cellHeight = constraints.maxHeight;
+            final iconSize = (cellHeight * 0.45).clamp(24.0, 32.0);
+            final padding = (iconSize * 0.4).roundToDouble();
+            final fontSize = (cellHeight * 0.13).clamp(9.0, 12.0);
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(padding),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _tabIconData(tab.icon),
+                    size: iconSize,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                SizedBox(height: (cellHeight * 0.08).clamp(4.0, 10.0)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(
+      width: 1,
+      height: 32,
+      color: Colors.grey.shade300,
+    );
+  }
+
+
+  Widget _buildStatItem(String count, String label, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            children: [
+              Text(
+                count,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openStatsBottomSheet(ProfileStatsType statsType, int count) {
+    ProfileStatsBottomSheet.show(
+      context,
+      userId: widget.userId,
+      currentUserId: _currentUserId,
+      statsType: statsType,
+      initialCount: count,
+    );
+  }
+
+  Widget _buildInfoItem(IconData icon, String text) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getFollowButtonLabel() {
+    if (_isOwnProfile) {
+      return AppStringsScope.of(context)?.editProfile ?? 'Edit profile';
+    }
+    switch (_profile?.friendshipStatus) {
+      case FriendshipStatus.none:
+        return 'Follow';
+      case FriendshipStatus.pending:
+        return 'Accept';
+      case FriendshipStatus.requested:
+        return 'Requested';
+      case FriendshipStatus.friends:
+        return 'Following';
+      case FriendshipStatus.self:
+      case null:
+        return 'Follow';
+    }
+  }
+
+  IconData _getActionIcon() {
+    switch (_profile?.friendshipStatus) {
+      case FriendshipStatus.none:
+        return Icons.person_add;
+      case FriendshipStatus.pending:
+        return Icons.check;
+      case FriendshipStatus.requested:
+        return Icons.hourglass_empty;
+      case FriendshipStatus.friends:
+        return Icons.people;
+      case FriendshipStatus.self:
+      case null:
+        return Icons.edit;
+    }
+  }
+
+  Color _getActionButtonColor() {
+    switch (_profile?.friendshipStatus) {
+      case FriendshipStatus.none:
+        return Theme.of(context).colorScheme.primary;
+      case FriendshipStatus.pending:
+        return Colors.green;
+      case FriendshipStatus.requested:
+        return const Color(0xFFF9FAFB); // Tailwind bg-gray-50
+      case FriendshipStatus.friends:
+        return Colors.green;
+      case FriendshipStatus.self:
+      case null:
+        return Theme.of(context).colorScheme.primary;
+    }
+  }
+
+  Color _getActionButtonForegroundColor() {
+    switch (_profile?.friendshipStatus) {
+      case FriendshipStatus.requested:
+        return const Color(0xFF6B7280); // Tailwind text-gray-500 for contrast on light bg
+      case FriendshipStatus.none:
+      case FriendshipStatus.pending:
+      case FriendshipStatus.friends:
+      case FriendshipStatus.self:
+      case null:
+        return Colors.white;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+    return '${_localizedMonth(date.month, isSw: isSw)} ${date.year}';
+  }
+
+}
+
+const List<String> _monthsSw = [
+  'Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
+  'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba',
+];
+
+const List<String> _monthsEn = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+String _localizedMonth(int monthOneBased, {required bool isSw}) {
+  final i = (monthOneBased - 1).clamp(0, 11);
+  return (isSw ? _monthsSw : _monthsEn)[i];
+}
+
+/// Me page: compact quick link (Settings, Wallet, Calls). DESIGN.md §13.4 — 48dp min height.
+class _MeQuickLink extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _MeQuickLink({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 22, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.clip,
+                    textAlign: TextAlign.start,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full page wrapper for profile tab content
+class _ProfileTabPage extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String tabId;
+  final int userId;
+  final int currentUserId;
+  final bool isOwnProfile;
+  final FullProfile? profile;
+  final VoidCallback? onRefresh;
+
+  const _ProfileTabPage({
+    required this.title,
+    required this.icon,
+    required this.tabId,
+    required this.userId,
+    required this.currentUserId,
+    required this.isOwnProfile,
+    this.profile,
+    this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: Colors.grey.shade700),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
+      ),
+      body: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    switch (tabId) {
+      case 'posts':
+        return _ProfilePostsPage(
+          userId: userId,
+          currentUserId: currentUserId,
+          isOwnProfile: isOwnProfile,
+        );
+      case 'photos':
+        return PhotoGalleryWidget(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+          heroTagPrefix: 'profile_photo',
+        );
+      case 'videos':
+        return VideoGalleryWidgetScreen(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+          onUploadComplete: onRefresh,
+        );
+      case 'music':
+        return MusicGalleryWidget(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+          onUploadComplete: onRefresh,
+        );
+      case 'live':
+        return LiveGalleryWidgetScreen(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+        );
+      case 'michango':
+        return MichangoGalleryWidgetScreen(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+          onCreateCampaign: isOwnProfile
+              ? () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CreateCampaignScreen(currentUserId: userId),
+                    ),
+                  );
+                }
+              : null,
+        );
+      case 'groups':
+        return _ProfileGroupsPage(
+          userId: userId,
+          currentUserId: currentUserId,
+          isOwnProfile: isOwnProfile,
+        );
+      case 'documents':
+        return _ProfileDocumentsPage(
+          userId: userId,
+          currentUserId: currentUserId,
+          isOwnProfile: isOwnProfile,
+        );
+      case 'shop':
+        return ShopGalleryWidget(
+          userId: userId,
+          isOwnProfile: isOwnProfile,
+          onProductAdded: onRefresh,
+        );
+      // ── Finance & Money ──────────────────────────────────────────
+      case 'budget':
+        return BudgetModule(userId: userId);
+      case 'kikoba':
+        return KikobaModule(userId: userId);
+      case 'my_wallet':
+        return MyWalletModule(userId: userId);
+      case 'investments':
+        return InvestmentsModule(userId: userId);
+      case 'loans':
+        return LoansModule(userId: userId);
+
+      // ── Health & Wellness ─────────────────────────────────────────
+      case 'doctor':
+        return DoctorModule(userId: userId);
+      case 'pharmacy':
+        return PharmacyModule(userId: userId);
+      case 'insurance':
+        return InsuranceModule(userId: userId);
+      case 'fitness':
+        return FitnessModule(userId: userId);
+
+      // ── Women & Family Care ──────────────────────────────────────
+      case 'my_circle':
+        if (!isOwnProfile) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text('This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyCircleModule(userId: userId);
+      case 'my_pregnancy':
+        if (!isOwnProfile) {
+          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyPregnancyModule(userId: userId);
+      case 'my_baby':
+        if (!isOwnProfile) {
+          final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_rounded, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(isSw ? 'Taarifa hizi ni za faragha' : 'This information is private',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return MyBabyModule(userId: userId);
+      case 'family':
+        return MyFamilyModule(userId: userId);
+      case 'skincare':
+        return SkincareModule(userId: userId);
+      case 'hair_nails':
+        return HairNailsModule(userId: userId);
+
+      // ── Business (flat tabs) ────────────────────────────────────
+      // Each feature gets ALL businesses. Pages that currently take a single
+      // businessId receive the first one; they can be updated later to iterate
+      // all businesses with BusinessSectionHeader dividers.
+      case 'biz_profile':
+        return BusinessModule(userId: userId);
+      case 'biz_docs':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            BusinessDocumentsPage(userId: uid, businesses: all));
+      case 'biz_email':
+        return const EmailClientPage();
+      case 'biz_card':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            first != null ? BusinessCardPage(business: first) : const SizedBox.shrink());
+      case 'biz_quotes':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? QuotesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_invoices':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? InvoicesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_recurring':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? RecurringInvoicesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_vfd':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? VfdPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_customers':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? CustomersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_debts':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? DebtsPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_reminders':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? ReminderSettingsPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_expenses':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? ExpensesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_tax':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? TaxPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_credit':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? CreditReportPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_employees':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? EmployeesPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_payroll':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? PayrollPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_suppliers':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? SuppliersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_po':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? PurchaseOrdersPage(businessId: fId) : const SizedBox.shrink());
+      case 'biz_tenders':
+        return TendersModule(userId: userId);
+      case 'biz_appointments':
+        return BizTabWrapper(userId: userId, builder: (uid, all, first, fId) =>
+            fId != null ? AppointmentsPage(businessId: fId) : const SizedBox.shrink());
+
+      // ── Daily Life & Home ─────────────────────────────────────────
+      case 'food':
+        return FoodModule(userId: userId);
+      case 'transport':
+        return TransportModule(userId: userId);
+      case 'services':
+        return FundiModule(userId: userId);
+      case 'housing':
+        return HousingModule(userId: userId);
+      case 'bills':
+        return BillsModule(userId: userId);
+      case 'vehicle':
+        return VehicleModule(userId: userId);
+
+      // ── Planning & Productivity ───────────────────────────────────
+      case 'calendar':
+        return CalendarModule(userId: userId);
+      case 'notes':
+        return NotesModule(userId: userId);
+
+      // ── Government & Legal ────────────────────────────────────────
+      case 'government':
+        return GovernmentModule(userId: userId);
+      case 'lawyer':
+        return LawyerModule(userId: userId);
+      // Leadership
+      case 'barozi_wangu':
+        return BaroziWanguModule(userId: userId, wardId: 0);
+      case 'ofisi_mtaa':
+        return OfisiMtaaModule(userId: userId, mtaaId: 0);
+      case 'dc':
+        return DcModule(userId: userId, districtId: 0);
+      case 'rc':
+        return RcModule(userId: userId, regionId: 0);
+      case 'katiba':
+        return KatibaModule(userId: userId);
+      case 'legal_gpt':
+        return LegalGptModule(userId: userId);
+      // Government services
+      case 'nida':
+        return NidaModule(userId: userId);
+      case 'rita':
+        return RitaModule(userId: userId);
+      case 'tra':
+        return TraModule(userId: userId);
+      case 'brela':
+        return BrelaModule(userId: userId);
+      case 'passport':
+        return PassportModule(userId: userId);
+      case 'driving_licence':
+        return DrivingLicenceModule(userId: userId);
+      case 'land_office':
+        return LandOfficeModule(userId: userId);
+      case 'nhif':
+        return NhifModule(userId: userId);
+      case 'nssf':
+        return NssfModule(userId: userId);
+      case 'tanesco':
+        return TanescoModule(userId: userId);
+      case 'dawasco':
+        return DawascoModule(userId: userId);
+
+      // ── Community & Lifestyle ─────────────────────────────────────
+      case 'faith':
+        return FaithModule(userId: userId);
+      case 'community':
+        return CommunityModule(userId: userId);
+      case 'events':
+        return EventsModule(userId: userId);
+      case 'travel':
+        return TravelModule(userId: userId);
+      case 'games':
+        return GamesModule(userId: userId);
+
+      case 'friends':
+        return _ProfileFriendsPage(
+          userId: userId,
+          profile: profile,
+        );
+      case 'about':
+        return _ProfileAboutPage(
+          profile: profile,
+          isOwnProfile: isOwnProfile,
+        );
+      // ── My Cars ──
+      case 'my_cars':
+        return MyCarsModule(userId: userId);
+      case 'car_insurance':
+        return CarInsuranceModule(userId: userId);
+      case 'buy_car':
+        return BuyCarModule(userId: userId);
+      case 'fuel_delivery':
+        return FuelDeliveryModule(userId: userId);
+      case 'service_garage':
+        return ServiceGarageModule(userId: userId);
+      case 'sell_car':
+        return SellCarModule(userId: userId);
+      case 'rent_car':
+        return RentCarModule(userId: userId);
+      case 'owners_club':
+        return OwnersClubModule(userId: userId);
+      case 'spare_parts':
+        return SparePartsModule(userId: userId);
+
+      // ── Commerce + Health ──
+      case 'tajirika':
+        return TajirikaModule(userId: userId);
+      case 'ambulance':
+        return AmbulanceModule(userId: userId);
+
+      // ── Govt extra ──
+      case 'latra':
+        return LatraModule(userId: userId);
+      case 'tira':
+        return TiraModule(userId: userId);
+      case 'ewura':
+        return EwuraModule(userId: userId);
+      case 'heslb':
+        return HeslbModule(userId: userId);
+      case 'necta':
+        return NectaModule(userId: userId);
+
+      // ── Faith ──
+      case 'my_faith':
+        return MyFaithModule(userId: userId);
+      case 'biblia':
+        return BibliaModule(userId: userId);
+      case 'sala':
+        return SalaModule(userId: userId);
+      case 'fungu_la_kumi':
+        return FunguLaKumiModule(userId: userId);
+      case 'kanisa_langu':
+        return KanisaLanguModule(userId: userId);
+      case 'huduma':
+        return HudumaModule(userId: userId);
+      case 'jumuiya':
+        return JumuiyaModule(userId: userId);
+      case 'ibada':
+        return IbadaModule(userId: userId);
+      case 'shule_ya_jumapili':
+        return ShuleYaJumapiliModule(userId: userId);
+      case 'tafuta_kanisa':
+        return TafutaKanisaModule(userId: userId);
+      case 'wakati_wa_sala':
+        return WakatiWaSalaModule(userId: userId);
+      case 'qibla':
+        return QiblaModule(userId: userId);
+      case 'quran':
+        return QuranModule(userId: userId);
+      case 'kalenda_hijri':
+        return KalendaHijriModule(userId: userId);
+      case 'ramadan':
+        return RamadanModule(userId: userId);
+      case 'zaka':
+        return ZakaModule(userId: userId);
+      case 'dua':
+        return DuaModule(userId: userId);
+      case 'hadith':
+        return HadithModule(userId: userId);
+      case 'tafuta_msikiti':
+        return TafutaMsikitiModule(userId: userId);
+      case 'maulid':
+        return MaulidModule(userId: userId);
+
+      // ── Security + Lifestyle ──
+      case 'police':
+        return PoliceModule(userId: userId);
+      case 'traffic':
+        return TrafficModule(userId: userId);
+      case 'neighbourhood_watch':
+        return NeighbourhoodWatchModule(userId: userId);
+      case 'alerts':
+        return AlertsModule(userId: userId);
+      case 'nightlife':
+        return NightlifeModule(userId: userId);
+
+      // ── Education ──
+      case 'my_class':
+        return MyClassModule(userId: userId);
+      case 'timetable':
+        return TimetableModule(userId: userId);
+      case 'assignments':
+        return AssignmentsModule(userId: userId);
+      case 'class_chat':
+        return ClassChatModule(userId: userId);
+      case 'class_notes':
+        return ClassNotesModule(userId: userId);
+      case 'exam_prep':
+        return ExamPrepModule(userId: userId);
+      case 'past_papers':
+        return PastPapersModule(userId: userId);
+      case 'newton':
+        return NewtonModule(userId: userId);
+      case 'results':
+        return ResultsModule(userId: userId);
+      case 'fee_status':
+        return FeeStatusModule(userId: userId);
+      case 'library':
+        return LibraryModule(userId: userId);
+      case 'campus_news':
+        return CampusNewsModule(userId: userId);
+      case 'study_groups':
+        return StudyGroupsModule(userId: userId);
+      case 'career':
+        return CareerModule(userId: userId);
+
+      // ── New Modules ──
+      case 'my_children':
+        return MyChildrenModule(userId: userId);
+      case 'my_parents':
+        return MyParentsModule(userId: userId);
+      case 'news':
+        return NewsModule(userId: userId);
+      case 'reminders':
+        return RemindersModule(userId: userId);
+      case 'accounting':
+        return AccountingModule(userId: userId);
+
+      // ── Additional Modules ──
+      case 'appointments':
+        return AppointmentsModule(userId: userId);
+      case 'calls':
+        return CallsModule(userId: userId);
+      case 'consultations':
+        return ConsultationsModule(userId: userId);
+      case 'crb':
+        return CrbModule(userId: userId);
+      case 'customer_orders':
+        return CustomerOrdersModule(userId: userId);
+      case 'debts':
+        return DebtsModule(userId: userId);
+      case 'engagements':
+        return EngagementsModule(userId: userId);
+      case 'expenses':
+        return ExpensesModule(userId: userId);
+      case 'income':
+        return IncomeModule(userId: userId);
+      case 'invoices':
+        return InvoicesModule(userId: userId);
+      case 'orders':
+        return OrdersModule(userId: userId);
+      case 'payroll':
+        return PayrollModule(userId: userId);
+      case 'products':
+        return ProductsModule(userId: userId);
+      case 'projects':
+        return ProjectsModule(userId: userId);
+      case 'recurring':
+        return RecurringModule(userId: userId);
+      case 'revenue':
+        return RevenueModule(userId: userId);
+      case 'tax':
+        return TaxModule(userId: userId);
+      case 'team':
+        return TeamModule(userId: userId);
+      case 'transactions':
+        return TransactionsModule(userId: userId);
+      case 'biz_services':
+        return BizServicesModule(userId: userId);
+
+      // ── Recovered orphan modules ─────────────────────────────────
+      case 'mafundi':
+        return mafundi_home.MafundiHomePage(userId: userId);
+      case 'myjob':
+        return _MyJobTokenWrapper(userId: userId);
+      case 'client_directory':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? clients_v2.ClientsPage(businessId: fId)
+                : const SizedBox.shrink());
+      case 'supplier_directory':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? suppliers_v2.SuppliersPage(businessId: fId, isOwner: true)
+                : const SizedBox.shrink());
+      case 'vfd_compliance':
+        return BizTabWrapper(
+            userId: userId,
+            builder: (uid, all, first, fId) => fId != null
+                ? vfd_v2.VfdPage(businessId: fId)
+                : const SizedBox.shrink());
+
+      default:
+        // Defensive fallback for tab IDs added to ProfileTabConfig without
+        // a matching dispatcher entry. Visible only to developers; users
+        // never see unknown tab IDs because the grid only shows enabled tabs
+        // backed by config.
+        assert(false, 'ProfileScreen: no widget mapping for tabId="$tabId"');
+        final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+        return _ComingSoonTab(
+          icon: icon,
+          title: title,
+          subtitle: isSw ? 'Inakuja Hivi Karibuni' : 'Coming soon',
+          description: isSw
+              ? 'Kipengele hiki kitapatikana hivi karibuni.'
+              : 'This module is not yet available.',
+        );
+    }
+  }
+}
+
+/// Instagram-style posts grid — 3-column, 1px gaps, square thumbnails.
+///
+/// Features:
+/// - Pinned posts (up to 3) always shown first with pin icon overlay
+/// - Infinite scroll with prefetch at ~70% of current batch
+/// - Long-press peek preview with dimmed backdrop
+/// - Shimmer loading placeholders
+/// - Post type indicators (carousel, video, audio, pin)
+/// - Pull-to-refresh
+/// - Scroll-direction-aware thumbnail prefetching
+class _ProfilePostsPage extends StatefulWidget {
+  final int userId;
+  final int currentUserId;
+  final bool isOwnProfile;
+
+  const _ProfilePostsPage({
+    required this.userId,
+    required this.currentUserId,
+    required this.isOwnProfile,
+  });
+
+  @override
+  State<_ProfilePostsPage> createState() => _ProfilePostsPageState();
+}
+
+class _ProfilePostsPageState extends State<_ProfilePostsPage> {
+  final PostService _postService = PostService();
+  final ScrollController _scrollController = ScrollController();
+
+  List<Post> _posts = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _page = 1;
+  double _lastScrollOffset = 0;
+  static const int _perPage = 24; // 8 rows of 3
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadPosts();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Prefetch next page at ~70% scroll through current content.
+  void _onScroll() {
+    if (!_hasMore || _isLoadingMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (currentScroll >= maxScroll * 0.7) {
+      _loadMorePosts();
+    }
+
+    // Prefetch thumbnails for upcoming rows
+    _prefetchVisibleThumbnails();
+  }
+
+  Future<void> _loadPosts() async {
+    setState(() {
+      _isLoading = true;
+      _page = 1;
+    });
+
+    final result = await _postService.getPosts(
+      userId: widget.currentUserId,
+      profileUserId: widget.userId,
+      page: 1,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _posts = _sortWithPinnedFirst(result.posts);
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.posts.length >= _perPage;
+          _page = 2;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+
+    final result = await _postService.getPosts(
+      userId: widget.currentUserId,
+      profileUserId: widget.userId,
+      page: _page,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoadingMore = false;
+        if (result.success) {
+          // Append new posts (pinned are only in first page)
+          _posts.addAll(result.posts);
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.posts.length >= _perPage;
+          _page++;
+        }
+      });
+    }
+  }
+
+  /// Sort posts so pinned posts (up to 3) appear first, rest reverse-chronological.
+  List<Post> _sortWithPinnedFirst(List<Post> posts) {
+    final pinned = posts.where((p) => p.isPinned).take(3).toList();
+    final unpinned = posts.where((p) => !p.isPinned || !pinned.contains(p)).toList();
+    return [...pinned, ...unpinned];
+  }
+
+  /// Scroll-direction-aware prefetch: prefetches thumbnails 2-3 rows ahead
+  /// in the direction the user is scrolling. Lower priority than on-screen loads
+  /// (handled by ImagePreloader's sequential processing with delays).
+  void _prefetchVisibleThumbnails() {
+    if (!mounted || _posts.isEmpty) return;
+    final cellSize = (MediaQuery.of(context).size.width - 2) / 3;
+    if (cellSize <= 0) return;
+
+    final scrollOffset = _scrollController.position.pixels;
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final scrollingDown = scrollOffset >= _lastScrollOffset;
+    _lastScrollOffset = scrollOffset;
+
+    final rowHeight = cellSize + 1; // cell + 1px gap
+
+    if (scrollingDown) {
+      // Prefetch 3 rows below the viewport
+      final bottomRow = ((scrollOffset + viewportHeight) / rowHeight).ceil();
+      final prefetchStartIndex = (bottomRow * 3).clamp(0, _posts.length);
+      final prefetchEndIndex = ((bottomRow + 3) * 3).clamp(0, _posts.length);
+
+      if (prefetchStartIndex >= _posts.length) return;
+
+      final urls = <String?>[];
+      for (int i = prefetchStartIndex; i < prefetchEndIndex; i++) {
+        urls.add(_posts[i].thumbnailUrl);
+      }
+      ImagePreloader.precacheImages(context, urls);
+    } else {
+      // Prefetch 3 rows above the viewport
+      final topRow = (scrollOffset / rowHeight).floor();
+      final prefetchStartRow = (topRow - 3).clamp(0, (_posts.length / 3).ceil());
+      final prefetchEndRow = topRow.clamp(0, (_posts.length / 3).ceil());
+      final prefetchStartIndex = (prefetchStartRow * 3).clamp(0, _posts.length);
+      final prefetchEndIndex = (prefetchEndRow * 3).clamp(0, _posts.length);
+
+      if (prefetchStartIndex >= prefetchEndIndex) return;
+
+      final urls = <String?>[];
+      for (int i = prefetchStartIndex; i < prefetchEndIndex; i++) {
+        urls.add(_posts[i].thumbnailUrl);
+      }
+      ImagePreloader.precacheImages(context, urls);
+    }
+  }
+
+  void _onPostTap(Post post) {
+    final index = _posts.indexWhere((p) => p.id == post.id);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(
+          postId: post.id,
+          currentUserId: widget.currentUserId,
+          initialPost: post,
+          posts: _posts,
+          initialIndex: index >= 0 ? index : 0,
+        ),
+      ),
+    ).then((result) {
+      if (result == true && mounted) _loadPosts();
+    });
+  }
+
+  void _onPostLongPress(Post post) {
+    if (widget.isOwnProfile) {
+      _showPostOptionsMenu(post);
+    } else {
+      showPostPeekPreview(context, post);
+    }
+  }
+
+  void _showPostOptionsMenu(Post post) {
+    final s = AppStringsScope.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: Text(s?.edit ?? 'Edit'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _editPost(post);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                title: Text(
+                  s?.delete ?? 'Delete',
+                  style: const TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _confirmDeletePost(post);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editPost(Post post) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditPostScreen(post: post),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadPosts();
+    }
+  }
+
+  void _confirmDeletePost(Post post) {
+    final s = AppStringsScope.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(s?.deletePostConfirmTitle ?? 'Delete post'),
+          content: Text(s?.deletePostConfirmMessage ??
+              'Are you sure you want to delete this post?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(s?.cancel ?? 'Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _deletePost(post);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text(s?.delete ?? 'Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deletePost(Post post) async {
+    final result = await _postService.deletePost(
+      post.id,
+      userId: widget.currentUserId,
+    );
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        _posts.removeWhere((p) => p.id == post.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? 'Post deleted'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ??
+              AppStringsScope.of(context)?.deletePostFailed ??
+              'Failed to delete post'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Shimmer loading state
+    if (_isLoading && _posts.isEmpty) {
+      return _buildShimmerGrid(context);
+    }
+
+    // Empty state
+    if (_posts.isEmpty) {
+      return _buildEmptyState(context);
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadPosts,
+      child: CustomScrollView(
+        controller: _scrollController,
+        // Increase cache extent for smoother scrolling (pre-build ~4 rows off-screen)
+        cacheExtent: (MediaQuery.of(context).size.width / 3) * 4,
+        slivers: [
+          // Posts management header (own profile only)
+          if (widget.isOwnProfile)
+            SliverToBoxAdapter(child: _buildPostsHeader(context)),
+          // Posts grid
+          SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 1,
+              mainAxisSpacing: 1,
+              childAspectRatio: 1.0,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final post = _posts[index];
+                return PostGridCell(
+                  post: post,
+                  onTap: () => _onPostTap(post),
+                  onLongPress: () => _onPostLongPress(post),
+                );
+              },
+              childCount: _posts.length,
+              addAutomaticKeepAlives: false,
+              addRepaintBoundaries: false, // We handle RepaintBoundary in PostGridCell
+            ),
+          ),
+          // Loading more indicator
+          if (_isLoadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Shimmer placeholder grid while loading.
+  Widget _buildShimmerGrid(BuildContext context) {
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 1,
+        mainAxisSpacing: 1,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: 18, // 6 rows
+      itemBuilder: (context, index) {
+        return _ShimmerCell(index: index);
+      },
+    );
+  }
+
+  Widget _buildPostsHeader(BuildContext context) {
+    final s = AppStringsScope.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: const Color(0xFFFAFAFA),
+      child: Row(
+        children: [
+          // Post count
+          Text(
+            '${_posts.length} ${s?.post ?? 'Posts'}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const Spacer(),
+          // Create post
+          _PostsHeaderButton(
+            icon: Icons.add_rounded,
+            label: s?.createPost ?? 'Create post',
+            onTap: () async {
+              final result = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
+                ),
+              );
+              if (result == true && mounted) _loadPosts();
+            },
+          ),
+          const SizedBox(width: 8),
+          // Saved posts
+          _PostsHeaderButton(
+            icon: Icons.bookmark_outline_rounded,
+            label: s?.savedTitle ?? 'Saved',
+            onTap: () => Navigator.pushNamed(context, '/saved-posts'),
+          ),
+          const SizedBox(width: 8),
+          // Drafts
+          _PostsHeaderButton(
+            icon: Icons.edit_note_rounded,
+            label: s?.drafts ?? 'Drafts',
+            onTap: () async {
+              final result = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
+                ),
+              );
+              if (result == true && mounted) _loadPosts();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.grid_on_rounded, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            widget.isOwnProfile
+                ? (AppStringsScope.of(context)?.noPostsMe ?? "You haven't posted yet")
+                : (AppStringsScope.of(context)?.noPosts ?? 'No posts'),
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+          ),
+          if (widget.isOwnProfile) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Share your first photo or video',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () async {
+                final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
+                  ),
+                );
+                if (result == true && mounted) _loadPosts();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A1A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(AppStringsScope.of(context)?.createPostNow ?? 'Post now'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact header button for posts management toolbar.
+class _PostsHeaderButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PostsHeaderButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF1A1A1A)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Animated shimmer placeholder cell for loading grid.
+class _ShimmerCell extends StatefulWidget {
+  final int index;
+  const _ShimmerCell({required this.index});
+
+  @override
+  State<_ShimmerCell> createState() => _ShimmerCellState();
+}
+
+class _ShimmerCellState extends State<_ShimmerCell>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _animation = Tween<double>(begin: 0.04, end: 0.12).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        return Container(
+          color: Color.lerp(
+            Colors.grey.shade200,
+            Colors.grey.shade300,
+            _animation.value / 0.12,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Groups page content - full management for own profile
+class _ProfileGroupsPage extends StatefulWidget {
+  final int userId;
+  final int currentUserId;
+  final bool isOwnProfile;
+
+  const _ProfileGroupsPage({
+    required this.userId,
+    required this.currentUserId,
+    required this.isOwnProfile,
+  });
+
+  @override
+  State<_ProfileGroupsPage> createState() => _ProfileGroupsPageState();
+}
+
+class _ProfileGroupsPageState extends State<_ProfileGroupsPage> {
+  final GroupService _groupService = GroupService();
+
+  List<Group> _allGroups = [];
+  List<GroupInvitation> _invitations = [];
+  bool _isLoading = true;
+  String? _error;
+
+  // Categorized groups
+  List<Group> get _adminGroups => _allGroups.where((g) =>
+      g.userRole == 'admin' || g.creatorId == widget.currentUserId).toList();
+  List<Group> get _systemGroups => _allGroups.where((g) => g.isSystem).toList();
+  List<Group> get _memberGroups => _allGroups.where((g) =>
+      !g.isSystem &&
+      g.userRole != 'admin' &&
+      g.creatorId != widget.currentUserId).toList();
+
+  static const Color _textPrimary = Color(0xFF1A1A1A);
+  static const Color _textSecondary = Color(0xFF666666);
+  static const Color _cardBg = Color(0xFFFFFFFF);
+  static const Color _accent = Color(0xFF999999);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadGroups(),
+      if (widget.isOwnProfile) _loadInvitations(),
+    ]);
+  }
+
+  Future<void> _loadGroups() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await _groupService.getUserGroups(widget.userId);
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _allGroups = result.groups;
+        } else {
+          _error = result.message ?? 'Imeshindwa kupakia vikundi';
+        }
+      });
+    }
+  }
+
+  Future<void> _loadInvitations() async {
+    if (!mounted || !widget.isOwnProfile) return;
+
+    final result = await _groupService.getUserInvitations(widget.currentUserId);
+
+    if (mounted) {
+      setState(() {
+        if (result.success) {
+          _invitations = result.invitations;
+        }
+      });
+    }
+  }
+
+  Future<void> _handleInvitation(GroupInvitation invitation, String response) async {
+    final success = await _groupService.respondToInvitation(invitation.id, response);
+    if (mounted) {
+      final s = AppStringsScope.of(context);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response == 'accepted'
+                ? (s?.joinedGroup ?? 'Umejiunga na kikundi')
+                : (s?.declinedInvitation ?? 'Umekataa mwaliko')),
+          ),
+        );
+        _loadData(); // Refresh both groups and invitations
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s?.actionFailed ?? 'Imeshindwa. Jaribu tena.')),
+        );
+      }
+    }
+  }
+
+  void _openGroupDetail(Group group) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GroupDetailScreen(
+          groupId: group.id,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _loadData();
+    });
+  }
+
+  void _createGroup() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateGroupScreen(creatorId: widget.currentUserId),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadData();
+    }
+  }
+
+  void _discoverGroups() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GroupsScreen(currentUserId: widget.currentUserId),
+      ),
+    ).then((_) {
+      if (mounted) _loadData();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return _buildErrorState(s);
+    }
+
+    final hasAnyContent = _allGroups.isNotEmpty || _invitations.isNotEmpty;
+
+    if (!hasAnyContent) {
+      return _buildEmptyState(s);
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      color: _textPrimary,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
+          // Quick actions for own profile
+          if (widget.isOwnProfile) ...[
+            _buildQuickActions(s),
+            const SizedBox(height: 16),
+          ],
+
+          // Pending invitations section
+          if (widget.isOwnProfile && _invitations.isNotEmpty) ...[
+            _buildSectionHeader(
+              s?.groupInvitations ?? 'Mialiko',
+              Icons.mail_outline,
+              count: _invitations.length,
+              color: Colors.orange,
+            ),
+            const SizedBox(height: 8),
+            ..._invitations.map((inv) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildInvitationCard(inv, s),
+            )),
+            const SizedBox(height: 16),
+          ],
+
+          // Admin/Created groups section
+          if (_adminGroups.isNotEmpty) ...[
+            _buildSectionHeader(
+              s?.groupsICreated ?? 'Nilivyounda',
+              Icons.admin_panel_settings_outlined,
+              count: _adminGroups.length,
+            ),
+            const SizedBox(height: 8),
+            ..._adminGroups.map((group) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildGroupCard(group, s, showAdminBadge: true),
+            )),
+            const SizedBox(height: 16),
+          ],
+
+          // System groups section
+          if (_systemGroups.isNotEmpty) ...[
+            _buildSectionHeader(
+              s?.systemGroups ?? 'Vikundi vya Mfumo',
+              Icons.school_outlined,
+              count: _systemGroups.length,
+              subtitle: s?.systemGroupsSubtitle ?? 'Shule, Mahali, Mwajiri',
+            ),
+            const SizedBox(height: 8),
+            ..._systemGroups.map((group) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildGroupCard(group, s, isSystem: true),
+            )),
+            const SizedBox(height: 16),
+          ],
+
+          // Other member groups section
+          if (_memberGroups.isNotEmpty) ...[
+            _buildSectionHeader(
+              s?.otherGroups ?? 'Vikundi Vingine',
+              Icons.group_outlined,
+              count: _memberGroups.length,
+            ),
+            const SizedBox(height: 8),
+            ..._memberGroups.map((group) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildGroupCard(group, s),
+            )),
+          ],
+
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(AppStrings? s) {
+    return Row(
+      children: [
+        Expanded(
+          child: _QuickActionButton(
+            icon: Icons.add,
+            label: s?.createGroup ?? 'Unda Kikundi',
+            onTap: _createGroup,
+            isPrimary: true,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickActionButton(
+            icon: Icons.search,
+            label: s?.discoverGroups ?? 'Gundua',
+            onTap: _discoverGroups,
+            isPrimary: false,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(
+    String title,
+    IconData icon, {
+    int? count,
+    String? subtitle,
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (color ?? _textPrimary).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20, color: color ?? _textPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: _textPrimary,
+                      ),
+                    ),
+                    if (count != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (color ?? _textSecondary).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: color ?? _textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 12, color: _textSecondary),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupCard(Group group, AppStrings? s, {bool showAdminBadge = false, bool isSystem = false}) {
+    return Material(
+      color: _cardBg,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 1,
+      shadowColor: Colors.black.withOpacity(0.08),
+      child: InkWell(
+        onTap: () => _openGroupDetail(group),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Group avatar
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isSystem ? Colors.blue.shade50 : _accent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: group.coverPhotoUrl != null && group.coverPhotoUrl!.isNotEmpty
+                    ? CachedMediaImage(
+                        imageUrl: group.coverPhotoUrl!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      )
+                    : Icon(
+                        isSystem ? _getSystemGroupIcon(group.name) : Icons.group,
+                        size: 28,
+                        color: isSystem ? Colors.blue.shade400 : _textSecondary,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              // Group info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (showAdminBadge)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              s?.adminBadge ?? 'Msimamizi',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        if (isSystem)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              s?.systemBadge ?? 'Mfumo',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.people_outline, size: 14, color: _textSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          s?.membersCount(group.membersCount) ?? '${group.membersCount} wanachama',
+                          style: const TextStyle(fontSize: 12, color: _textSecondary),
+                        ),
+                        const SizedBox(width: 12),
+                        _buildPrivacyIndicator(group.privacy, s),
+                      ],
+                    ),
+                    if (group.description != null && group.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        group.description!,
+                        style: const TextStyle(fontSize: 12, color: _textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Arrow indicator
+              Icon(Icons.chevron_right, color: _accent, size: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvitationCard(GroupInvitation invitation, AppStrings? s) {
+    final group = invitation.group;
+    final inviter = invitation.inviter;
+
+    return Material(
+      color: Colors.orange.shade50,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Group avatar
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _accent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: group?.coverPhotoUrl != null && group!.coverPhotoUrl!.isNotEmpty
+                      ? CachedMediaImage(
+                          imageUrl: group.coverPhotoUrl!,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                        )
+                      : const Icon(Icons.group, size: 24, color: _textSecondary),
+                ),
+                const SizedBox(width: 12),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group?.name ?? (s?.groups ?? 'Kikundi'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        inviter != null
+                            ? (s?.invitedBy(inviter.fullName) ?? 'Umealikwa na ${inviter.fullName}')
+                            : (s?.invitedToJoin ?? 'Umealikwa kujiunga'),
+                        style: const TextStyle(fontSize: 12, color: _textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => _handleInvitation(invitation, 'rejected'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _textSecondary,
+                        side: BorderSide(color: _accent.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(s?.declineInvitation ?? 'Kataa'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: () => _handleInvitation(invitation, 'accepted'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _textPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(s?.acceptInvitation ?? 'Kubali'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyIndicator(String privacy, AppStrings? s) {
+    IconData icon;
+    String label;
+    switch (privacy) {
+      case 'private':
+        icon = Icons.lock_outline;
+        label = s?.privacyPrivate ?? 'Binafsi';
+        break;
+      case 'secret':
+        icon = Icons.visibility_off_outlined;
+        label = s?.privacySecret ?? 'Siri';
+        break;
+      default:
+        icon = Icons.public;
+        label = s?.privacyPublic ?? 'Wazi';
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: _textSecondary),
+        const SizedBox(width: 2),
+        Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary)),
+      ],
+    );
+  }
+
+  IconData _getSystemGroupIcon(String groupName) {
+    final nameLower = groupName.toLowerCase();
+    if (nameLower.contains('shule') || nameLower.contains('school') || nameLower.contains('msingi')) {
+      return Icons.school_outlined;
+    }
+    if (nameLower.contains('chuo') || nameLower.contains('university')) {
+      return Icons.account_balance_outlined;
+    }
+    if (nameLower.contains('kazi') || nameLower.contains('employer') || nameLower.contains('mwajiri')) {
+      return Icons.work_outline;
+    }
+    if (nameLower.contains('mkoa') || nameLower.contains('wilaya') || nameLower.contains('location')) {
+      return Icons.location_on_outlined;
+    }
+    return Icons.groups_outlined;
+  }
+
+  Widget _buildErrorState(AppStrings? s) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: _textSecondary),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? (s?.somethingWrong ?? 'Kuna tatizo'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: _textSecondary),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _loadData,
+                icon: const Icon(Icons.refresh),
+                label: Text(s?.retry ?? 'Jaribu tena'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(AppStrings? s) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.group_outlined, size: 64, color: _accent),
+            const SizedBox(height: 16),
+            Text(
+              s?.groups ?? 'Vikundi',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.isOwnProfile
+                  ? (s?.noGroupsYet ?? 'Hujajiunga na kikundi chochote bado')
+                  : (s?.noGroups ?? 'Hakuna vikundi'),
+              style: const TextStyle(fontSize: 14, color: _textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            if (widget.isOwnProfile) ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: _discoverGroups,
+                  icon: const Icon(Icons.search),
+                  label: Text(s?.searchGroups ?? 'Tafuta Vikundi'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _textPrimary,
+                    side: const BorderSide(color: _textPrimary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _createGroup,
+                  icon: const Icon(Icons.add),
+                  label: Text(s?.createGroup ?? 'Unda Kikundi'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _textPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Quick action button for groups page
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isPrimary;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.isPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const textPrimary = Color(0xFF1A1A1A);
+    const cardBg = Color(0xFFFFFFFF);
+
+    return Material(
+      color: isPrimary ? textPrimary : cardBg,
+      borderRadius: BorderRadius.circular(12),
+      elevation: isPrimary ? 0 : 1,
+      shadowColor: Colors.black.withOpacity(0.08),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: isPrimary
+              ? null
+              : BoxDecoration(
+                  border: Border.all(color: textPrimary.withOpacity(0.2)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isPrimary ? cardBg : textPrimary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isPrimary ? cardBg : textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Documents/Files page content - Dropbox-like file management
+class _ProfileDocumentsPage extends StatefulWidget {
+  final int userId;
+  final int currentUserId;
+  final bool isOwnProfile;
+
+  const _ProfileDocumentsPage({
+    required this.userId,
+    required this.currentUserId,
+    required this.isOwnProfile,
+  });
+
+  @override
+  State<_ProfileDocumentsPage> createState() => _ProfileDocumentsPageState();
+}
+
+class _ProfileDocumentsPageState extends State<_ProfileDocumentsPage> {
+  final FileService _fileService = FileService();
+
+  List<UserFile> _files = [];
+  List<UserFile> _recentFiles = [];
+  List<UserFile> _starredFiles = [];
+  StorageQuota? _quota;
+  bool _isLoading = true;
+  String? _error;
+
+  FileCategory _selectedCategory = FileCategory.all;
+  int? _currentFolderId;
+  String _currentPath = '/';
+  final List<_BreadcrumbItem> _breadcrumbs = [_BreadcrumbItem(name: 'Nyaraka', folderId: null, path: '/')];
+
+  static const Color _textPrimary = Color(0xFF1A1A1A);
+  static const Color _textSecondary = Color(0xFF666666);
+  static const Color _cardBg = Color(0xFFFFFFFF);
+  static const Color _accent = Color(0xFF999999);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    await Future.wait([
+      _loadFiles(),
+      if (widget.isOwnProfile) _loadRecentFiles(),
+      if (widget.isOwnProfile) _loadStarredFiles(),
+      if (widget.isOwnProfile) _loadQuota(),
+    ]);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadFiles() async {
+    final result = await _fileService.getFiles(
+      userId: widget.userId,
+      folderId: _currentFolderId,
+      path: _currentPath,
+      category: _selectedCategory,
+    );
+
+    if (mounted) {
+      setState(() {
+        if (result.success) {
+          _files = result.files;
+          _error = null; // Clear any previous error on success
+          if (result.quota != null) _quota = result.quota;
+        } else {
+          _error = result.message;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadRecentFiles() async {
+    final result = await _fileService.getRecentFiles(widget.userId, limit: 10);
+    if (mounted && result.success) {
+      setState(() => _recentFiles = result.files);
+    }
+  }
+
+  Future<void> _loadStarredFiles() async {
+    final result = await _fileService.getStarredFiles(widget.userId);
+    if (mounted && result.success) {
+      setState(() => _starredFiles = result.files);
+    }
+  }
+
+  Future<void> _loadQuota() async {
+    final quota = await _fileService.getStorageQuota(widget.userId);
+    if (mounted && quota != null) {
+      setState(() => _quota = quota);
+    }
+  }
+
+  void _navigateToFolder(UserFile folder) {
+    setState(() {
+      _currentFolderId = folder.id;
+      _currentPath = folder.path;
+      _breadcrumbs.add(_BreadcrumbItem(
+        name: folder.title,
+        folderId: folder.id,
+        path: folder.path,
+      ));
+    });
+    _loadFiles();
+  }
+
+  void _navigateToBreadcrumb(int index) {
+    if (index >= _breadcrumbs.length - 1) return;
+    setState(() {
+      final crumb = _breadcrumbs[index];
+      _currentFolderId = crumb.folderId;
+      _currentPath = crumb.path;
+      _breadcrumbs.removeRange(index + 1, _breadcrumbs.length);
+    });
+    _loadFiles();
+  }
+
+  void _onCategoryChanged(FileCategory category) {
+    setState(() => _selectedCategory = category);
+    _loadFiles();
+  }
+
+  Future<void> _uploadFile() async {
+    final s = AppStringsScope.of(context);
+
+    try {
+      // Pick files - allow documents and archives only
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          // Documents
+          'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+          'txt', 'csv', 'rtf', 'odt', 'ods', 'odp',
+          // Archives
+          'zip', 'rar', '7z', 'tar', 'gz',
+        ],
+        allowMultiple: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return; // User cancelled
+      }
+
+      // Show uploading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${s?.uploading ?? 'Inapakia'} ${result.files.length} ${s?.files ?? 'faili'}...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Upload each file
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final platformFile in result.files) {
+        if (platformFile.path == null) continue;
+
+        final file = File(platformFile.path!);
+        final uploadResult = await _fileService.uploadFile(
+          userId: widget.currentUserId,
+          file: file,
+          folderId: _currentFolderId,
+          path: _currentPath,
+          displayName: platformFile.name,
+        );
+
+        if (uploadResult.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      // Show result and refresh
+      if (mounted) {
+        String message;
+        if (failCount == 0) {
+          message = '${s?.uploadSuccess ?? 'Imepakiwa'}: $successCount ${s?.files ?? 'faili'}';
+        } else {
+          message = '${s?.uploaded ?? 'Imepakiwa'}: $successCount, ${s?.failed ?? 'Imeshindwa'}: $failCount';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+
+        _loadData(); // Refresh file list
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${s?.error ?? 'Hitilafu'}: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _createFolder() async {
+    final s = AppStringsScope.of(context);
+    final controller = TextEditingController();
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.createFolder ?? 'Unda Folda'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: s?.folderName ?? 'Jina la folda',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(s?.create ?? 'Unda'),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty) {
+      final result = await _fileService.createFolder(
+        userId: widget.currentUserId,
+        name: name,
+        parentFolderId: _currentFolderId,
+        path: _currentPath,
+      );
+
+      if (mounted) {
+        if (result.success) {
+          _loadFiles();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? 'Imeshindwa kuunda folda')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _toggleStar(UserFile file) async {
+    final result = await _fileService.toggleStar(file.id);
+    if (mounted && result.success) {
+      _loadData();
+    }
+  }
+
+  Future<void> _deleteFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.delete ?? 'Futa'),
+        content: Text('${s?.deleteConfirm ?? 'Una uhakika unataka kufuta'} "${file.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(s?.delete ?? 'Futa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await _fileService.deleteFile(file.id);
+      if (mounted) {
+        if (success) {
+          _loadData();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(s?.actionFailed ?? 'Imeshindwa')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _shareFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    final link = await _fileService.shareFile(file.id, publicLink: true);
+    if (!mounted) return;
+    if (link != null && link.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: link));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s?.linkCopied ?? 'Kiungo kimenakiliwa')),
+        );
+      }
+      SharePlus.instance.share(ShareParams(text: link));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s?.actionFailed ?? 'Imeshindwa kushiriki')),
+      );
+    }
+  }
+
+  Future<void> _renameFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    final controller = TextEditingController(text: file.title);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.rename ?? 'Badilisha jina'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Ingiza jina',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(s?.save ?? 'Hifadhi'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != file.title) {
+      final result = await _fileService.renameFile(file.id, newName);
+      if (mounted) {
+        if (result.success) {
+          _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Imefanikiwa')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? (s?.actionFailed ?? 'Imeshindwa'))),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _moveFile(UserFile file) async {
+    final s = AppStringsScope.of(context);
+    // Load root-level folders for the user
+    final result = await _fileService.getFiles(
+      userId: widget.userId,
+      path: '/',
+    );
+    if (!mounted) return;
+
+    final folders = result.success
+        ? result.files.where((f) => f.isFolder && f.id != file.id).toList()
+        : <UserFile>[];
+
+    final targetFolderId = await showDialog<int?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s?.moveTo ?? 'Hamisha'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: folders.isEmpty
+              ? Center(
+                  child: Text(
+                    'Hakuna folda',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: folders.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      // Root folder option
+                      return ListTile(
+                        leading: const Icon(Icons.folder_rounded),
+                        title: const Text('/ (Mzizi)'),
+                        onTap: () => Navigator.pop(context, 0),
+                      );
+                    }
+                    final folder = folders[index - 1];
+                    return ListTile(
+                      leading: const Icon(Icons.folder_rounded),
+                      title: Text(folder.title),
+                      onTap: () => Navigator.pop(context, folder.id),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s?.cancel ?? 'Ghairi'),
+          ),
+        ],
+      ),
+    );
+
+    if (targetFolderId != null) {
+      final moveResult = await _fileService.moveFile(
+        file.id,
+        targetFolderId: targetFolderId == 0 ? null : targetFolderId,
+        targetPath: targetFolderId == 0 ? '/' : null,
+      );
+      if (mounted) {
+        if (moveResult.success) {
+          _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Imehamishwa')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(moveResult.message ?? (s?.actionFailed ?? 'Imeshindwa'))),
+          );
+        }
+      }
+    }
+  }
+
+  void _showFileOptions(UserFile file) {
+    final s = AppStringsScope.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: _accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: Icon(file.isStarred ? Icons.star : Icons.star_border),
+              title: Text(file.isStarred
+                  ? (s?.removeFromStarred ?? 'Ondoa nyota')
+                  : (s?.addToStarred ?? 'Weka nyota')),
+              onTap: () {
+                Navigator.pop(context);
+                _toggleStar(file);
+              },
+            ),
+            if (!file.isFolder)
+              ListTile(
+                leading: const Icon(Icons.share),
+                title: Text(s?.share ?? 'Shiriki'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _shareFile(file);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: Text(s?.rename ?? 'Badilisha jina'),
+              onTap: () {
+                Navigator.pop(context);
+                _renameFile(file);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_move),
+              title: Text(s?.moveTo ?? 'Hamisha'),
+              onTap: () {
+                Navigator.pop(context);
+                _moveFile(file);
+              },
+            ),
+            if (widget.isOwnProfile)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: Text(s?.delete ?? 'Futa', style: const TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteFile(file);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _files.isEmpty) {
+      return _buildErrorState(s);
+    }
+
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadData,
+            color: _textPrimary,
+            child: CustomScrollView(
+              slivers: [
+                // Storage quota indicator (own profile only)
+                if (widget.isOwnProfile && _quota != null)
+                  SliverToBoxAdapter(child: _buildStorageIndicator(s)),
+
+                // Category filter tabs
+                SliverToBoxAdapter(child: _buildCategoryTabs(s)),
+
+                // Breadcrumbs (when in subfolder)
+                if (_breadcrumbs.length > 1)
+                  SliverToBoxAdapter(child: _buildBreadcrumbs()),
+
+                // Quick access sections (only at root and own profile)
+                if (_currentFolderId == null && widget.isOwnProfile) ...[
+                  // Recent files section
+                  if (_recentFiles.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildHorizontalSection(
+                        s?.recentFiles ?? 'Hivi Karibuni',
+                        Icons.access_time,
+                        _recentFiles.take(5).toList(),
+                      ),
+                    ),
+
+                  // Starred files section
+                  if (_starredFiles.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildHorizontalSection(
+                        s?.starredFiles ?? 'Zenye Nyota',
+                        Icons.star,
+                        _starredFiles.take(5).toList(),
+                      ),
+                    ),
+                ],
+
+                // Main file list
+                if (_files.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyState(s))
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildFileItem(_files[index]),
+                        childCount: _files.length,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // FAB for upload (own profile only)
+          if (widget.isOwnProfile)
+            Positioned(
+              right: 16,
+              bottom: 16 + bottomPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'create_folder',
+                    onPressed: _createFolder,
+                    backgroundColor: _cardBg,
+                    foregroundColor: _textPrimary,
+                    child: const Icon(Icons.create_new_folder),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton(
+                    heroTag: 'upload_file',
+                    onPressed: _uploadFile,
+                    backgroundColor: _textPrimary,
+                    foregroundColor: _cardBg,
+                    child: const Icon(Icons.upload_file),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStorageIndicator(AppStrings? s) {
+    if (_quota == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                s?.storage ?? 'Hifadhi',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _textPrimary,
+                ),
+              ),
+              Text(
+                '${_quota!.formattedUsed} / ${_quota!.formattedTotal}',
+                style: const TextStyle(fontSize: 12, color: _textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _quota!.usagePercent / 100,
+              backgroundColor: _accent.withOpacity(0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _quota!.usagePercent > 90 ? Colors.red : _textPrimary,
+              ),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${_quota!.fileCount} ${s?.filesCount ?? 'faili'} | ${_quota!.folderCount} ${s?.foldersCount ?? 'folda'}',
+            style: const TextStyle(fontSize: 11, color: _textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabs(AppStrings? s) {
+    final categories = [
+      (FileCategory.all, s?.allFiles ?? 'Zote', Icons.folder),
+      (FileCategory.document, s?.documents ?? 'Nyaraka', Icons.description),
+      (FileCategory.archive, s?.archives ?? 'Kumbukumbu', Icons.archive),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: categories.map((cat) {
+          final isSelected = _selectedCategory == cat.$1;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              selected: isSelected,
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(cat.$3, size: 16),
+                  const SizedBox(width: 4),
+                  Text(cat.$2),
+                ],
+              ),
+              onSelected: (_) => _onCategoryChanged(cat.$1),
+              selectedColor: _textPrimary.withOpacity(0.15),
+              checkmarkColor: _textPrimary,
+              labelStyle: TextStyle(
+                color: isSelected ? _textPrimary : _textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbs() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: _breadcrumbs.asMap().entries.map((entry) {
+          final index = entry.key;
+          final crumb = entry.value;
+          final isLast = index == _breadcrumbs.length - 1;
+
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: isLast ? null : () => _navigateToBreadcrumb(index),
+                child: Text(
+                  crumb.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isLast ? FontWeight.w600 : FontWeight.normal,
+                    color: isLast ? _textPrimary : _textSecondary,
+                  ),
+                ),
+              ),
+              if (!isLast) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right, size: 16, color: _textSecondary),
+                const SizedBox(width: 4),
+              ],
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildHorizontalSection(String title, IconData icon, List<UserFile> files) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: _textSecondary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: files.length,
+            itemBuilder: (context, index) => _buildCompactFileCard(files[index]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactFileCard(UserFile file) {
+    return GestureDetector(
+      onTap: () {
+        if (file.isFolder) {
+          _navigateToFolder(file);
+        }
+        // Else open file preview
+      },
+      onLongPress: () => _showFileOptions(file),
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: _getFileColor(file).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: file.thumbnailUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CachedMediaImage(
+                        imageUrl: file.thumbnailUrl!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Icon(
+                      _getFileIcon(file),
+                      size: 28,
+                      color: _getFileColor(file),
+                    ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              file.title,
+              style: const TextStyle(fontSize: 11, color: _textPrimary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileItem(UserFile file) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () {
+            if (file.isFolder) {
+              _navigateToFolder(file);
+            }
+            // Else open file preview
+          },
+          onLongPress: () => _showFileOptions(file),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // File icon/thumbnail
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _getFileColor(file).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: file.thumbnailUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: CachedMediaImage(
+                            imageUrl: file.thumbnailUrl!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Icon(
+                          _getFileIcon(file),
+                          size: 24,
+                          color: _getFileColor(file),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                // File info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              file.title,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: _textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (file.isStarred)
+                            const Icon(Icons.star, size: 16, color: Colors.amber),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        file.isFolder
+                            ? _formatDate(file.updatedAt)
+                            : '${file.formattedSize} • ${_formatDate(file.updatedAt)}',
+                        style: const TextStyle(fontSize: 12, color: _textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                // More options
+                IconButton(
+                  icon: const Icon(Icons.more_vert, color: _textSecondary),
+                  onPressed: () => _showFileOptions(file),
+                  iconSize: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _getFileIcon(UserFile file) {
+    if (file.isFolder) return Icons.folder;
+
+    switch (file.category) {
+      case FileCategory.document:
+        final ext = file.extension;
+        if (ext == 'pdf') return Icons.picture_as_pdf;
+        if (['doc', 'docx'].contains(ext)) return Icons.description;
+        if (['xls', 'xlsx'].contains(ext)) return Icons.table_chart;
+        if (['ppt', 'pptx'].contains(ext)) return Icons.slideshow;
+        if (['txt', 'md', 'rtf'].contains(ext)) return Icons.article;
+        return Icons.description;
+      case FileCategory.archive:
+        return Icons.archive;
+      case FileCategory.all:
+      case FileCategory.other:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  Color _getFileColor(UserFile file) {
+    if (file.isFolder) return Colors.amber.shade700;
+
+    switch (file.category) {
+      case FileCategory.document:
+        final ext = file.extension;
+        if (ext == 'pdf') return Colors.red.shade700;
+        if (['doc', 'docx'].contains(ext)) return Colors.blue;
+        if (['xls', 'xlsx'].contains(ext)) return Colors.green.shade700;
+        if (['ppt', 'pptx'].contains(ext)) return Colors.orange;
+        return Colors.blueGrey;
+      case FileCategory.archive:
+        return Colors.brown;
+      case FileCategory.all:
+      case FileCategory.other:
+        return _textSecondary;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays == 0) {
+      return 'Leo';
+    } else if (diff.inDays == 1) {
+      return 'Jana';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays} siku zilizopita';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+
+  Widget _buildErrorState(AppStrings? s) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: _textSecondary),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? (s?.somethingWrong ?? 'Kuna tatizo'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: _textSecondary),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: Text(s?.retry ?? 'Jaribu tena'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(AppStrings? s) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _currentFolderId != null ? Icons.folder_open : Icons.cloud_upload_outlined,
+              size: 64,
+              color: _accent,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _currentFolderId != null
+                  ? (s?.emptyFolder ?? 'Folda tupu')
+                  : (s?.noFiles ?? 'Hakuna faili'),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.isOwnProfile
+                  ? (s?.uploadFilesHint ?? 'Bonyeza + kupakia faili')
+                  : (s?.noData ?? 'Hakuna data'),
+              style: const TextStyle(fontSize: 14, color: _textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Breadcrumb item for folder navigation
+class _BreadcrumbItem {
+  final String name;
+  final int? folderId;
+  final String path;
+
+  _BreadcrumbItem({
+    required this.name,
+    required this.folderId,
+    required this.path,
+  });
+}
+
+/// Friends page content
+class _ProfileFriendsPage extends StatefulWidget {
+  final int userId;
+  final FullProfile? profile;
+
+  const _ProfileFriendsPage({
+    required this.userId,
+    this.profile,
+  });
+
+  @override
+  State<_ProfileFriendsPage> createState() => _ProfileFriendsPageState();
+}
+
+class _ProfileFriendsPageState extends State<_ProfileFriendsPage> {
+  final FriendService _friendService = FriendService();
+  final ScrollController _scrollController = ScrollController();
+
+  List<UserProfile> _friends = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _page = 1;
+  static const int _perPage = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadFriends();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoadingMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (currentScroll >= maxScroll * 0.7) {
+      _loadMoreFriends();
+    }
+  }
+
+  Future<void> _loadFriends() async {
+    setState(() {
+      _isLoading = true;
+      _page = 1;
+    });
+
+    final result = await _friendService.getFriends(
+      userId: widget.userId,
+      page: 1,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result.success) {
+          _friends = result.friends;
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.friends.length >= _perPage;
+          _page = 2;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadMoreFriends() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+
+    final result = await _friendService.getFriends(
+      userId: widget.userId,
+      page: _page,
+      perPage: _perPage,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoadingMore = false;
+        if (result.success) {
+          _friends.addAll(result.friends);
+          final meta = result.meta;
+          _hasMore = meta != null
+              ? meta.currentPage < meta.lastPage
+              : result.friends.length >= _perPage;
+          _page++;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_friends.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Hakuna marafiki',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadFriends,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _friends.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _friends.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final friend = _friends[index];
+          return ListTile(
+            leading: CircleAvatar(
+              radius: 24,
+              backgroundImage: friend.profilePhotoUrl != null
+                  ? NetworkImage(friend.profilePhotoUrl!)
+                  : null,
+              child: friend.profilePhotoUrl == null
+                  ? Text(
+                      friend.fullName.isNotEmpty
+                          ? friend.fullName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : null,
+            ),
+            title: Text(
+              friend.fullName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: friend.location.isNotEmpty
+                ? Text(
+                    friend.location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  )
+                : null,
+            onTap: () {
+              Navigator.pushNamed(context, '/profile/${friend.id}');
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// About page content
+class _ProfileAboutPage extends StatelessWidget {
+  final FullProfile? profile;
+  final bool isOwnProfile;
+
+  const _ProfileAboutPage({
+    this.profile,
+    required this.isOwnProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (profile == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Personal Info
+          _buildSection(
+            context,
+            title: 'Taarifa Binafsi',
+            icon: Icons.person,
+            children: [
+              if (profile?.dateOfBirth != null)
+                _buildRow('Tarehe ya Kuzaliwa', _formatFullDate(profile!.dateOfBirth!, isSw: isSw)),
+              if (profile?.genderLabel != null)
+                _buildRow('Jinsia', profile!.genderLabel!),
+              if (profile?.relationshipStatusLabel != null)
+                _buildRow('Hali ya Uhusiano', profile!.relationshipStatusLabel!),
+              if (profile?.phoneNumber != null)
+                _buildRow('Simu', profile!.phoneNumber!),
+            ],
+          ),
+
+          // Location
+          if (profile?.location != null) ...[
+            const SizedBox(height: 16),
+            _buildSection(
+              context,
+              title: 'Mahali',
+              icon: Icons.location_on,
+              children: [
+                if (profile!.location!.regionName != null)
+                  _buildRow('Mkoa', profile!.location!.regionName!),
+                if (profile!.location!.districtName != null)
+                  _buildRow('Wilaya', profile!.location!.districtName!),
+                if (profile!.location!.wardName != null)
+                  _buildRow('Kata', profile!.location!.wardName!),
+              ],
+            ),
+          ],
+
+          // Education
+          if (profile?.hasEducation == true) ...[
+            const SizedBox(height: 16),
+            _buildSection(
+              context,
+              title: 'Elimu',
+              icon: Icons.school,
+              children: [
+                if (profile?.universityEducation != null)
+                  _buildEducationItem(
+                    'Chuo Kikuu',
+                    profile!.universityEducation!.universityName ?? '',
+                    profile!.universityEducation!.programmeName,
+                  ),
+                if (profile?.secondarySchool != null)
+                  _buildEducationItem(
+                    'Sekondari',
+                    profile!.secondarySchool!.schoolName ?? '',
+                    null,
+                  ),
+                if (profile?.primarySchool != null)
+                  _buildEducationItem(
+                    'Msingi',
+                    profile!.primarySchool!.schoolName ?? '',
+                    null,
+                  ),
+              ],
+            ),
+          ],
+
+          // Career
+          if (profile?.currentEmployer != null) ...[
+            const SizedBox(height: 16),
+            _buildSection(
+              context,
+              title: 'Kazi',
+              icon: Icons.work,
+              children: [
+                _buildRow(
+                  profile!.currentEmployer!.jobTitle ?? 'Kazi',
+                  profile!.currentEmployer!.employerName ?? '',
+                ),
+              ],
+            ),
+          ],
+
+          // Account
+          const SizedBox(height: 16),
+          _buildSection(
+            context,
+            title: 'Akaunti',
+            icon: Icons.info_outline,
+            children: [
+              _buildRow(
+                'Alijiunga',
+                _formatFullDate(profile?.createdAt ?? DateTime.now(), isSw: isSw),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    final nonEmpty = children.where((w) => w is! SizedBox || (w.height ?? 0) > 0).toList();
+    if (nonEmpty.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ...nonEmpty,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+          const SizedBox(width: 16),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEducationItem(String level, String institution, String? detail) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(level, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(institution, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+          if (detail != null) ...[
+            const SizedBox(height: 2),
+            Text(detail, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatFullDate(DateTime date, {required bool isSw}) {
+    return '${date.day} ${_localizedMonth(date.month, isSw: isSw)} ${date.year}';
+  }
+}
+
+/// Placeholder tab for features coming soon.
+class _ComingSoonTab extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String description;
+
+  const _ComingSoonTab({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 48, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A).withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Inakuja Hivi Karibuni',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Loads the user's auth token then renders the orphan-recovery [MyJobPage].
+/// MyJobPage requires the token as a constructor argument; this thin wrapper
+/// fetches it from [LocalStorageService] so the dispatcher case stays clean.
+class _MyJobTokenWrapper extends StatelessWidget {
+  final int userId;
+
+  const _MyJobTokenWrapper({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: () async {
+        final storage = await LocalStorageService.getInstance();
+        return storage.getAuthToken();
+      }(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final token = snap.data;
+        if (token == null || token.isEmpty) {
+          return const Center(child: Text('Sijaingia'));
+        }
+        return myjob_home.MyJobPage(token: token);
+      },
+    );
+  }
+}

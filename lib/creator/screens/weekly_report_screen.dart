@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/payment_models.dart';
-import '../../services/creator_service.dart';
+import '../services/creator_service.dart';
 import '../../l10n/app_strings_scope.dart';
 
 class WeeklyReportScreen extends StatefulWidget {

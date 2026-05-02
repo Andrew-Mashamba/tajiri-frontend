@@ -554,6 +554,27 @@ class FcmService {
       _openMyBaby(data, navigator);
       return;
     }
+    // Security notifications — login alerts, password/PIN changes, 2FA
+    // toggles, biometric events, session revocations. All land on the
+    // Security activity feed so the user can see the full timeline.
+    if (type == 'security_alert' ||
+        type == 'login_alert' ||
+        type == 'login' ||
+        type == 'password_changed' ||
+        type == 'pin_changed' ||
+        type == '2fa_enabled' ||
+        type == '2fa_disabled' ||
+        type == '2fa_recovery_regen' ||
+        type == 'app_lock_changed' ||
+        type == 'session_revoked' ||
+        type == 'sessions_revoked_all' ||
+        type == 'biometric_enrolled' ||
+        type == 'biometric_login_success' ||
+        type == 'biometric_login_failed' ||
+        type == 'biometric_revoked') {
+      _openSecurityActivity(data, navigator);
+      return;
+    }
     // Budget notifications — navigate to home with budget tab hint
     if (type == 'budget_alert' ||
         type == 'budget_envelope_warning' ||
@@ -569,6 +590,16 @@ class FcmService {
   void _openBudget(Map<String, dynamic> data, NavigatorState navigator) {
     if (navigator.mounted) {
       navigator.pushNamed('/home', arguments: {'tab': 'budget'});
+    }
+  }
+
+  /// Opens the Security activity feed. Security-relevant pushes (login
+  /// alerts, password/PIN changes, 2FA toggles, biometric events,
+  /// session revocations) all land here so the user sees one unified
+  /// timeline.
+  void _openSecurityActivity(Map<String, dynamic> data, NavigatorState navigator) {
+    if (navigator.mounted) {
+      navigator.pushNamed('/settings/security/activity');
     }
   }
 

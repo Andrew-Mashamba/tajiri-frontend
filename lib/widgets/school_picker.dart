@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../l10n/app_strings_scope.dart';
 import '../models/school_models.dart';
 import '../services/school_service.dart';
 
@@ -242,19 +243,33 @@ class _SchoolPickerState extends State<SchoolPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+    // Once a school is picked, collapse all the input UI and show only
+    // the selected card. Tapping its X clears the selection and reopens
+    // the inputs (the close button calls _clearSelection() which nulls
+    // _selectedSchool, flipping the conditional below).
+    if (_selectedSchool != null) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [_buildSelectedSchoolChip()],
+        ),
+      );
+    }
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Toggle: Chagua (browse) / Tafuta (search) — min 48dp height
+          // Browse / Search toggle — min 48dp height
           SizedBox(
             height: 48,
             child: Row(
               children: [
                 Expanded(
                   child: _SegmentTap(
-                    label: 'Chagua',
+                    label: s?.pickerBrowse ?? 'Browse',
                     icon: Icons.list_rounded,
                     selected: !_useSearch,
                     onTap: () {
@@ -267,7 +282,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
                 ),
                 Expanded(
                   child: _SegmentTap(
-                    label: 'Tafuta',
+                    label: s?.pickerSearch ?? 'Search',
                     icon: Icons.search_rounded,
                     selected: _useSearch,
                     onTap: () {
@@ -318,27 +333,23 @@ class _SchoolPickerState extends State<SchoolPicker> {
                 ),
               ),
             ),
-
-          if (_selectedSchool != null) ...[
-            const SizedBox(height: 16),
-            _buildSelectedSchoolChip(),
-          ],
         ],
       ),
     );
   }
 
   Widget _buildSearchField() {
+    final s = AppStringsScope.of(context);
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        labelText: 'Tafuta shule',
-        hintText: 'Andika jina la shule au code',
+        labelText: s?.pickerSearchSchoolField ?? 'Search schools',
+        hintText: s?.pickerSearchSchoolHint ?? 'Type school name or code',
         hintStyle: const TextStyle(color: _secondaryText, fontSize: 14),
         prefixIcon: const Icon(Icons.search, color: _primaryText, size: 24),
         suffixIcon: _searchQuery.isNotEmpty
             ? Semantics(
-                label: 'Futa maandishi',
+                label: s?.pickerClearText ?? 'Clear text',
                 child: IconButton(
                   icon: const Icon(Icons.clear, color: _primaryText),
                   onPressed: () {
@@ -368,13 +379,14 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildSearchFilters() {
+    final s = AppStringsScope.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
         children: [
           Expanded(
             child: _buildFilterDropdown<SchoolRegion>(
-              label: 'Mkoa',
+              label: s?.regionLabel ?? 'Region',
               value: _filterRegion,
               items: _regions,
               itemLabel: (r) => r.region,
@@ -394,7 +406,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildFilterDropdown<SchoolDistrict>(
-              label: 'Wilaya',
+              label: s?.districtLabel ?? 'District',
               value: _filterDistrict,
               items: _filterDistricts,
               itemLabel: (d) => d.district,
@@ -527,6 +539,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildRetryMessage() {
+    final s = AppStringsScope.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -544,10 +557,11 @@ class _SchoolPickerState extends State<SchoolPicker> {
               children: [
                 const Icon(Icons.cloud_off_outlined, color: _secondaryText),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Imeshindwa kupakua mikoa. Gusa kujaribu tena.',
-                    style: TextStyle(
+                    s?.pickerErrLoadRegionsTap ??
+                        'Could not load regions. Tap to try again.',
+                    style: const TextStyle(
                       fontSize: 13,
                       color: _secondaryText,
                     ),
@@ -556,7 +570,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
                   ),
                 ),
                 Semantics(
-                  label: 'Jaribu tena',
+                  label: s?.pickerTryAgain ?? 'Try again',
                   child: IconButton(
                     icon: const Icon(Icons.refresh, color: _primaryText),
                     onPressed: _loadRegions,
@@ -574,9 +588,11 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildRegionDropdown() {
+    final s = AppStringsScope.of(context);
     return _buildDropdown<SchoolRegion>(
-      label: 'Mkoa',
-      hint: 'Chagua mkoa',
+      label: s?.regionLabel ?? 'Region',
+      hint: s?.pickerSelectRegion ?? 'Select region',
+      icon: Icons.map_outlined,
       value: _selectedRegion,
       items: _regions,
       itemLabel: (r) => '${r.region} (${r.schoolCount})',
@@ -595,9 +611,11 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildDistrictDropdown() {
+    final s = AppStringsScope.of(context);
     return _buildDropdown<SchoolDistrict>(
-      label: 'Wilaya',
-      hint: 'Chagua wilaya',
+      label: s?.districtLabel ?? 'District',
+      hint: s?.pickerSelectDistrict ?? 'Select district',
+      icon: Icons.location_city_outlined,
       value: _selectedDistrict,
       items: _districts,
       enabled: _selectedRegion != null,
@@ -615,9 +633,11 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildSchoolDropdown() {
+    final s = AppStringsScope.of(context);
     return _buildDropdown<School>(
-      label: 'Shule',
-      hint: 'Chagua shule',
+      label: s?.pickerSchool ?? 'School',
+      hint: s?.pickerSelectSchool ?? 'Select school',
+      icon: Icons.school_outlined,
       value: _selectedSchool,
       items: _schools,
       enabled: _selectedDistrict != null,
@@ -633,6 +653,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
   Widget _buildDropdown<T>({
     required String label,
     required String hint,
+    required IconData icon,
     required T? value,
     required List<T> items,
     required String Function(T) itemLabel,
@@ -645,15 +666,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: _secondaryText, fontSize: 12),
-        prefixIcon: Icon(
-          label == 'Mkoa'
-              ? Icons.map_outlined
-              : label == 'Wilaya'
-                  ? Icons.location_city_outlined
-                  : Icons.school_outlined,
-          color: _primaryText,
-          size: 24,
-        ),
+        prefixIcon: Icon(icon, color: _primaryText, size: 24),
         filled: true,
         fillColor: enabled ? Colors.white : _background,
         border: OutlineInputBorder(
@@ -725,7 +738,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
             ),
           ),
           Semantics(
-            label: 'Ondoa uchaguzi',
+            label: AppStringsScope.of(context)?.pickerClearSelection ?? 'Clear selection',
             child: IconButton(
               icon: const Icon(Icons.close, color: _primaryText),
               onPressed: _clearSelection,
@@ -740,6 +753,7 @@ class _SchoolPickerState extends State<SchoolPicker> {
   }
 
   Widget _buildTypeChip(String type) {
+    final s = AppStringsScope.of(context);
     final isGovernment = type == 'government';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -750,7 +764,9 @@ class _SchoolPickerState extends State<SchoolPicker> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        isGovernment ? 'Serikali' : 'Binafsi',
+        isGovernment
+            ? (s?.pickerOwnershipGovernment ?? 'Government')
+            : (s?.pickerOwnershipPrivate ?? 'Private'),
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,

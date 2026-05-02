@@ -190,6 +190,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (mounted) {
       final s = AppStringsScope.of(context);
+      ProfileService.invalidate(widget.currentUserId);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s?.profileSaved ?? 'Profile saved')),
       );

@@ -1,22 +1,20 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../../config/api_config.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/theme_notifier.dart';
 import '../../services/language_notifier.dart';
-import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../profile/edit_profile_screen.dart';
 import 'profile_tabs_settings_screen.dart';
 import 'username_settings_screen.dart';
-import 'about_screen.dart';
+import 'email_settings_screen.dart';
+import 'location_settings_screen.dart';
+import 'education_settings_screen.dart';
+import 'work_settings_screen.dart';
 import 'privacy_settings_screen.dart';
-import 'two_factor_screen.dart';
-import 'account_protection_screen.dart';
+import 'security/security_settings_screen.dart';
 import 'notification_settings_screen.dart';
-import 'chat_bridges_screen.dart';
+import '../../creator/screens/settings_screen.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
@@ -43,12 +41,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoadingTheme = true;
   bool _darkMode = false;
   bool _isSwahili = true;
+  bool _isDeleting = false;
+  // Sentinel error key — mapped to bilingual text in `_localizedError`.
+  // Replaces all SnackBars per ENGINEERING_PLAYBOOK.md → Inline feedback.
+  String? _formError;
 
-  // Creator opt-out toggles
-  bool _optOutSponsored = false;
-  bool _optOutCollaboration = false;
-  bool _optOutBattles = false;
-  bool _optOutThreads = false;
+  // Creator opt-out toggles moved to lib/screens/profile/creator_settings_screen.dart
+  // (single canonical home; this Settings screen now links to it via a tile).
 
   @override
   void initState() {
@@ -62,10 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _darkMode = storage.getThemeMode() == ThemeMode.dark;
         _isSwahili = storage.getLanguageCode() == 'sw';
-        _optOutSponsored = storage.getBool('opt_out_sponsored') ?? false;
-        _optOutCollaboration = storage.getBool('opt_out_collaboration') ?? false;
-        _optOutBattles = storage.getBool('opt_out_battles') ?? false;
-        _optOutThreads = storage.getBool('opt_out_threads') ?? false;
         _isLoadingTheme = false;
       });
     }
@@ -79,17 +74,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ThemeNotifier.setThemeMode(mode);
   }
 
-  Future<void> _syncPreference(String key, bool value) async {
-    final storage = await LocalStorageService.getInstance();
-    final token = storage.getAuthToken();
-    if (token == null) return;
-    try {
-      await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/users/${widget.currentUserId}/preferences'),
-        headers: {...ApiConfig.authHeaders(token), 'Content-Type': 'application/json'},
-        body: jsonEncode({key: value}),
-      );
-    } catch (_) {}
+  String _localizedError(String? key, AppStrings s) {
+    switch (key) {
+      case 'sync_failed':
+        return s.preferenceSyncFailed;
+      case 'biometric_failed':
+        return s.biometricFailure;
+      case 'delete_failed':
+        return s.deleteAccountFailure;
+      default:
+        return key ?? '';
+    }
   }
 
   @override
@@ -102,7 +97,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
     final languageLabel = _isSwahili ? s.languageSwahili : s.languageEnglish;
-    return Scaffold(
+    return GestureDetector(
+      // Tap outside the inline banner / lists dismisses any focused field
+      // (defence-in-depth — Settings has no TextField today, but this
+      // matches the playbook page-chrome rule for every screen).
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: _backgroundColor,
       appBar: TajiriAppBar(
         title: s.settings,
@@ -110,16 +111,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_formError != null) _buildInlineErrorBanner(s),
               _buildSectionHeader(s.account),
               _buildSettingsTile(
                 icon: Icons.person,
                 title: s.profile,
                 subtitle: s.editProfileSubtitle,
                 onTap: () => _navigateToEditProfile(),
+              ),
+              _buildSettingsTile(
+                icon: Icons.email_outlined,
+                title: s.email,
+                subtitle: s.editEmailTitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EmailSettingsScreen(currentUserId: widget.currentUserId),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.location_on_outlined,
+                title: s.location,
+                subtitle: s.editLocationTitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LocationSettingsScreen(currentUserId: widget.currentUserId),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.school_outlined,
+                title: s.aboutEducationSection,
+                subtitle: s.editEducationTitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EducationSettingsScreen(currentUserId: widget.currentUserId),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.work_outline,
+                title: s.aboutWorkSection,
+                subtitle: s.editWorkTitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => WorkSettingsScreen(currentUserId: widget.currentUserId),
+                    ),
+                  );
+                },
               ),
               _buildSettingsTile(
                 icon: Icons.alternate_email,
@@ -149,27 +204,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 },
               ),
-              _buildSettingsTile(
-                icon: Icons.info_outline_rounded,
-                title: 'Kuhusu',
-                subtitle: 'Taarifa zako zote za usajili',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AboutScreen(
-                        currentUserId: widget.currentUserId,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
               _buildSectionHeader(s.notifications),
               _buildSettingsTile(
                 icon: Icons.notifications_outlined,
-                title: 'Arifa',
-                subtitle: 'Dhibiti arifa za ujumbe, simu, na zaidi',
+                title: s.notifications,
+                subtitle: s.notificationsSubtitle,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -199,96 +238,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSettingsTile(
                 icon: Icons.security,
                 title: s.security,
-                subtitle: s.securitySubtitle,
+                subtitle: s.usalamaHomeSubtitle,
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => TwoFactorScreen(
+                      builder: (_) => SecuritySettingsScreen(
                         currentUserId: widget.currentUserId,
                       ),
                     ),
                   );
                 },
               ),
-              _buildSettingsTile(
-                icon: Icons.shield_outlined,
-                title: 'Account Protection',
-                subtitle: 'Login alerts & active sessions',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AccountProtectionScreen(
-                        currentUserId: widget.currentUserId,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              _buildSettingsTile(
-                icon: Icons.hub_rounded,
-                title: 'Madaraja ya mazungumzo',
-                subtitle: 'Matrix, RCS, SMS, Barua pepe',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatBridgesScreen(
-                        currentUserId: widget.currentUserId,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
               _buildSectionHeader(s.creatorSettings),
-              _buildSwitchTile(
-                icon: Icons.campaign_rounded,
-                title: s.optOutSponsored,
-                subtitle: s.starLegendOnly,
-                value: _optOutSponsored,
-                onChanged: (value) async {
-                  setState(() => _optOutSponsored = value);
-                  final storage = await LocalStorageService.getInstance();
-                  await storage.saveBool('opt_out_sponsored', value);
-                  _syncPreference('opt_out_sponsored', value);
-                },
-              ),
-              _buildSwitchTile(
-                icon: Icons.people_rounded,
-                title: s.optOutCollaboration,
-                subtitle: s.collaborationRadar,
-                value: _optOutCollaboration,
-                onChanged: (value) async {
-                  setState(() => _optOutCollaboration = value);
-                  final storage = await LocalStorageService.getInstance();
-                  await storage.saveBool('opt_out_collaboration', value);
-                  _syncPreference('opt_out_collaboration', value);
-                },
-              ),
-              _buildSwitchTile(
-                icon: Icons.sports_mma_rounded,
-                title: s.optOutBattles,
-                subtitle: s.creatorBattles,
-                value: _optOutBattles,
-                onChanged: (value) async {
-                  setState(() => _optOutBattles = value);
-                  final storage = await LocalStorageService.getInstance();
-                  await storage.saveBool('opt_out_battles', value);
-                  _syncPreference('opt_out_battles', value);
-                },
-              ),
-              _buildSwitchTile(
-                icon: Icons.forum_rounded,
-                title: s.optOutThreads,
-                subtitle: s.trendingThreads,
-                value: _optOutThreads,
-                onChanged: (value) async {
-                  setState(() => _optOutThreads = value);
-                  final storage = await LocalStorageService.getInstance();
-                  await storage.saveBool('opt_out_threads', value);
-                  _syncPreference('opt_out_threads', value);
+              _buildSettingsTile(
+                icon: Icons.auto_awesome_rounded,
+                title: s.creatorSettings,
+                subtitle: s.isSwahili
+                    ? 'Mialiko, mashindano, ushirikiano, na ulinganishi'
+                    : 'Invites, battles, collaboration, and matching',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreatorSettingsScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
                 },
               ),
 
@@ -304,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 24),
               _buildActionButton(
                 icon: Icons.devices,
-                label: 'Toka kwenye vifaa vyote',
+                label: s.logoutAllDevices,
                 isDestructive: true,
                 onPressed: () => _showLogoutAllDevicesDialog(s),
               ),
@@ -335,6 +312,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  Widget _buildInlineErrorBanner(AppStrings s) {
+    final message = _localizedError(_formError, s);
+    if (message.isEmpty) return const SizedBox.shrink();
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          border: Border.all(color: Colors.red.shade200),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, size: 20, color: Colors.red),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 13, color: Colors.red),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Semantics(
+              label: s.close,
+              button: true,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18, color: Colors.red),
+                onPressed: () => setState(() => _formError = null),
+                style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -360,7 +378,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
+      child: Semantics(
+        button: true,
+        label: '$title. $subtitle',
+        child: MergeSemantics(
+          child: Material(
         color: _cardBackground,
         borderRadius: BorderRadius.circular(16),
         elevation: 2,
@@ -419,6 +441,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+        ),
+      ),
     );
   }
 
@@ -431,7 +455,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
+      child: Semantics(
+        toggled: value,
+        label: '$title. $subtitle',
+        child: MergeSemantics(
+          child: Material(
         color: _cardBackground,
         borderRadius: BorderRadius.circular(16),
         elevation: 2,
@@ -489,6 +517,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
@@ -635,8 +665,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(s.logoutConfirmTitle),
-        content: const Text(
-            'Utatolewa kwenye vifaa vyote vilivyoingia akaunti yako.'),
+        content: Text(s.logoutAllDevicesMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -693,44 +722,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Thibitisha ni wewe kubadilisha mipangilio ya akaunti',
     );
     if (!authorized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Uthibitisho umeshindwa')),
-        );
-      }
+      // Per ENGINEERING_PLAYBOOK: no SnackBars. Surface inline at the
+      // top of the page so the user has time to read it.
+      if (mounted) setState(() => _formError = 'biometric_failed');
       return;
     }
 
     if (!mounted) return;
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(s.deleteAccountConfirmTitle),
-        content: Text(s.deleteAccountConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(s.no),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final success = await UserService().deleteAccount(widget.currentUserId);
-              if (!mounted) return;
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(s.deleteAccountRequestSent)),
-                );
-                await _logout();
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Imeshindwa kufuta akaunti')),
-                );
-              }
-            },
-            child: Text(s.delete, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(s.deleteAccountConfirmTitle),
+          content: Text(s.deleteAccountConfirmMessage),
+          actions: [
+            TextButton(
+              onPressed: _isDeleting ? null : () => Navigator.pop(ctx),
+              child: Text(s.no),
+            ),
+            TextButton(
+              onPressed: _isDeleting
+                  ? null
+                  : () async {
+                      setDialogState(() {});
+                      setState(() => _isDeleting = true);
+                      final success = await UserService().deleteAccount(widget.currentUserId);
+                      if (!mounted) return;
+                      setState(() => _isDeleting = false);
+                      if (success) {
+                        // Pop dialog, then navigation away (logout to login
+                        // screen) IS the confirmation. No SnackBar.
+                        if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                        await _logout();
+                      } else {
+                        // Pop dialog, surface inline error on the Settings page.
+                        if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                        if (mounted) setState(() => _formError = 'delete_failed');
+                      }
+                    },
+              child: _isDeleting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.red,
+                      ),
+                    )
+                  : Text(s.delete, style: const TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
       ),
     );
   }

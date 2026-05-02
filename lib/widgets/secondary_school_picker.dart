@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_strings_scope.dart';
 import '../models/secondary_models.dart';
 import '../services/secondary_service.dart';
 
@@ -91,7 +92,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
       if (!mounted) return;
       setState(() {
         _isLoadingRegions = false;
-        _error = 'Imeshindwa kupakia mikoa. Jaribu tena.';
+        _error = 'regions';
       });
     }
   }
@@ -118,7 +119,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
       if (!mounted) return;
       setState(() {
         _isLoadingDistricts = false;
-        _error = 'Imeshindwa kupakia wilaya. Jaribu tena.';
+        _error = 'districts';
       });
     }
   }
@@ -145,7 +146,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
       if (!mounted) return;
       setState(() {
         _isLoadingSchools = false;
-        _error = 'Imeshindwa kupakia shule. Jaribu tena.';
+        _error = 'schools';
       });
     }
   }
@@ -218,6 +219,16 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
 
   @override
   Widget build(BuildContext context) {
+    // Once a school is picked, collapse the inputs and show only the
+    // selected card. Tapping its X clears the selection and the inputs
+    // come back automatically. Mirrors `SchoolPicker`.
+    if (_selectedSchool != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [_buildSelectedCard()],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -229,15 +240,12 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
           const SizedBox(height: 12),
         ],
         if (_useSearch) _buildSearchSection() else _buildBrowseSection(),
-        if (_selectedSchool != null) ...[
-          const SizedBox(height: 16),
-          _buildSelectedCard(),
-        ],
       ],
     );
   }
 
   Widget _buildModeToggle() {
+    final s = AppStringsScope.of(context);
     return Container(
       decoration: BoxDecoration(
         color: _accent.withValues(alpha: 0.2),
@@ -254,7 +262,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
               }),
               isSelected: !_useSearch,
               child: Text(
-                'Chagua',
+                s?.pickerBrowse ?? 'Browse',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -273,7 +281,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
               }),
               isSelected: _useSearch,
               child: Text(
-                'Tafuta',
+                s?.pickerSearch ?? 'Search',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -289,6 +297,24 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
   }
 
   Widget _buildErrorBanner() {
+    final s = AppStringsScope.of(context);
+    String message;
+    switch (_error) {
+      case 'regions':
+        message = s?.pickerErrLoadRegions ??
+            'Could not load regions. Try again.';
+        break;
+      case 'districts':
+        message = s?.pickerErrLoadDistricts ??
+            'Could not load districts. Try again.';
+        break;
+      case 'schools':
+        message = s?.pickerErrLoadSchools ??
+            'Could not load schools. Try again.';
+        break;
+      default:
+        message = _error ?? '';
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -302,7 +328,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _error!,
+              message,
               style: const TextStyle(
                 fontSize: 12,
                 color: _primaryText,
@@ -315,13 +341,15 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
   }
 
   Widget _buildSearchSection() {
+    final s = AppStringsScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
           controller: _searchController,
           decoration: InputDecoration(
-            hintText: 'Andika jina la shule, mkoa au wilaya',
+            hintText: s?.pickerSearchSecondaryHint ??
+                'Type school name, region or district',
             hintStyle: const TextStyle(color: _secondaryText, fontSize: 14),
             prefixIcon: const Icon(Icons.search, color: _primaryText),
             suffixIcon: _isSearching
@@ -436,12 +464,13 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
   }
 
   Widget _buildBrowseSection() {
+    final s = AppStringsScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildDropdown<SecondaryRegion>(
-          label: 'Mkoa',
-          hint: 'Chagua mkoa',
+          label: s?.regionLabel ?? 'Region',
+          hint: s?.pickerSelectRegion ?? 'Select region',
           value: _selectedRegion,
           items: _regions,
           isLoading: _isLoadingRegions,
@@ -462,8 +491,8 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
         ),
         const SizedBox(height: 16),
         _buildDropdown<SecondaryDistrict>(
-          label: 'Wilaya',
-          hint: 'Chagua wilaya',
+          label: s?.districtLabel ?? 'District',
+          hint: s?.pickerSelectDistrict ?? 'Select district',
           value: _selectedDistrict,
           items: _districts,
           isLoading: _isLoadingDistricts,
@@ -486,8 +515,8 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
         ),
         const SizedBox(height: 16),
         _buildDropdown<SecondarySchool>(
-          label: 'Shule',
-          hint: 'Chagua shule',
+          label: s?.pickerSchool ?? 'School',
+          hint: s?.pickerSelectSchool ?? 'Select school',
           value: _selectedSchool,
           items: _schools,
           isLoading: _isLoadingSchools,
@@ -526,10 +555,13 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
         ),
       );
     } else if (!enabled || items.isEmpty) {
+      final s = AppStringsScope.of(context);
       content = Padding(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         child: Text(
-          items.isEmpty && enabled ? 'Hakuna data' : hint,
+          items.isEmpty && enabled
+              ? (s?.pickerNoData ?? 'No data')
+              : hint,
           style: const TextStyle(color: _secondaryText, fontSize: 14),
         ),
       );
@@ -663,6 +695,7 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
   }
 
   Widget _buildTypeChip(String type) {
+    final s = AppStringsScope.of(context);
     final isGovernment = type == 'government';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -671,7 +704,9 @@ class _SecondarySchoolPickerState extends State<SecondarySchoolPicker> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        isGovernment ? 'Serikali' : 'Binafsi',
+        isGovernment
+            ? (s?.pickerOwnershipGovernment ?? 'Government')
+            : (s?.pickerOwnershipPrivate ?? 'Private'),
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
