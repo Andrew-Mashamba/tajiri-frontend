@@ -13,6 +13,9 @@ import '../services/fcm_service.dart';
 import '../services/live_update_service.dart';
 import '../services/tea_warmup_service.dart';
 import '../services/feed_cache_service.dart';
+import '../services/user_posts_cache_service.dart';
+import '../photos/services/photos_cache_service.dart';
+import '../services/comments_cache_service.dart';
 import 'message_database.dart';
 import '../services/conversation_cache_service.dart';
 import '../services/people_cache_service.dart';
@@ -526,6 +529,15 @@ class AuthService {
     } catch (_) {}
     try {
       await FeedCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await UserPostsCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await PhotosCacheService.instance.clear();
+    } catch (_) {}
+    try {
+      await CommentsCacheService.instance.clear();
     } catch (_) {}
     try {
       await ConversationCacheService.instance.clear();

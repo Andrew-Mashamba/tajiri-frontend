@@ -18,6 +18,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../screens/wallet/payout_request_screen.dart';
 import '../../services/local_storage_service.dart';
@@ -86,7 +87,11 @@ class IncomeSourcesView extends StatefulWidget {
   State<IncomeSourcesView> createState() => _IncomeSourcesViewState();
 }
 
-class _IncomeSourcesViewState extends State<IncomeSourcesView> {
+class _IncomeSourcesViewState extends State<IncomeSourcesView>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final IncomeSourcesService _service = IncomeSourcesService();
 
   IncomePeriod _period = IncomePeriod.month;
@@ -197,6 +202,7 @@ class _IncomeSourcesViewState extends State<IncomeSourcesView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin
     final s = AppStringsScope.of(context);
     final isSw = s?.isSwahili ?? false;
 
@@ -254,6 +260,8 @@ class _IncomeSourcesViewState extends State<IncomeSourcesView> {
           PeriodPillSelector(selected: _period, onChanged: _setPeriod),
           const SizedBox(height: 12),
           _KpiRow(summary: summary, isSw: isSw),
+          const SizedBox(height: 16),
+          _CreatorToolsRow(creatorId: widget.creatorId, isSw: isSw),
           const SizedBox(height: 16),
           if (tally != null) LivePinnedCard(tally: tally, onTap: () {}),
           _SectionHeader(
@@ -513,28 +521,132 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFEBEE),
+        color: const Color(0xFFFFE5E5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEF9A9A)),
+        border: Border.all(color: const Color(0xFFD32F2F)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFC62828)),
+          const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFD32F2F)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF8B0000)),
+              style: const TextStyle(fontSize: 12, color: Color(0xFFD32F2F)),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           TextButton(
             onPressed: onRetry,
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFC62828)),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFD32F2F)),
             child: const Text('Retry', style: TextStyle(fontSize: 12)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Three-pill row exposing the secondary creator surfaces from the
+/// embedded profile-tab body (which has no AppBar): Stats, Fund earnings,
+/// and Sponsored posts. Without this row those screens are unreachable
+/// from the profile tab — only via direct deep-links.
+class _CreatorToolsRow extends StatelessWidget {
+  final int creatorId;
+  final bool isSw;
+
+  const _CreatorToolsRow({required this.creatorId, required this.isSw});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ToolPill(
+            icon: Icons.insights_rounded,
+            label: isSw ? 'Takwimu' : 'Stats',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreatorStatsScreen(creatorId: creatorId),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ToolPill(
+            icon: Icons.payments_rounded,
+            label: isSw ? 'Mfuko' : 'Fund',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.pushNamed(context, '/creator-earnings');
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ToolPill(
+            icon: Icons.campaign_rounded,
+            label: isSw ? 'Tangazo' : 'Sponsor',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.pushNamed(context, '/sponsored-posts');
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToolPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ToolPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E5E5)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: const Color(0xFF1A1A1A)),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

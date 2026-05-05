@@ -128,7 +128,7 @@ class ProgressBar extends StatelessWidget {
     super.key,
     required this.pct,
     this.height = 4,
-    this.trackColor = const Color(0xFFF2F2F2),
+    this.trackColor = const Color(0xFFF5F5F5),
     this.fillColor = const Color(0xFF1A1A1A),
   });
 

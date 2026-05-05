@@ -288,6 +288,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildHeader(context),
+          _buildLineageBadge(context),
           _buildMediaZone(context),
           _buildActionRow(context),
           _buildLikesCount(context),
@@ -309,6 +310,60 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       key: Key('post_card_${widget.post.id}'),
       onVisibilityChanged: _onVisibilityChanged,
       child: tappableCard,
+    );
+  }
+
+  /// Lineage badge — strategy §3 provenance graph. Shown above the
+  /// media zone when the post is a derivative ("Quote of @user",
+  /// "Stitch of @user", "Reply to @user", "Remix of @user",
+  /// "Duet with @user"). Originals render nothing.
+  Widget _buildLineageBadge(BuildContext context) {
+    final type = post.relationshipType;
+    if (type == 'original' || type == 'shared') {
+      return const SizedBox.shrink();
+    }
+
+    String? parentHandle;
+    if (post.replyToPost?.user?.username != null) {
+      parentHandle = post.replyToPost!.user!.username;
+    } else if (post.stitchFromPost?.user?.username != null) {
+      parentHandle = post.stitchFromPost!.user!.username;
+    }
+
+    final (icon, label) = switch (type) {
+      'quote' => (Icons.format_quote_rounded, 'Quote of'),
+      'stitch' => (Icons.cut_rounded, 'Stitch of'),
+      'reply_post' => (Icons.reply_rounded, 'Reply to'),
+      'remix' => (Icons.auto_awesome_outlined, 'Remix of'),
+      'duet' => (Icons.people_outline_rounded, 'Duet with'),
+      _ => (Icons.share_outlined, 'Built on'),
+    };
+
+    final caption = parentHandle != null
+        ? '$label @$parentHandle'
+        : '$label original creator';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF666666)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              caption,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF666666),
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

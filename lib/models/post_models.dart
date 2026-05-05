@@ -118,14 +118,24 @@ class Post {
   /// Whether commenting is allowed on this post (post author can disable).
   final bool allowComments;
 
-  // Reply (Duet) / Stitch fields
-  final int? replyToPostId;       // Post this is a video reply (duet) of
+  // Reply / Stitch / Quote / Remix / Duet fields — strategy §1C
+  final int? replyToPostId;       // Post this is a reply post of
   final int? stitchFromPostId;    // Post this is a stitch of
+  final int? quoteFromPostId;     // Post this quotes
+  final int? remixFromPostId;     // Post this remixes
+  final int? duetFromPostId;      // Post this is a duet with
   final String? replyLayout;      // 'side_by_side', 'top_bottom', 'pip'
   final int? stitchTrimStartMs;   // Trim start in ms for stitch source clip
   final int? stitchTrimEndMs;     // Trim end in ms for stitch source clip
   final Post? replyToPost;        // Nested original post for display
   final Post? stitchFromPost;     // Nested original post for display
+
+  // Provenance graph (strategy §3) — populated server-side at post
+  // creation. relationshipType is one of:
+  //   'original' | 'quote' | 'stitch' | 'reply_post' | 'remix' | 'duet' | 'shared'
+  final int? parentPostId;        // Immediate ancestor in derivative chain
+  final int? rootPostId;          // Lineage root (the originating post)
+  final String relationshipType;  // Default 'original'
 
   // Sponsored post fields
   final bool isSponsored;
@@ -191,11 +201,17 @@ class Post {
     this.threadTitle,
     this.replyToPostId,
     this.stitchFromPostId,
+    this.quoteFromPostId,
+    this.remixFromPostId,
+    this.duetFromPostId,
     this.replyLayout,
     this.stitchTrimStartMs,
     this.stitchTrimEndMs,
     this.replyToPost,
     this.stitchFromPost,
+    this.parentPostId,
+    this.rootPostId,
+    this.relationshipType = 'original',
     this.isSponsored = false,
     this.sponsorId,
     this.sponsorName,
@@ -277,11 +293,17 @@ class Post {
       allowComments: _parseBool(json['allow_comments'], true),
       replyToPostId: json['reply_to_post_id'] != null ? _parseInt(json['reply_to_post_id']) : null,
       stitchFromPostId: json['stitch_from_post_id'] != null ? _parseInt(json['stitch_from_post_id']) : null,
+      quoteFromPostId: json['quote_from_post_id'] != null ? _parseInt(json['quote_from_post_id']) : null,
+      remixFromPostId: json['remix_from_post_id'] != null ? _parseInt(json['remix_from_post_id']) : null,
+      duetFromPostId: json['duet_from_post_id'] != null ? _parseInt(json['duet_from_post_id']) : null,
       replyLayout: json['reply_layout'] as String?,
       stitchTrimStartMs: json['stitch_trim_start_ms'] != null ? _parseInt(json['stitch_trim_start_ms']) : null,
       stitchTrimEndMs: json['stitch_trim_end_ms'] != null ? _parseInt(json['stitch_trim_end_ms']) : null,
       replyToPost: json['reply_to_post'] != null ? Post.fromJson(json['reply_to_post']) : null,
       stitchFromPost: json['stitch_from_post'] != null ? Post.fromJson(json['stitch_from_post']) : null,
+      parentPostId: json['parent_post_id'] != null ? _parseInt(json['parent_post_id']) : null,
+      rootPostId: json['root_post_id'] != null ? _parseInt(json['root_post_id']) : null,
+      relationshipType: json['relationship_type'] as String? ?? 'original',
       isSponsored: _parseBool(json['is_sponsored']),
       sponsorId: json['sponsor_id'] != null ? _parseInt(json['sponsor_id']) : null,
       sponsorName: json['sponsor_name'] as String?,
@@ -345,11 +367,17 @@ class Post {
       'allow_comments': allowComments,
       'reply_to_post_id': replyToPostId,
       'stitch_from_post_id': stitchFromPostId,
+      'quote_from_post_id': quoteFromPostId,
+      'remix_from_post_id': remixFromPostId,
+      'duet_from_post_id': duetFromPostId,
       'reply_layout': replyLayout,
       'stitch_trim_start_ms': stitchTrimStartMs,
       'stitch_trim_end_ms': stitchTrimEndMs,
       'reply_to_post': replyToPost?.toJson(),
       'stitch_from_post': stitchFromPost?.toJson(),
+      'parent_post_id': parentPostId,
+      'root_post_id': rootPostId,
+      'relationship_type': relationshipType,
       'is_sponsored': isSponsored,
       'sponsor_id': sponsorId,
       'sponsor_name': sponsorName,
@@ -1042,6 +1070,26 @@ class Comment {
   }
 
   bool get isReply => parentId != null;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'post_id': postId,
+      'user_id': userId,
+      'parent_id': parentId,
+      'content': content,
+      'likes_count': likesCount,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'user': user?.toJson(),
+      'replies': replies.map((r) => r.toJson()).toList(),
+      'is_pinned': isPinned,
+      'is_liked': isLiked,
+      'edited_at': editedAt?.toIso8601String(),
+      'reply_count': replyCount,
+      'mentioned_user_ids': mentionedUserIds,
+    };
+  }
 
   Comment copyWith({
     int? id,

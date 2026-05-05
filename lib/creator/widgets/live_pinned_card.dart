@@ -32,7 +32,7 @@ class LivePinnedCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF880E4F), width: 1.5),
+            border: Border.all(color: const Color(0xFFD32F2F), width: 1.5),
           ),
           child: Row(
             children: [
@@ -131,7 +131,7 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
         width: 10,
         height: 10,
         decoration: const BoxDecoration(
-          color: Color(0xFFFC3D5A),
+          color: Color(0xFFD32F2F),
           shape: BoxShape.circle,
         ),
       ),

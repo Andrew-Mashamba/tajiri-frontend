@@ -25,6 +25,7 @@ class ContentEngineService {
     try {
       final uri = Uri.parse('$_baseUrl/v2/feed').replace(queryParameters: {
         'feed_type': feedType,
+        'user_id': userId.toString(),
         'page': page.toString(),
         'per_page': perPage.toString(),
       });
@@ -98,6 +99,7 @@ class ContentEngineService {
     try {
       final params = <String, String>{
         'q': query,
+        'user_id': userId.toString(),
         'sort': sort,
         'page': page.toString(),
         'per_page': perPage.toString(),
@@ -161,6 +163,7 @@ class ContentEngineService {
     try {
       final uri = Uri.parse('$_baseUrl/v2/similar').replace(queryParameters: {
         'document_id': documentId.toString(),
+        'user_id': userId.toString(),
         'limit': limit.toString(),
       });
       final response = await http.get(uri, headers: ApiConfig.authHeaders(token))

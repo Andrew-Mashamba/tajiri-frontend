@@ -90,7 +90,6 @@ class _IncomeSourceDetailScreenState extends State<IncomeSourceDetailScreen> {
     final action = source.primaryCta!.action;
     final s = AppStringsScope.of(context);
     final isSw = s?.isSwahili ?? false;
-    final messenger = ScaffoldMessenger.maybeOf(context);
     final navigator = Navigator.of(context);
 
     switch (action) {
@@ -114,7 +113,6 @@ class _IncomeSourceDetailScreenState extends State<IncomeSourceDetailScreen> {
       default:
         if (kDebugMode) debugPrint('[Mapato] unknown CTA action: $action');
         if (mounted) {
-          messenger?.clearSnackBars();
           setState(() {
             _inlineMessage = isSw
                 ? 'Hatua haijatekelezeka bado'
@@ -598,7 +596,7 @@ class _LockedHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F2),
+        color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -782,9 +780,9 @@ class _InlineMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isError ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9);
-    final fg = isError ? const Color(0xFF8B0000) : const Color(0xFF1B5E20);
-    final border = isError ? const Color(0xFFEF9A9A) : const Color(0xFFA5D6A7);
+    final bg = isError ? const Color(0xFFFFE5E5) : const Color(0xFFF5F5F5);
+    final fg = isError ? const Color(0xFFD32F2F) : const Color(0xFF1A1A1A);
+    final border = isError ? const Color(0xFFD32F2F) : const Color(0xFFE5E5E5);
     final icon = isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded;
 
     return Container(

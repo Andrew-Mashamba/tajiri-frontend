@@ -207,7 +207,7 @@ class _SponsoredPostsScreenState extends State<SponsoredPostsScreen> {
               children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: const Color(0xFFE0E0E0),
+              backgroundColor: const Color(0xFFE5E5E5),
               backgroundImage: creator.avatarUrl != null ? NetworkImage(creator.avatarUrl!) : null,
               child: creator.avatarUrl == null
                   ? const Icon(Icons.person_rounded, size: 24, color: Color(0xFF999999))

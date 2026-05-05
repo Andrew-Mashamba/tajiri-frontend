@@ -227,7 +227,7 @@ class _ActivityRow extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F2),
+                color: const Color(0xFFF5F5F5),
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
@@ -411,10 +411,10 @@ class _StatusPill extends StatelessWidget {
     switch (s) {
       case 'pending':
       case 'processing':
-        return const Color(0xFFF57C00);
+        return const Color(0xFF666666);
       case 'failed':
       case 'cancelled':
-        return const Color(0xFFC62828);
+        return const Color(0xFFD32F2F);
       case 'reversed':
         return const Color(0xFF666666);
       default:

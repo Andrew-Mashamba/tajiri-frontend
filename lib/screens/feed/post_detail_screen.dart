@@ -2,8 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/post_models.dart';
+import '../../services/comments_cache_service.dart';
+import '../../services/feed_cache_service.dart';
 import '../../services/post_service.dart';
 import '../../services/live_update_service.dart';
+import '../../services/user_posts_cache_service.dart';
+import '../../widgets/motion_tokens.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_post_sheet.dart';
 import '../../widgets/tajiri_app_bar.dart';
@@ -11,10 +15,18 @@ import '../../widgets/user_avatar.dart';
 import '../../config/api_config.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'edit_post_screen.dart';
+import '../../creator/screens/post_earnings_screen.dart';
 import '../../services/event_tracking_service.dart';
 import '../search/hashtag_screen.dart';
 import '../search/search_screen.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
+
+const Color _kPrimary = Color(0xFF1A1A1A);
+const Color _kSecondary = Color(0xFF666666);
+const Color _kBorder = Color(0xFFE5E5E5);
+const Color _kSurface = Colors.white;
+const Color _kBackground = Color(0xFFFAFAFA);
+const Color _kDanger = Color(0xFFD32F2F);
 
 /// Instagram-style post detail screen with:
 /// - Scrollable feed of posts (when [posts] list provided)
@@ -76,39 +88,47 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final s = AppStringsScope.of(context);
 
     if (_isFeedMode) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFFAFAFA),
-        appBar: TajiriAppBar(title: s?.post ?? 'Post'),
-        body: SafeArea(
-          child: PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: widget.posts!.length,
-            itemBuilder: (context, index) {
-              final post = widget.posts![index];
-              return _PostDetailPage(
-                key: ValueKey(post.id),
-                postId: post.id,
-                currentUserId: widget.currentUserId,
-                initialPost: post,
-                postService: _postService,
-              );
-            },
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: _kBackground,
+          appBar: TajiriAppBar(title: s?.post ?? 'Post'),
+          body: SafeArea(
+            child: PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.vertical,
+              itemCount: widget.posts!.length,
+              itemBuilder: (context, index) {
+                final post = widget.posts![index];
+                return _PostDetailPage(
+                  key: ValueKey(post.id),
+                  postId: post.id,
+                  currentUserId: widget.currentUserId,
+                  initialPost: post,
+                  postService: _postService,
+                );
+              },
+            ),
           ),
         ),
       );
     }
 
     // Single post mode (route navigation: /post/:id)
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: TajiriAppBar(title: s?.post ?? 'Post'),
-      body: SafeArea(
-        child: _PostDetailPage(
-          postId: widget.postId,
-          currentUserId: widget.currentUserId,
-          initialPost: widget.initialPost,
-          postService: _postService,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: _kBackground,
+        appBar: TajiriAppBar(title: s?.post ?? 'Post'),
+        body: SafeArea(
+          child: _PostDetailPage(
+            postId: widget.postId,
+            currentUserId: widget.currentUserId,
+            initialPost: widget.initialPost,
+            postService: _postService,
+          ),
         ),
       ),
     );
@@ -137,7 +157,11 @@ class _PostDetailPage extends StatefulWidget {
   State<_PostDetailPage> createState() => _PostDetailPageState();
 }
 
-class _PostDetailPageState extends State<_PostDetailPage> {
+class _PostDetailPageState extends State<_PostDetailPage>
+    with AutomaticKeepAliveClientMixin<_PostDetailPage> {
+  @override
+  bool get wantKeepAlive => true;
+
   late final PostService _postService = widget.postService;
   final ScrollController _scrollController = ScrollController();
 
@@ -173,17 +197,21 @@ class _PostDetailPageState extends State<_PostDetailPage> {
   /// Double-tap heart animation state.
   bool _showHeartAnimation = false;
 
+  /// Transient error shown as a dismissible banner above the comment
+  /// composer. Replaces SnackBars per playbook §99. Cleared on next
+  /// successful action or by the user tapping the close icon.
+  String? _formError;
+
+  /// Bumps to retrigger a brief shake animation on whichever icon
+  /// just failed (like / save). Used as a key on TweenAnimationBuilder
+  /// so the animation replays on each failure.
+  int _shakeNonce = 0;
+
   @override
   void initState() {
     super.initState();
-    if (widget.initialPost != null && widget.initialPost!.id == widget.postId) {
-      _post = widget.initialPost;
-      _isLoadingPost = false;
-      _loadPostInBackground();
-    } else {
-      _loadPost();
-    }
-    _loadComments();
+    _hydratePost();
+    _hydrateAndRefreshComments();
     _loadEarningsIfOwner();
     _scrollController.addListener(_onScroll);
     _liveUpdateSubscription = LiveUpdateService.instance.stream.listen((event) {
@@ -192,6 +220,76 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         _loadPost();
       }
     });
+  }
+
+  /// Layered hydrate for the post payload. Tries (in order):
+  ///   1. widget.initialPost — passed by the navigator pusher
+  ///   2. UserPostsCacheService — RAM-fast for own posts
+  ///   3. FeedCacheService — RAM-fast for posts seen in feed
+  ///   4. Network — always; silent if cache hydrated something
+  /// See playbook → "Local-first list pages — layered cache & SWR".
+  void _hydratePost() {
+    Post? hot;
+    if (widget.initialPost != null &&
+        widget.initialPost!.id == widget.postId) {
+      hot = widget.initialPost;
+    } else {
+      // Same-session: try the user-posts hot cache (covers own-post
+      // tap from My Posts grid). Feed cache is async + the navigator
+      // pusher already supplies initialPost from feed surfaces.
+      hot = _findInUserPostsCache(widget.postId);
+    }
+    if (hot != null) {
+      _post = hot;
+      _isLoadingPost = false;
+      _loadPostInBackground(); // silent refresh
+    } else {
+      _loadPost();
+    }
+  }
+
+  Post? _findInUserPostsCache(int postId) {
+    // The cache is keyed by userId; we don't know which user owns this
+    // post until the post itself loads, so we scan the hot map. Cheap
+    // for typical user counts; falls through fast if nothing matches.
+    final cache = UserPostsCacheService.instance;
+    final hotByMe = cache.getSync(widget.currentUserId);
+    if (hotByMe != null) {
+      for (final p in hotByMe) {
+        if (p.id == postId) return p;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _hydrateAndRefreshComments() async {
+    final cache = CommentsCacheService.instance;
+
+    // 1. In-memory hit — same-session re-visit.
+    final hot = cache.getSync(widget.postId);
+    if (hot != null && hot.isNotEmpty) {
+      setState(() {
+        _comments
+          ..clear()
+          ..addAll(hot);
+        _hasMoreComments = true;
+      });
+    } else {
+      // 2. Disk hit — across cold-starts.
+      final cold = await cache.getCached(widget.postId);
+      if (!mounted) return;
+      if (cold != null && cold.isNotEmpty) {
+        setState(() {
+          _comments
+            ..clear()
+            ..addAll(cold);
+          _hasMoreComments = true;
+        });
+      }
+    }
+
+    // 3. Network — always. silent:true skips spinner over cached rows.
+    await _loadComments(silent: _comments.isNotEmpty);
   }
 
   @override
@@ -260,15 +358,15 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
     final result = await _postService.getPostEarnings(widget.postId);
     if (!mounted) return;
-    if (!result.isEmpty) {
-      setState(() => _earnings = result);
-    }
+    // Always set — empty result still drives the "0 TSh / 0 views"
+    // bar so the creator sees the strip from day one.
+    setState(() => _earnings = result);
   }
 
-  Future<void> _loadComments() async {
+  Future<void> _loadComments({bool silent = false}) async {
     if (_isLoadingComments) return;
     setState(() {
-      _isLoadingComments = true;
+      if (!silent) _isLoadingComments = true;
       _commentsError = null;
     });
 
@@ -288,9 +386,16 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         _hasMoreComments = result.meta?.hasMore ?? false;
         _commentsError = null;
       } else {
-        _commentsError = result.message ?? (AppStringsScope.of(context)?.commentsNotFound ?? 'Comments could not be loaded');
+        _commentsError = result.message ??
+            (AppStringsScope.of(context)?.commentsNotFound ??
+                'Comments could not be loaded');
       }
     });
+
+    // Persist for next hydrate (in-memory + disk).
+    if (result.success) {
+      CommentsCacheService.instance.save(widget.postId, _comments);
+    }
   }
 
   Future<void> _loadMoreComments() async {
@@ -312,6 +417,9 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         _hasMoreComments = result.meta?.hasMore ?? false;
       }
     });
+    if (result.success) {
+      CommentsCacheService.instance.save(widget.postId, _comments);
+    }
   }
 
   // ─── Actions ───────────────────────────────────────────────────────
@@ -338,6 +446,8 @@ class _PostDetailPageState extends State<_PostDetailPage> {
       _replyingTo = null;
     });
     if (result.success && result.comment != null) {
+      // Meaningful submit per playbook §2364 — mediumImpact.
+      HapticFeedback.mediumImpact();
       setState(() {
         if (parentId != null) {
           // Add reply to comments list
@@ -365,13 +475,17 @@ class _PostDetailPageState extends State<_PostDetailPage> {
           creatorId: _post?.userId,
         );
       });
+      // Mirror new comment into the cache so the next hydrate is fresh.
+      CommentsCacheService.instance.save(widget.postId, _comments);
     } else {
       final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message ?? (s?.addCommentFailed ?? 'Failed to add comment')),
-        ),
-      );
+      final isSw = s?.isSwahili ?? false;
+      setState(() {
+        _formError = result.message ??
+            (isSw
+                ? 'Imeshindwa kutuma maoni — angalia muunganisho na ujaribu tena.'
+                : "Couldn't post your comment — check your connection and try again.");
+      });
     }
   }
 
@@ -390,11 +504,12 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
     if (!mounted) return;
     if (!result.success) {
-      setState(() => _post = post);
-      final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(s?.likeUpdateFailed ?? 'Failed to update like')),
-      );
+      // Optimistic revert + brief shake on the heart — playbook §1568
+      // (no SnackBar; the revert + shake IS the failure signal).
+      setState(() {
+        _post = post;
+        _shakeNonce++;
+      });
     } else if (result.likesCount != null) {
       setState(() => _post = _post!.copyWith(likesCount: result.likesCount!));
     }
@@ -429,10 +544,13 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
     HapticFeedback.lightImpact();
 
-    setState(() => _showHeartAnimation = true);
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted) setState(() => _showHeartAnimation = false);
-    });
+    // Skip the visual animation when reduce-motion is on; just like.
+    if (!MotionTokens.reduced(context)) {
+      setState(() => _showHeartAnimation = true);
+      Future.delayed(MotionTokens.emph + MotionTokens.short, () {
+        if (mounted) setState(() => _showHeartAnimation = false);
+      });
+    }
 
     if (!post.isLiked) {
       _onLike(post);
@@ -454,23 +572,14 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
     if (!mounted) return;
     if (!result.success) {
-      setState(() => _post = post);
-      final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message ?? (s?.saveUpdateFailed ?? 'Failed to update save')),
-        ),
-      );
-    } else {
-      final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            wasSaved ? (s?.removedFromSaved ?? 'Removed from saved') : (s?.savedSuccess ?? 'Saved'),
-          ),
-        ),
-      );
+      // Optimistic revert + shake — no SnackBar.
+      setState(() {
+        _post = post;
+        _shakeNonce++;
+      });
     }
+    // Success path is silent — bookmark icon already toggled inline,
+    // which IS the confirmation per playbook §99.
   }
 
   void _onShare(Post post) {
@@ -494,6 +603,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
   // ─── Enhanced 3-dot menu (Instagram-style) ─────────────────────────
 
   void _onMenuTap(Post post) {
+    HapticFeedback.heavyImpact(); // Long-press menu open (§2364).
     final s = AppStringsScope.of(context);
     final isOwner = post.userId == widget.currentUserId;
     showModalBottomSheet(
@@ -514,60 +624,22 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            if (isOwner) ...[
-              ListTile(
-                leading: Icon(
-                  post.isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
-                  color: const Color(0xFF1A1A1A),
-                ),
-                title: Text(post.isPinned ? (s?.unpinPost ?? 'Unpin post') : (s?.pinToProfile ?? 'Pin to your profile')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _togglePin(post);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.archive_outlined, color: Color(0xFF1A1A1A)),
-                title: Text(s?.archive ?? 'Archive'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _archivePost(post);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Color(0xFF1A1A1A)),
-                title: Text(s?.edit ?? 'Edit'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final updated = await Navigator.push<Post>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditPostScreen(post: post),
-                    ),
-                  );
-                  if (updated != null && mounted) {
-                    setState(() => _post = updated);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                title: Text(s?.delete ?? 'Delete', style: const TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _confirmDelete(post);
-                },
-              ),
-            ],
+            // Note: Edit / Pin / Archive / Delete moved to the sticky
+            // owner action row below the AppBar — see
+            // _buildOwnerActionRow. This menu now only carries
+            // ambient actions (Copy link, Report).
             ListTile(
               leading: const Icon(Icons.link_rounded, color: Color(0xFF1A1A1A)),
               title: Text(s?.copyLink ?? 'Copy link'),
               onTap: () {
                 Navigator.pop(ctx);
-                Clipboard.setData(ClipboardData(text: '${ApiConfig.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/post/${post.id}'));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(s?.linkCopied ?? 'Link copied')),
-                );
+                Clipboard.setData(ClipboardData(
+                  text:
+                      '${ApiConfig.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/post/${post.id}',
+                ));
+                // Silent ack — sheet popped + system haptic per
+                // playbook §1421 (visual-only ack for clipboard).
+                HapticFeedback.lightImpact();
               },
             ),
             if (!isOwner) ...[
@@ -576,16 +648,10 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                 title: Text(s?.reportPost ?? 'Report'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final result = await _postService.reportPost(post.id, widget.currentUserId);
-                  if (!mounted) return;
-                  final s2 = AppStringsScope.of(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(
-                      result.success
-                          ? (s2?.reportSubmitted ?? 'Report submitted')
-                          : (result.message ?? (s2?.reportSubmitted ?? 'Report submitted')),
-                    )),
-                  );
+                  await _postService.reportPost(
+                      post.id, widget.currentUserId);
+                  // Silent — the sheet pop is the user's signal that
+                  // the action completed. Idempotent server-side.
                 },
               ),
             ],
@@ -604,35 +670,81 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
     if (!mounted) return;
     if (result.success) {
+      // Silent on success — the inline pin badge updating IS the
+      // confirmation per playbook §99.
       setState(() => _post = _post!.copyWith(isPinned: !wasPinned));
-      final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(wasPinned ? (s?.postUnpinned ?? 'Post unpinned') : (s?.postPinned ?? 'Post pinned to profile'))),
-      );
     } else {
       final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? (s?.pinUpdateFailed ?? 'Failed to update pin'))),
+      await _showFailureDialog(
+        s?.pinUpdateFailed ?? 'Could not update pin. Try again.',
+        result.message,
       );
     }
   }
 
   Future<void> _archivePost(Post post) async {
-    final result = await _postService.archivePost(post.id, widget.currentUserId);
+    final result =
+        await _postService.archivePost(post.id, widget.currentUserId);
     if (!mounted) return;
     if (result.success) {
-      final s = AppStringsScope.of(context);
-      final messenger = ScaffoldMessenger.of(context);
+      // Invalidate caches so the parent grid refetches without the
+      // archived post — matches the project-wide save→pop→refresh chain.
+      UserPostsCacheService.instance.invalidate(widget.currentUserId);
+      FeedCacheService.instance.clear();
+      // Silent + pop(true) — the parent's reload is the confirmation.
       Navigator.pop(context, post.id);
-      messenger.showSnackBar(
-        SnackBar(content: Text(s?.postArchived ?? 'Post archived')),
-      );
     } else {
       final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? (s?.archiveFailed ?? 'Failed to archive post'))),
+      await _showFailureDialog(
+        s?.archiveFailed ?? 'Could not archive the post. Try again.',
+        result.message,
       );
     }
+  }
+
+  /// Strip developer noise from raw error strings before showing them
+  /// — playbook §100 "never raw error strings".
+  String _sanitizeError(String raw) {
+    final stripped =
+        raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+    if (stripped.contains('SocketException') ||
+        stripped.contains('Failed host lookup')) {
+      final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+      return isSw
+          ? 'Hakuna intaneti. Hakikisha umeunganishwa.'
+          : "Can't reach the server. Check your connection.";
+    }
+    if (stripped.contains('TimeoutException')) {
+      final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+      return isSw
+          ? 'Muda umeisha. Jaribu tena.'
+          : 'Request timed out. Try again.';
+    }
+    return stripped;
+  }
+
+  /// Generic failure dialog used to replace transient SnackBars on
+  /// non-recoverable errors (pin/archive/delete fail).
+  Future<void> _showFailureDialog(
+      String defaultMessage, String? serverMessage) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(
+          serverMessage ?? defaultMessage,
+          style: const TextStyle(color: _kPrimary, fontSize: 14),
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmDelete(Post post) {
@@ -651,26 +763,28 @@ class _PostDetailPageState extends State<_PostDetailPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              final result = await _postService.deletePost(post.id, userId: widget.currentUserId);
+              final result = await _postService.deletePost(post.id,
+                  userId: widget.currentUserId);
               if (!mounted) return;
               if (result.success) {
-                final s2 = AppStringsScope.of(context);
-                final messenger = ScaffoldMessenger.of(context);
+                UserPostsCacheService.instance
+                    .invalidate(widget.currentUserId);
+                FeedCacheService.instance.clear();
+                CommentsCacheService.instance.invalidate(post.id);
+                // Silent + pop(true) — the parent's reload reflects
+                // the deletion, which IS the confirmation.
                 Navigator.pop(context, post.id);
-                messenger.showSnackBar(
-                  SnackBar(content: Text(s2?.postDeleted ?? 'Post deleted')),
-                );
               } else {
                 final s2 = AppStringsScope.of(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(result.message ?? (s2?.deletePostFailed ?? 'Failed to delete post')),
-                    backgroundColor: Colors.red,
-                  ),
+                await _showFailureDialog(
+                  s2?.deletePostFailed ??
+                      'Could not delete the post. Try again.',
+                  result.message,
                 );
               }
             },
-            child: Text(s?.yes ?? 'Yes', style: const TextStyle(color: Colors.red)),
+            child: Text(s?.yes ?? 'Yes',
+                style: const TextStyle(color: _kDanger)),
           ),
         ],
       ),
@@ -760,6 +874,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
           );
         });
       }
+      CommentsCacheService.instance.save(widget.postId, _comments);
     }
   }
 
@@ -767,10 +882,16 @@ class _PostDetailPageState extends State<_PostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required by AutomaticKeepAliveClientMixin
     final s = AppStringsScope.of(context);
 
     if (_isLoadingPost && _post == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: _kPrimary,
+        ),
+      );
     }
 
     if (_postError != null && _post == null) {
@@ -780,18 +901,29 @@ class _PostDetailPageState extends State<_PostDetailPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
               Text(
-                _postError!,
-                style: const TextStyle(color: Color(0xFF666666), fontSize: 14),
+                _sanitizeError(_postError!),
+                style: const TextStyle(color: _kSecondary, fontSize: 14),
                 textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _loadPost,
-                  child: Text(s?.retry ?? 'Retry'),
+              OutlinedButton(
+                onPressed: _loadPost,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kPrimary,
+                  side: const BorderSide(color: _kPrimary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
                 ),
+                child: Text(s?.retry ?? 'Retry'),
               ),
             ],
           ),
@@ -800,9 +932,16 @@ class _PostDetailPageState extends State<_PostDetailPage> {
     }
 
     final post = _post!;
+    final isOwner = post.userId == widget.currentUserId;
+    // Always show the earnings strip for own posts (even at 0 TSh /
+    // 0 views) — gives the creator a clear "this is what it's earning
+    // so far". Hidden only while earnings are still loading.
+    final hasEarnings = isOwner && _earnings != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isOwner) _buildOwnerActionRow(post, s),
+        if (hasEarnings) _buildEarningsBar(post, _earnings!, s),
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
@@ -810,13 +949,12 @@ class _PostDetailPageState extends State<_PostDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Creator stats panel (own posts only)
-                if (post.userId == widget.currentUserId && _earnings != null)
-                  _CreatorStatsPanel(earnings: _earnings!, post: post),
                 _DoubleTapLikeWrapper(
                   showHeart: _showHeartAnimation,
                   onDoubleTap: _onDoubleTapLike,
-                  child: PostCard(
+                  child: _ShakeOnFailure(
+                    nonce: _shakeNonce,
+                    child: PostCard(
                     post: post,
                     currentUserId: widget.currentUserId,
                     onLike: () => _onLike(post),
@@ -867,6 +1005,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                         ? () => Navigator.pushNamed(context, '/thread/${post.threadId}')
                         : null,
                   ),
+                  ),
                 ),
                 const Divider(height: 1),
                 _buildCommentsSection(s),
@@ -900,45 +1039,74 @@ class _PostDetailPageState extends State<_PostDetailPage> {
         ),
         if (_commentsError != null)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              _commentsError!,
-              style: const TextStyle(color: Color(0xFF666666), fontSize: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded,
+                    size: 40, color: Colors.grey.shade300),
+                const SizedBox(height: 8),
+                Text(
+                  _sanitizeError(_commentsError!),
+                  style: const TextStyle(color: _kSecondary, fontSize: 13),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _loadComments,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kPrimary,
+                    side: const BorderSide(color: _kPrimary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(s?.retry ?? 'Retry'),
+                ),
+              ],
             ),
           ),
         if (_comments.isEmpty && !_isLoadingComments && _commentsError == null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Text(
-              s?.noCommentsYet ?? 'No comments yet. Be the first to comment.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            child: Column(
+              children: [
+                Icon(Icons.chat_bubble_outline_rounded,
+                    size: 48, color: Colors.grey.shade300),
+                const SizedBox(height: 8),
+                Text(
+                  s?.noCommentsYet ??
+                      'No comments yet. Be the first to comment.',
+                  style: const TextStyle(color: _kSecondary, fontSize: 13),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           )
         else ...[
           // Pinned comments first (with their reply threads)
           for (final pinned in pinnedComments)
             _buildCommentThread(pinned, isPinned: true),
-          // Regular top-level comments with threads
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: regularComments.length + (_hasMoreComments && _isLoadingComments ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == regularComments.length) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                );
-              }
-              return _buildCommentThread(regularComments[index]);
-            },
-          ),
+          // Regular top-level comments — direct spread into the parent
+          // SingleChildScrollView per playbook §2627 (no shrinkWrap +
+          // NeverScrollableScrollPhysics inside another scroll view).
+          for (final c in regularComments) _buildCommentThread(c),
+          if (_hasMoreComments && _isLoadingComments)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: _kPrimary),
+                ),
+              ),
+            ),
         ],
       ],
     );
@@ -987,7 +1155,7 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                     const SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: _kPrimary),
                     )
                   else
                     Text(
@@ -1047,11 +1215,195 @@ class _PostDetailPageState extends State<_PostDetailPage> {
     );
   }
 
+  /// Sticky earnings strip — directly under the owner CRUD row.
+  /// Shows the headline figure + impressions; tap opens the full
+  /// breakdown sheet (engagement, per-metric earnings, etc.).
+  Widget _buildEarningsBar(
+      Post post, PostEarningsResult e, AppStrings? s) {
+    final isSw = s?.isSwahili ?? false;
+    final amount = '${_fmtCurrency(e.estimatedEarnings)} ${e.currency}';
+    return Material(
+      color: _kSurface,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PostEarningsScreen(
+              postId: post.id,
+              currentUserId: widget.currentUserId,
+              initialEarnings: e,
+              post: post,
+            ),
+          ),
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _kBorder)),
+          ),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.payments_rounded,
+                  size: 20,
+                  color: _kPrimary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isSw ? 'Mapato ya chapisho' : 'This post has earned',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: _kSecondary,
+                        letterSpacing: 0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      amount,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _kPrimary,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isSw
+                          ? '${_fmtCount(e.impressions)} mwoneko · ${e.engagementRate.toStringAsFixed(1)}% mwingiliano'
+                          : '${_fmtCount(e.impressions)} views · ${e.engagementRate.toStringAsFixed(1)}% engagement',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _kSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: _kSecondary,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _fmtCurrency(double v) {
+    if (v >= 1000000) {
+      return '${(v / 1000000).toStringAsFixed(v >= 10000000 ? 0 : 1)}M';
+    }
+    if (v >= 10000) return '${(v / 1000).toStringAsFixed(0)}K';
+    final s = v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 2);
+    // Add comma separators for thousands when below the K cutoff.
+    final parts = s.split('.');
+    final intPart = parts[0];
+    final reversed = intPart.split('').reversed.toList();
+    final out = StringBuffer();
+    for (var i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) out.write(',');
+      out.write(reversed[i]);
+    }
+    final formatted = out.toString().split('').reversed.join('');
+    return parts.length > 1 ? '$formatted.${parts[1]}' : formatted;
+  }
+
+  String _fmtCount(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return n.toString();
+  }
+
+  /// Sticky CRUD row directly under the AppBar — owner-only. Edit /
+  /// Pin·Unpin / Archive / Delete. Replaces the same actions in the
+  /// 3-dot menu so they're one tap away instead of two.
+  Widget _buildOwnerActionRow(Post post, AppStrings? s) {
+    final isSw = s?.isSwahili ?? false;
+    return Container(
+      decoration: const BoxDecoration(
+        color: _kSurface,
+        border: Border(bottom: BorderSide(color: _kBorder)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            _CrudPill(
+              icon: Icons.edit_rounded,
+              label: s?.edit ?? 'Edit',
+              onTap: () async {
+                final updated = await Navigator.push<Post>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditPostScreen(post: post),
+                  ),
+                );
+                if (updated != null && mounted) {
+                  setState(() => _post = updated);
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            _CrudPill(
+              icon: post.isPinned
+                  ? Icons.push_pin_outlined
+                  : Icons.push_pin_rounded,
+              label: post.isPinned
+                  ? (s?.unpinPost ?? 'Unpin')
+                  : (s?.pinToProfile ?? 'Pin'),
+              onTap: () => _togglePin(post),
+            ),
+            const SizedBox(width: 8),
+            _CrudPill(
+              icon: Icons.archive_outlined,
+              label: s?.archive ?? 'Archive',
+              onTap: () => _archivePost(post),
+            ),
+            const SizedBox(width: 8),
+            _CrudPill(
+              icon: Icons.delete_outline_rounded,
+              label: isSw ? 'Futa' : 'Delete',
+              onTap: () => _confirmDelete(post),
+              danger: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCommentInput(Post post, AppStrings? s) {
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+        color: _kSurface,
+        border: Border(top: BorderSide(color: _kBorder)),
       ),
       padding: EdgeInsets.only(
         left: 16,
@@ -1062,6 +1414,14 @@ class _PostDetailPageState extends State<_PostDetailPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Inline error banner (replaces SnackBars on comment failures).
+          if (_formError != null) ...[
+            _InlineErrorBanner(
+              message: _formError!,
+              onDismiss: () => setState(() => _formError = null),
+            ),
+            const SizedBox(height: 8),
+          ],
           // Reply indicator
           if (_replyingTo != null)
             Container(
@@ -1113,26 +1473,34 @@ class _PostDetailPageState extends State<_PostDetailPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              Material(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(24),
-                child: InkWell(
-                  onTap: _isSubmittingComment ? null : _submitComment,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    child: _isSubmittingComment
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.send, color: Colors.white, size: 22),
+              Tooltip(
+                message: s?.send ?? 'Send',
+                child: Semantics(
+                  button: true,
+                  label: s?.send ?? 'Send',
+                  child: Material(
+                    color: _kPrimary,
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      onTap: _isSubmittingComment ? null : _submitComment,
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        child: _isSubmittingComment
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.send_rounded,
+                                color: Colors.white, size: 22),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1194,7 +1562,7 @@ class _HeartAnimationState extends State<_HeartAnimation>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: MotionTokens.emph,
     );
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.2), weight: 30),
@@ -1370,7 +1738,7 @@ class _CommentTile extends StatelessWidget {
                             ? Icons.favorite_rounded
                             : Icons.favorite_border_rounded,
                         size: 16,
-                        color: comment.isLiked ? Colors.red : Colors.grey.shade400,
+                        color: comment.isLiked ? _kDanger : Colors.grey.shade400,
                       ),
                       if (comment.likesCount > 0) ...[
                         const SizedBox(height: 2),
@@ -1378,7 +1746,7 @@ class _CommentTile extends StatelessWidget {
                           _formatCount(comment.likesCount),
                           style: TextStyle(
                             fontSize: 11,
-                            color: comment.isLiked ? Colors.red : Colors.grey.shade400,
+                            color: comment.isLiked ? _kDanger : Colors.grey.shade400,
                           ),
                         ),
                       ],
@@ -1413,281 +1781,135 @@ class _CommentTile extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Creator Stats Panel — shown above own posts with earnings & engagement
-// ═══════════════════════════════════════════════════════════════════════
-
-class _CreatorStatsPanel extends StatelessWidget {
-  final PostEarningsResult earnings;
-  final Post post;
-
-  const _CreatorStatsPanel({required this.earnings, required this.post});
+/// Outlined pill used in the owner-only CRUD row below the AppBar.
+/// Playbook §110 spec: `circular(20)`, padding `(14, 8)`, 12px label.
+/// `danger:true` switches to semantic red `_kDanger`.
+class _CrudPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+  const _CrudPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(0, 0, 0, 1),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Earnings headline
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+    final fg = danger ? _kDanger : _kPrimary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 36,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: fg.withValues(alpha: 0.40)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 6),
               Text(
-                '${earnings.currency} ${_formatAmount(earnings.estimatedEarnings)}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'estimated earnings',
+                label,
                 style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF999999),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
                 ),
-              ),
-              const Spacer(),
-              // Badges
-              if (post.isTrending)
-                _badge('Trending', const Color(0xFFFF6B00)),
-              if (post.isViral)
-                Padding(
-                  padding: EdgeInsets.only(left: post.isTrending ? 4 : 0),
-                  child: _badge('Viral', const Color(0xFFE91E63)),
-                ),
-              if (post.isFeatured)
-                Padding(
-                  padding: EdgeInsets.only(left: (post.isTrending || post.isViral) ? 4 : 0),
-                  child: _badge('Featured', const Color(0xFF2196F3)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Engagement stats row
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _statChip(Icons.visibility_outlined, _formatCount(post.viewsCount), 'Views'),
-                const SizedBox(width: 6),
-                _statChip(Icons.favorite_outline, _formatCount(post.likesCount), 'Likes'),
-                const SizedBox(width: 6),
-                _statChip(Icons.chat_bubble_outline, _formatCount(post.commentsCount), 'Comments'),
-                const SizedBox(width: 6),
-                _statChip(Icons.repeat_rounded, _formatCount(post.sharesCount), 'Shares'),
-                const SizedBox(width: 6),
-                _statChip(Icons.bookmark_outline, _formatCount(post.savesCount), 'Saves'),
-                if (post.watchTimeSeconds > 0) ...[
-                  const SizedBox(width: 6),
-                  _statChip(Icons.timer_outlined, _formatDuration(post.watchTimeSeconds), 'Watch'),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Performance row
-          Row(
-            children: [
-              _performancePill(
-                'Engagement',
-                '${earnings.engagementRate.toStringAsFixed(1)}%',
-              ),
-              const SizedBox(width: 8),
-              _performancePill(
-                'Reach',
-                _formatCount(earnings.impressions),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
-          ),
-          // Earnings breakdown (expandable)
-          const SizedBox(height: 8),
-          _EarningsBreakdown(earnings: earnings),
-        ],
-      ),
-    );
-  }
-
-  Widget _badge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-      ),
-    );
-  }
-
-  Widget _statChip(IconData icon, String value, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF666666)),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF999999)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _performancePill(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label ',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) {
-      return '${(amount / 1000000).toStringAsFixed(1)}M';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(1)}K';
-    }
-    return amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2);
-  }
-
-  String _formatCount(int count) {
-    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
-    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return count.toString();
-  }
-
-  String _formatDuration(int seconds) {
-    if (seconds >= 3600) {
-      return '${(seconds / 3600).toStringAsFixed(1)}h';
-    } else if (seconds >= 60) {
-      return '${(seconds / 60).toStringAsFixed(0)}m';
-    }
-    return '${seconds}s';
-  }
-}
-
-/// Expandable earnings breakdown showing per-metric contributions.
-class _EarningsBreakdown extends StatefulWidget {
-  final PostEarningsResult earnings;
-  const _EarningsBreakdown({required this.earnings});
-
-  @override
-  State<_EarningsBreakdown> createState() => _EarningsBreakdownState();
-}
-
-class _EarningsBreakdownState extends State<_EarningsBreakdown> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                const Text(
-                  'Earnings breakdown',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: const Color(0xFF666666),
-                ),
-              ],
-            ),
           ),
         ),
-        if (_expanded) ...[
-          const SizedBox(height: 4),
-          _row('Views', widget.earnings.views),
-          _row('Likes', widget.earnings.likes),
-          _row('Comments', widget.earnings.comments),
-          _row('Shares', widget.earnings.shares),
-          _row('Saves', widget.earnings.saves),
-          if (widget.earnings.watchTime.count > 0)
-            _row('Watch time', widget.earnings.watchTime),
-        ],
-      ],
+      ),
     );
   }
+}
 
-  Widget _row(String label, EarningsMetric metric) {
-    if (metric.count == 0 && metric.amount == 0) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
+/// Brief shake animation that fires whenever [nonce] changes — used
+/// to signal optimistic-update failures (like / save) without a
+/// SnackBar (playbook §1568). Suppressed when reduce-motion is on.
+class _ShakeOnFailure extends StatelessWidget {
+  final int nonce;
+  final Widget child;
+  const _ShakeOnFailure({required this.nonce, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (MotionTokens.reduced(context)) return child;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(nonce),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: MotionTokens.medium,
+      builder: (context, t, c) {
+        // Damped 3-cycle horizontal shake — playbook §1131.
+        final dx = nonce == 0 ? 0.0 : (1 - t) * 6.0 * (t < 0.05 ? 0 : 1) *
+            (t < 0.5 ? 1 : -1) *
+            ((t * 6).floor().isEven ? 1 : -1);
+        return Transform.translate(offset: Offset(dx, 0), child: c);
+      },
+      child: child,
+    );
+  }
+}
+
+/// Inline error banner shown above the comment composer when a save
+/// fails. Replaces SnackBars per playbook §99. Wrapped in
+/// [Semantics(liveRegion: true)] so screen readers announce on appear.
+class _InlineErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+  const _InlineErrorBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: _kDanger.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _kDanger.withValues(alpha: 0.20)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                size: 18, color: _kDanger),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: _kDanger,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          Text(
-            '${metric.count} × ${widget.earnings.currency} ${metric.rate}',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
-          ),
-          const Spacer(),
-          Text(
-            '${widget.earnings.currency} ${metric.amount.toStringAsFixed(1)}',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
+            IconButton(
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close_rounded,
+                  size: 18, color: _kDanger),
+              padding: EdgeInsets.zero,
+              constraints:
+                  const BoxConstraints(minWidth: 36, minHeight: 36),
+              tooltip: 'Dismiss',
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

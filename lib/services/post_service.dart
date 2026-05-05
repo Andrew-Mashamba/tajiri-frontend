@@ -211,12 +211,15 @@ class PostService {
     double? videoSpeed,
     String? videoFilter,
     List<Map<String, dynamic>>? textOverlays,
-    // Reply (Duet) / Stitch metadata
+    // Reply / Stitch / Quote / Remix / Duet metadata — strategy §1C
     int? replyToPostId,
     String? replyLayout, // 'side_by_side', 'top_bottom', 'pip'
     int? stitchFromPostId,
     int? stitchTrimStartMs,
     int? stitchTrimEndMs,
+    int? quoteFromPostId,
+    int? remixFromPostId,
+    int? duetFromPostId,
     // Content category for search indexing
     String? contentCategory,
     // Progress callback for large uploads
@@ -331,12 +334,15 @@ class PostService {
         if (videoSpeed != null) request.fields['video_speed'] = videoSpeed.toString();
         if (videoFilter != null) request.fields['video_filter'] = videoFilter;
         if (textOverlays != null) request.fields['text_overlays'] = jsonEncode(textOverlays);
-        // Reply (Duet) / Stitch metadata
+        // Reply / Stitch / Quote / Remix / Duet metadata
         if (replyToPostId != null) request.fields['reply_to_post_id'] = replyToPostId.toString();
         if (replyLayout != null) request.fields['reply_layout'] = replyLayout;
         if (stitchFromPostId != null) request.fields['stitch_from_post_id'] = stitchFromPostId.toString();
         if (stitchTrimStartMs != null) request.fields['stitch_trim_start_ms'] = stitchTrimStartMs.toString();
         if (stitchTrimEndMs != null) request.fields['stitch_trim_end_ms'] = stitchTrimEndMs.toString();
+        if (quoteFromPostId != null) request.fields['quote_from_post_id'] = quoteFromPostId.toString();
+        if (remixFromPostId != null) request.fields['remix_from_post_id'] = remixFromPostId.toString();
+        if (duetFromPostId != null) request.fields['duet_from_post_id'] = duetFromPostId.toString();
         // Multipart form sends strings; backend expects boolean-like value (accept '1'/'0' or 'true'/'false')
         request.fields['allow_comments'] = allowComments ? '1' : '0';
 
@@ -541,6 +547,9 @@ class PostService {
     int? stitchFromPostId,
     int? stitchTrimStartMs,
     int? stitchTrimEndMs,
+    int? quoteFromPostId,
+    int? remixFromPostId,
+    int? duetFromPostId,
     String? contentCategory,
     void Function(double progress)? onProgress,
     bool allowComments = true,
@@ -573,6 +582,9 @@ class PostService {
         if (stitchFromPostId != null) 'stitch_from_post_id': stitchFromPostId.toString(),
         if (stitchTrimStartMs != null) 'stitch_trim_start_ms': stitchTrimStartMs.toString(),
         if (stitchTrimEndMs != null) 'stitch_trim_end_ms': stitchTrimEndMs.toString(),
+        if (quoteFromPostId != null) 'quote_from_post_id': quoteFromPostId.toString(),
+        if (remixFromPostId != null) 'remix_from_post_id': remixFromPostId.toString(),
+        if (duetFromPostId != null) 'duet_from_post_id': duetFromPostId.toString(),
         'allow_comments': allowComments ? '1' : '0',
       });
 
@@ -1007,6 +1019,37 @@ class PostService {
       final response = await http.delete(Uri.parse('$_baseUrl/posts/$postId/comments/pin'));
       return response.statusCode == 200;
     } catch (e) {
+      return false;
+    }
+  }
+
+  /// Negative-feedback signal — integrity framework §II.
+  /// Accepts any of the 10 canonical signal types:
+  ///   negative_reaction · hide_post · not_interested · mute_creator ·
+  ///   block_creator · unfollow_after_view · report_content ·
+  ///   rapid_scroll_past · session_exit_after_view · negative_share
+  ///
+  /// Server-side severity is enforced; the frontend can't lie.
+  /// Idempotent within a 24h window per (actor, signal, post).
+  Future<bool> postFeedback({
+    required int postId,
+    required int userId,
+    required String signalType,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'signal_type': signalType,
+        if (metadata != null) 'metadata': metadata,
+      };
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/feedback'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
       return false;
     }
   }

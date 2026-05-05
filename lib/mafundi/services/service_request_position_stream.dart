@@ -206,7 +206,8 @@ class ServiceRequestPositionStream {
         headers['Authorization'] = 'Bearer $authToken';
       }
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/broadcasting/auth'),
+        // Laravel mounts /broadcasting/auth on the web origin (not /api).
+        Uri.parse('${ApiConfig.broadcastAuthBaseUrl}/broadcasting/auth'),
         headers: headers,
         body: jsonEncode({
           'socket_id': _socketId,

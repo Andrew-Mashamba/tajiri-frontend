@@ -47,6 +47,7 @@
     - [Inline feedback, never toasts](#inline-feedback-never-toasts)
     - [Save → pop → refresh chain](#save--pop--refresh-chain-project-wide)
     - [CRUD directives](#crud-directives-project-wide)
+    - [Local-first list pages — layered cache & SWR](#local-first-list-pages--layered-cache--stale-while-revalidate-project-wide)
   - [Implementation patterns](#implementation-patterns)
   - [Performance & lifecycle](#motion-performance--lifecycle)
   - [Anti-patterns](#motion-anti-patterns)
@@ -769,8 +770,11 @@ Need to store data on device?
 │   → In-memory cache (Map<K, (Value, DateTime)>) with TTL
 │   Examples: ProfileService (5 min, 50 entries), ShopService categories (1 hour)
 ├─ Page-1 cache for feed/list with JSON-shaped objects, no relational queries?
-│   → Hive box of JSON strings
-│   Examples: FeedCacheService, MessageCacheService, ConversationCacheService
+│   → Hive box of JSON strings — wrap in a layered cache service
+│     (RAM + disk) per the canonical pattern in Part VI →
+│     "Local-first list pages — layered cache & SWR".
+│   Examples: FeedCacheService, UserPostsCacheService,
+│             MessageCacheService, ConversationCacheService
 ├─ Relational, large dataset, FTS or filtered queries, must work offline?
 │   → SQLite (sqflite) — see candidates below
 └─ Media files (images, video, audio)?
@@ -1945,9 +1949,233 @@ Every list screen has `RefreshIndicator(color: Color(0xFF1A1A1A))`. The pull-dow
 
 Every async screen handles three states explicitly. Skeletons (or shimmer) for loading, an icon+title+subtitle for empty, an icon+message+retry for error. **Never a blank screen.**
 
-### Stale-while-revalidate
+### Local-first list pages — layered cache & stale-while-revalidate (project-wide)
 
-For cached data: show the stale view immediately, refresh silently in the background, surface a small "New" pill if anything changed. Never show a full-screen spinner over data the user has seen before.
+Every list/grid page that fetches user-scoped data from the server MUST implement a **two-layer cache (RAM + disk)** and a **stale-while-revalidate hydrate flow**. Posts grids, photos, videos, conversations, friends, followers, following, subscribers, michango — anything that's "this user's stuff" and doesn't change every second.
+
+> **Reference implementation:** `lib/services/user_posts_cache_service.dart` + `lib/screens/profile/posts/profile_posts_page.dart` (`_hydrateAndRefresh`).
+
+#### Why
+
+- **Cold-start:** returning users tap a tab expecting their data already there. A 200-500ms spinner is a 2010s experience.
+- **Cross-route persistence:** tap Photos → tap back → tap Photos again. Without a cache the second visit re-fetches and the user wonders why "going back" feels slow.
+- **Offline tolerance:** WiFi flakes; the user can still see what was last known.
+- **Server pressure:** redundant fetches cost backend cycles + Tanzanian mobile data.
+
+#### The two layers
+
+| Layer | Backing | Lifetime | Capacity | Read latency |
+|---|---|---|---|---|
+| **In-memory** | `Map<int, List<Item>>` | Process lifetime | **Uncapped** per key (full scroll-back state) | ~0ms |
+| **Disk** | Hive `Box<String>` | Across cold-starts | **Capped** (typically 100 items per key) | ~10-50ms |
+| **Network** | HTTP service | — | — | 200-500ms |
+
+#### Service template
+
+Each domain owns a singleton cache service modelled on `UserPostsCacheService`:
+
+```dart
+class XxxCacheService {
+  XxxCacheService._();
+  static final XxxCacheService instance = XxxCacheService._();
+
+  static const String _boxName = 'xxx_cache';
+  static const int _maxItemsPerKey = 100;
+
+  Box<String>? _box;
+  final Map<int, List<Item>> _hot = {};
+
+  Future<Box<String>> _getBox() async {
+    _box ??= await Hive.openBox<String>(_boxName);
+    return _box!;
+  }
+  String _keyOf(int key) => 'xxx_$key';
+
+  // Sync hot read — null on miss; caller falls back to getCached().
+  List<Item>? getSync(int key) => _hot[key];
+
+  // Async: hot first, then disk; hydrates hot from disk on first hit.
+  Future<List<Item>?> getCached(int key) async {
+    final hot = _hot[key];
+    if (hot != null) return hot;
+    try {
+      final box = await _getBox();
+      final raw = box.get(_keyOf(key));
+      if (raw == null) return null;
+      final list = (jsonDecode(raw) as List)
+          .whereType<Map<String, dynamic>>()
+          .map(Item.fromJson)
+          .toList();
+      _hot[key] = list;
+      return list;
+    } catch (_) { return null; }
+  }
+
+  // In-memory uncapped (scroll-back survives); disk capped.
+  Future<void> save(int key, List<Item> items) async {
+    _hot[key] = items;
+    final capped = items.length > _maxItemsPerKey
+        ? items.sublist(0, _maxItemsPerKey)
+        : items;
+    try {
+      final box = await _getBox();
+      await box.put(_keyOf(key),
+          jsonEncode(capped.map((i) => i.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  Future<void> invalidate(int key) async {
+    _hot.remove(key);
+    try { (await _getBox()).delete(_keyOf(key)); } catch (_) {}
+  }
+
+  Future<void> clear() async {
+    _hot.clear();
+    try { (await _getBox()).clear(); } catch (_) {}
+  }
+}
+```
+
+#### Page hydrate flow
+
+Every list/grid page's `initState` calls a single method that hydrates from cache and refreshes from network in parallel:
+
+```dart
+@override
+void initState() {
+  super.initState();
+  _scrollController.addListener(_onScroll);
+  _hydrateAndRefresh();
+}
+
+Future<void> _hydrateAndRefresh() async {
+  final cache = XxxCacheService.instance;
+
+  // 1. Same-session: in-memory hit (~0ms).
+  final hot = cache.getSync(widget.userId);
+  if (hot != null && hot.isNotEmpty) {
+    setState(() {
+      _items = hot;
+      _isLoading = false;
+      _hasMore = true;
+    });
+  } else {
+    // 2. Cold-start: disk hit (~10-50ms).
+    final cold = await cache.getCached(widget.userId);
+    if (!mounted) return;
+    if (cold != null && cold.isNotEmpty) {
+      setState(() {
+        _items = cold;
+        _isLoading = false;
+        _hasMore = true;
+      });
+    }
+  }
+
+  // 3. Network — always. silent:true keeps the existing list visible
+  //    until the response arrives so the user never sees a flicker.
+  await _loadItems(silent: _items.isNotEmpty);
+}
+```
+
+`_loadItems` writes back to the cache on success:
+
+```dart
+Future<void> _loadItems({bool silent = false}) async {
+  if (!silent) setState(() => _isLoading = true);
+  final result = await _service.fetch(...);
+  if (!mounted) return;
+  setState(() {
+    _isLoading = false;
+    if (result.success) {
+      _items = result.items;
+      _hasMore = ...;
+    }
+  });
+  if (result.success) {
+    XxxCacheService.instance.save(widget.userId, _items);
+  }
+}
+```
+
+Pagination and mutations write back too — the cache is "what the user sees right now":
+
+```dart
+// pagination append
+_items.addAll(more);
+XxxCacheService.instance.save(widget.userId, _items);
+
+// optimistic delete
+_items.removeWhere((i) => i.id == doomed.id);
+XxxCacheService.instance.save(widget.userId, _items);
+```
+
+#### Where to apply (project-wide)
+
+A domain MUST have a layered cache when ALL three apply:
+
+1. The user reads it more than once per session.
+2. The data is keyed on a stable identifier (userId, conversationId, groupId, creatorId).
+3. Updates don't arrive every few seconds (otherwise SSE/WebSocket is the right tool, not a cache).
+
+Reference table — keep in sync as new caches land:
+
+| Domain | Service | Key | Status |
+|---|---|---|---|
+| Main feed | `FeedCacheService` | feed type | ✅ |
+| User's own posts (Posts tab) | `UserPostsCacheService` | userId | ✅ |
+| Conversations list | `ConversationCacheService` | currentUserId | ✅ |
+| People search | `PeopleCacheService` | recent queries | ✅ |
+| Photos grid | TBD | userId | ⏳ apply pattern |
+| Videos grid | TBD | userId | ⏳ apply pattern |
+| Friends list | TBD | userId | ⏳ apply pattern |
+| Followers list | TBD | userId | ⏳ apply pattern |
+| Following list | TBD | userId | ⏳ apply pattern |
+| Subscribers list | TBD | creatorId | ⏳ apply pattern |
+| Saved posts | (SQLite — Part IV §10) | userId | ⏳ |
+| Michango contributions | TBD | userId | ⏳ apply pattern |
+| Wallet transactions | (SQLite — Part IV §1) | userId | ⏳ |
+| Notifications | (SQLite — Part IV §2) | userId | ⏳ |
+
+When SQLite is the right primary backing (relational/queryable per Part IV), the same hydrate flow applies — the layers are SQLite + RAM instead of Hive + RAM.
+
+#### Rules to follow strictly
+
+1. **Layered cache, never single-layer.** RAM-only loses cold-start speed; disk-only loses same-session speed.
+2. **In-memory uncapped, disk capped.** RAM holds the full loaded list so scroll-back survives navigator pop/repush. Disk caps at a sane number to bound storage.
+3. **Network ALWAYS fires on page entry**, even after a cache hit. The cache is for first-paint speed, never for staleness.
+4. **`silent: true` on the network call** when cache already hydrated — prevents the loading spinner from flashing over data the user already sees.
+5. **Save back on every state mutation** — page-1 fetch, paginated append, delete, create. The cache must always equal "what the user is looking at."
+6. **`invalidate(key)` when uncertain.** If the page can't reliably reconstruct post-mutation state (e.g. server-side reorders), invalidate so the next hydrate reads fresh.
+7. **Logout clears every cache.** `AuthService._performLocalLogout()` calls `instance.clear()` on every layered service. New caches MUST be added there in the same commit they're created.
+8. **One service per domain, one box per service.** Don't share Hive boxes across unrelated entities — clear-on-logout becomes ambiguous and migrations tangle.
+9. **`Map<key, List<Item>>` for hot-cache.** Key is the stable id (`userId`, `creatorId`, `conversationId`, etc.).
+10. **`if (!mounted) return;` after every await.** Cache reads and API responses are async; the State may have been disposed.
+11. **Pair with `AutomaticKeepAliveClientMixin`.** The cache handles cross-route persistence; keep-alive handles within-route tab switches. Both together = the page never recreates from scratch.
+
+#### Anti-patterns
+
+| Anti-pattern | Why it's bad | Fix |
+|---|---|---|
+| `initState() { _loadItems(); }` with no cache | Every page mount = full network round-trip; cold-start, tab switch, back-nav all feel slow. | Hydrate from cache first; fetch in parallel. |
+| Single Hive layer (no in-memory) | Same-session re-visit hits disk every time. | Add `Map<key, List<T>> _hot` layer. |
+| Single in-memory layer (no disk) | Cold-start blank; no offline tolerance. | Persist via Hive. |
+| Network only on cache miss | Cache becomes the source of truth and goes stale. | Network always; cache is only for first-paint speed. |
+| Cache writes only on initial fetch (page 1) | User scrolls to item 200, leaves, returns → only sees first 24. Scroll history evaporates. | Write back on every paginated append. |
+| Forgetting to clear on logout | Next user sees previous user's data flash on first paint. | Add `clear()` to `_performLocalLogout`. |
+| Showing the loading spinner over cached content | Defeats the whole point — user sees flicker. | `silent: true` on the network call when hydrated. |
+| Sharing a Hive box across unrelated domains | Logout-clear too broad or too narrow; debugging harder. | One box per service. |
+
+#### Acceptance checks (per cache service)
+
+- [ ] Singleton with `getSync`, `getCached`, `save`, `invalidate`, `clear`.
+- [ ] In-memory `Map<key, List<T>>`, disk `Box<String>` named `<domain>_cache`.
+- [ ] Save: in-memory uncapped, disk capped at a documented `_maxItemsPerKey`.
+- [ ] `Item.fromJson` + `Item.toJson` roundtrip with no data loss.
+- [ ] `AuthService._performLocalLogout` calls `instance.clear()` for this service.
+- [ ] Reference page's `_hydrateAndRefresh` follows the template exactly (RAM → disk → network in that order).
+- [ ] Network call is `silent: true` when cache hydrated something.
+- [ ] Page mixes in `AutomaticKeepAliveClientMixin` (so the State preserves within parent route's tab switches).
 
 ## Implementation patterns
 
@@ -2156,6 +2384,11 @@ Apply across all animation widgets — accessibility users should never see moti
 | **`resizeToAvoidBottomInset: false`** without reason | Keyboard covers the focused field. | Leave the default `true`; wrap forms in `SingleChildScrollView`. |
 | **Using `WillPopScope`** | Deprecated in Flutter 3.16+. | Use `PopScope` with `onPopInvokedWithResult`. |
 | **Intercepting back without an unsaved-changes reason** | Friction for no benefit; users think the back button is broken. | Reserve `PopScope` for screens with real losable state (compose, long forms). |
+| **List/grid page fetching from network on every mount** | Cold-start spinner, slow tab-back, no offline tolerance. | Layered cache (RAM + disk) + SWR hydrate flow — see *Local-first list pages*. |
+| **Single-layer cache** (RAM only or disk only) | Either cold-start blank or every same-session re-visit hits disk. | Both layers — RAM uncapped, disk capped. |
+| **Loading spinner over already-cached content** | User sees flicker; defeats the cache. | `silent: true` on the network call when the cache hydrated something. |
+| **Cache writes only on initial fetch (not on pagination/mutation)** | Scroll-back state evaporates on pop/repush. | Save back on every state change — page-1 fetch, paginated append, delete, create. |
+| **Forgetting to clear a cache on logout** | Next user briefly sees previous user's data. | Add `instance.clear()` to `AuthService._performLocalLogout` in the same commit the cache is created. |
 
 ---
 

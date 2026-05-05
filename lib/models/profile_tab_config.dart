@@ -91,11 +91,9 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'music', label: 'Music', icon: 'music_note', enabled: true, order: 3),
     ProfileTabConfig(id: 'live', label: 'Live', icon: 'live_tv', enabled: true, order: 4),
     ProfileTabConfig(id: 'groups', label: 'Groups', icon: 'group', enabled: true, order: 5),
-    ProfileTabConfig(id: 'friends', label: 'Friends', icon: 'people', enabled: true, order: 6),
     ProfileTabConfig(id: 'saved', label: 'Saved', icon: 'bookmark', enabled: true, order: 7),
     ProfileTabConfig(id: 'creator', label: 'Creator', icon: 'auto_awesome', enabled: true, order: 8),
     ProfileTabConfig(id: 'settings', label: 'Settings', icon: 'settings', enabled: true, order: 9),
-    ProfileTabConfig(id: 'about', label: 'About', icon: 'info', enabled: true, order: 10),
 
     // ── Commerce ────────────────────────────────────────────────────
     ProfileTabConfig(id: 'shop', label: 'Shop', icon: 'storefront', enabled: true, order: 8),
@@ -109,6 +107,7 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'investments', label: 'Invest', icon: 'trending_up', enabled: true, order: 14),
     ProfileTabConfig(id: 'loans', label: 'Loans', icon: 'request_quote', enabled: true, order: 15),
     ProfileTabConfig(id: 'my_wallet', label: 'Wallet', icon: 'account_balance_wallet', enabled: true, order: 16),
+    ProfileTabConfig(id: 'subscriptions', label: 'Subscriptions', icon: 'workspace_premium', enabled: true, order: 17),
 
     // ── Health & Wellness ───────────────────────────────────────────
     ProfileTabConfig(id: 'doctor', label: 'Doctor', icon: 'medical_services', enabled: true, order: 16),
@@ -289,7 +288,7 @@ class ProfileTabDefaults {
     ProfileTabCategory(
       id: 'social',
       label: '', // No header for social — it's the top section
-      tabIds: ['posts', 'photos', 'videos', 'music', 'live', 'groups', 'friends', 'saved', 'creator', 'settings', 'about'],
+      tabIds: ['posts', 'photos', 'videos', 'music', 'live', 'groups', 'saved', 'creator', 'settings'],
     ),
     ProfileTabCategory(
       id: 'commerce',
@@ -299,7 +298,7 @@ class ProfileTabDefaults {
     ProfileTabCategory(
       id: 'finance',
       label: 'FINANCE',
-      tabIds: ['budget', 'kikoba', 'investments', 'loans', 'my_wallet', 'bills'],
+      tabIds: ['budget', 'kikoba', 'investments', 'loans', 'my_wallet', 'subscriptions', 'bills'],
     ),
     ProfileTabCategory(
       id: 'health',

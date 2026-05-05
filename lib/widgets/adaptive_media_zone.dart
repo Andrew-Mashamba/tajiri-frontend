@@ -1,9 +1,12 @@
-import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_blurhash/flutter_blurhash.dart';
+import 'package:heroicons/heroicons.dart';
+
 import '../models/post_models.dart';
+import '../services/media_cache_service.dart';
 import 'cached_media_image.dart';
 import 'video_player_widget.dart';
-import 'package:heroicons/heroicons.dart';
 
 // ─── Constants ──────────────────────────────────────────────
 const double _kMinRatio = 4 / 5;     // 0.8  — tallest portrait
@@ -46,6 +49,52 @@ double _clampRatio(double ratio) => ratio.clamp(_kMinRatio, _kMaxRatio);
 
 Color _mediaBgColor(PostMedia media, Color? fallback) {
   return parseDominantColor(media.dominantColor, fallback: fallback ?? _kFallbackBg);
+}
+
+/// Aspect-preserving image for ultra-tall / ultra-wide canvases.
+///
+/// Why this bypasses [CachedMediaImage]: that helper hardcodes both
+/// `memCacheWidth` and `memCacheHeight` (default 800×800). Flutter's
+/// `ResizeImage` uses `ResizeImagePolicy.exact`, which decodes the
+/// bitmap to that exact rectangle regardless of source aspect — the
+/// downscaled bitmap is squashed, then `BoxFit.contain` paints the
+/// already-distorted image. Same fix as `CoverCanvas`: pass
+/// `memCacheWidth` only so the decoder preserves the source aspect.
+class _AspectSafeImage extends StatelessWidget {
+  final String imageUrl;
+  final String? blurhash;
+  final String? dominantColor;
+
+  const _AspectSafeImage({
+    required this.imageUrl,
+    this.blurhash,
+    this.dominantColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final decodeWidth = (mq.size.width * mq.devicePixelRatio).round();
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.contain,
+      cacheManager: MediaCacheManager.instance,
+      memCacheWidth: decodeWidth,
+      fadeInDuration: const Duration(milliseconds: 180),
+      placeholder: (_, _) => _placeholder(),
+      errorWidget: (_, _, _) => const ColoredBox(color: Colors.black),
+    );
+  }
+
+  Widget _placeholder() {
+    if (blurhash != null && blurhash!.isNotEmpty) {
+      return BlurHash(hash: blurhash!, imageFit: BoxFit.cover);
+    }
+    if (dominantColor != null && dominantColor!.isNotEmpty) {
+      return ColoredBox(color: parseDominantColor(dominantColor));
+    }
+    return const ColoredBox(color: Colors.black);
+  }
 }
 
 // ─── AdaptiveMediaZone ──────────────────────────────────────
@@ -186,42 +235,17 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
         );
 
       case _RatioClass.ultraTall:
-        final cw = _optimalCacheWidth(context);
         return AspectRatio(
           aspectRatio: _kMinRatio, // 4:5 container
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Blurred background layer — zero fade to avoid animation artifacts
-              ExcludeSemantics(
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                  child: CachedMediaImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    backgroundColor: bgColor,
-                    blurhash: blurhash,
-                    dominantColor: dominantColor,
-                    fadeInDuration: Duration.zero,
-                    fadeOutDuration: Duration.zero,
-                    cacheWidth: cw,
-                  ),
-                ),
+          child: Container(
+            color: Colors.black,
+            child: Center(
+              child: _AspectSafeImage(
+                imageUrl: imageUrl,
+                blurhash: blurhash,
+                dominantColor: dominantColor,
               ),
-              // Dark tint
-              Container(color: Colors.black.withValues(alpha: 0.15)),
-              // Sharp foreground
-              Center(
-                child: CachedMediaImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  backgroundColor: Colors.transparent,
-                  blurhash: blurhash,
-                  dominantColor: dominantColor,
-                  cacheWidth: cw,
-                ),
-              ),
-            ],
+            ),
           ),
         );
 
@@ -229,15 +253,12 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
         return AspectRatio(
           aspectRatio: _kMaxRatio, // 1.91:1 container
           child: Container(
-            color: bgColor,
+            color: Colors.black,
             child: Center(
-              child: CachedMediaImage(
+              child: _AspectSafeImage(
                 imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                backgroundColor: Colors.transparent,
                 blurhash: blurhash,
                 dominantColor: dominantColor,
-                cacheWidth: cacheW,
               ),
             ),
           ),
@@ -542,38 +563,16 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
       );
     }
 
-    // Ultra-tall or ultra-wide: blur bg + contain
-    final cw = _optimalCacheWidth(context);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ExcludeSemantics(
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: CachedMediaImage(
-              imageUrl: media.fileUrl,
-              fit: BoxFit.cover,
-              backgroundColor: bg,
-              blurhash: media.blurhash,
-              dominantColor: media.dominantColor,
-              fadeInDuration: Duration.zero,
-              fadeOutDuration: Duration.zero,
-              cacheWidth: cw,
-            ),
-          ),
+    // Ultra-tall or ultra-wide: solid black canvas + contain.
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: _AspectSafeImage(
+          imageUrl: media.fileUrl,
+          blurhash: media.blurhash,
+          dominantColor: media.dominantColor,
         ),
-        Container(color: Colors.black.withValues(alpha: 0.15)),
-        Center(
-          child: CachedMediaImage(
-            imageUrl: media.fileUrl,
-            fit: BoxFit.contain,
-            backgroundColor: Colors.transparent,
-            blurhash: media.blurhash,
-            dominantColor: media.dominantColor,
-            cacheWidth: cw,
-          ),
-        ),
-      ],
+      ),
     );
   }
 

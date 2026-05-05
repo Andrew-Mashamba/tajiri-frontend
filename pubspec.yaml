@@ -78,6 +78,12 @@ dependencies:
 
   # Media picker
   image_picker: ^1.0.7
+  image_cropper: ^12.2.1
+  flutter_image_compress: ^2.4.0
+
+  # Animation polish
+  animated_flip_counter: ^0.3.4
+  flutter_animate: ^4.5.2
 
   # Video/audio playback
   video_player: ^2.10.1

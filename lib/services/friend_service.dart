@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../models/friend_models.dart';
 import '../config/api_config.dart';
+import 'local_storage_service.dart';
 import 'post_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -267,11 +271,13 @@ class FriendService {
     int perPage = 20,
   }) async {
     try {
-      String url = '$_baseUrl/users/$userId/followers?page=$page&per_page=$perPage';
+      String url = '$_baseUrl/follows/$userId/followers?page=$page&per_page=$perPage';
       if (currentUserId != null) {
         url += '&current_user_id=$currentUserId';
       }
-      final response = await http.get(Uri.parse(url));
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(Uri.parse(url),
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -300,11 +306,13 @@ class FriendService {
     int perPage = 20,
   }) async {
     try {
-      String url = '$_baseUrl/users/$userId/following?page=$page&per_page=$perPage';
+      String url = '$_baseUrl/follows/$userId/following?page=$page&per_page=$perPage';
       if (currentUserId != null) {
         url += '&current_user_id=$currentUserId';
       }
-      final response = await http.get(Uri.parse(url));
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(Uri.parse(url),
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -426,6 +434,537 @@ class FriendService {
     } catch (e) {
       return false;
     }
+  }
+
+  // ── Subscribers manager (creator-mode) ────────────────────────────────
+
+  Future<SubscriberListResult> getOwnerSubscribers({
+    required int creatorId,
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter, // new | expiring | churned | null (active default)
+    String? sort,   // newest | oldest | name | expiring | null
+  }) async {
+    try {
+      final params = <String, String>{
+        'page': '$page',
+        'per_page': '$perPage',
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (filter != null) 'filter': filter,
+        if (sort != null) 'sort': sort,
+      };
+      final uri = Uri.parse('$_baseUrl/subscriptions/creator/$creatorId/subscribers')
+          .replace(queryParameters: params);
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(uri,
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true) {
+          final entries = (body['data'] as List)
+              .map((e) => SubscriberEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+          final total =
+              (body['meta']?['pagination']?['total'] as num?)?.toInt() ?? 0;
+          return SubscriberListResult(
+              success: true, entries: entries, totalCount: total);
+        }
+      }
+      return const SubscriberListResult(
+          success: false, message: 'Failed to load subscribers');
+    } catch (e) {
+      return SubscriberListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  Future<SubscriberInsights?> getSubscriberInsights({required int creatorId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(
+        Uri.parse(
+            '$_baseUrl/subscriptions/creator/$creatorId/subscribers/insights'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true && body['data'] is Map<String, dynamic>) {
+          return SubscriberInsights.fromJson(body['data']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> creatorCancelSubscription({
+    required int creatorId,
+    required int subscriptionId,
+  }) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse(
+            '$_baseUrl/subscriptions/creator/$creatorId/subscribers/$subscriptionId/cancel'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      return response.statusCode == 200 &&
+          (jsonDecode(response.body)['success'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int> creatorBulkCancelSubscriptions({
+    required int creatorId,
+    required List<int> subscriptionIds,
+  }) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse(
+            '$_baseUrl/subscriptions/creator/$creatorId/subscribers/bulk-cancel'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'subscription_ids': subscriptionIds}),
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true) {
+          return (body['data']?['cancelled'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<String?> exportSubscribersCsv({required int creatorId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}subscribers-$today.csv';
+      final dio = Dio();
+      final response = await dio.download(
+        '$_baseUrl/subscriptions/creator/$creatorId/subscribers/export.csv',
+        path,
+        options: Options(
+          headers: token != null ? ApiConfig.authHeaders(token) : null,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.statusCode == 200) return path;
+    } catch (_) {}
+    return null;
+  }
+
+  // ── Friends manager (owner-mode) ──────────────────────────────────────
+
+  Future<FollowListResult> getOwnerFriends({
+    required int userId,
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final params = <String, String>{
+        'user_id': '$userId',
+        'page': '$page',
+        'per_page': '$perPage',
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (filter != null) 'filter': filter,
+        if (sort != null) 'sort': sort,
+      };
+      final uri =
+          Uri.parse('$_baseUrl/friends').replace(queryParameters: params);
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(uri,
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final users = (data['data'] as List)
+              .map((u) => FollowUser.fromJson(u))
+              .toList();
+          return FollowListResult(
+            success: true,
+            users: users,
+            meta: PaginationMeta.fromJson(data['meta'] ?? {}),
+          );
+        }
+      }
+      return FollowListResult(success: false, message: 'Failed to load friends');
+    } catch (e) {
+      return FollowListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  Future<FollowerInsights?> getFriendsInsights() async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(
+        Uri.parse('$_baseUrl/friends/insights'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is Map<String, dynamic>) {
+          return FollowerInsights.fromJson(data['data']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<int> bulkUnfriend({required List<int> ids}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/friends/bulk-unfriend'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'ids': ids}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data']?['unfriended'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<String?> exportFriendsCsv() async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}friends-$today.csv';
+      final dio = Dio();
+      final response = await dio.download(
+        '$_baseUrl/friends/export.csv',
+        path,
+        options: Options(
+          headers: token != null ? ApiConfig.authHeaders(token) : null,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.statusCode == 200) return path;
+    } catch (_) {}
+    return null;
+  }
+
+  // ── Following manager (owner-mode) ────────────────────────────────────
+
+  Future<FollowListResult> getOwnerFollowing({
+    required int userId,
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final params = <String, String>{
+        'page': '$page',
+        'per_page': '$perPage',
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (filter != null) 'filter': filter,
+        if (sort != null) 'sort': sort,
+      };
+      final uri = Uri.parse('$_baseUrl/follows/$userId/following')
+          .replace(queryParameters: params);
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(uri,
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final users = (data['data'] as List)
+              .map((u) => FollowUser.fromJson(u))
+              .toList();
+          return FollowListResult(
+            success: true,
+            users: users,
+            meta: PaginationMeta.fromJson(data['meta'] ?? {}),
+          );
+        }
+      }
+      return FollowListResult(success: false, message: 'Failed to load following');
+    } catch (e) {
+      return FollowListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  Future<FollowerInsights?> getFollowingInsights({required int userId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(
+        Uri.parse('$_baseUrl/follows/$userId/following/insights'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is Map<String, dynamic>) {
+          return FollowerInsights.fromJson(data['data']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> unfollow({required int userId, required int targetId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/follows/$userId/following/$targetId'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      return response.statusCode == 200 &&
+          (jsonDecode(response.body)['success'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int> bulkUnfollow({required int userId, required List<int> ids}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/follows/$userId/following/bulk-unfollow'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'ids': ids}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data']?['unfollowed'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<String?> exportFollowingCsv({required int userId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}following-$today.csv';
+      final dio = Dio();
+      final response = await dio.download(
+        '$_baseUrl/follows/$userId/following/export.csv',
+        path,
+        options: Options(
+          headers: token != null ? ApiConfig.authHeaders(token) : null,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.statusCode == 200) return path;
+    } catch (_) {}
+    return null;
+  }
+
+  // ── Followers manager (owner-mode) ────────────────────────────────────
+
+  /// Owner-mode followers list with q / filter / sort. Backend returns
+  /// 403 if the auth'd user doesn't match `userId` and any management
+  /// param is supplied.
+  Future<FollowListResult> getOwnerFollowers({
+    required int userId,
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final params = <String, String>{
+        'page': '$page',
+        'per_page': '$perPage',
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (filter != null) 'filter': filter,
+        if (sort != null) 'sort': sort,
+      };
+      final uri = Uri.parse('$_baseUrl/follows/$userId/followers')
+          .replace(queryParameters: params);
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(uri,
+          headers: token != null ? ApiConfig.authHeaders(token) : null);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final users = (data['data'] as List)
+              .map((u) => FollowUser.fromJson(u))
+              .toList();
+          return FollowListResult(
+            success: true,
+            users: users,
+            meta: PaginationMeta.fromJson(data['meta'] ?? {}),
+          );
+        }
+      }
+      return FollowListResult(success: false, message: 'Failed to load followers');
+    } catch (e) {
+      return FollowListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  Future<FollowerInsights?> getFollowerInsights({required int userId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.get(
+        Uri.parse('$_baseUrl/follows/$userId/followers/insights'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is Map<String, dynamic>) {
+          return FollowerInsights.fromJson(data['data']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> removeFollower({required int userId, required int followerId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/follows/$userId/followers/$followerId'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      return response.statusCode == 200 &&
+          (jsonDecode(response.body)['success'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int> bulkRemoveFollowers({required int userId, required List<int> ids}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/follows/$userId/followers/bulk-remove'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'ids': ids}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data']?['removed'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<bool> muteUser({required int userId, required int mutedUserId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/$userId/mutes'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'muted_user_id': mutedUserId}),
+      );
+      return response.statusCode == 200 &&
+          (jsonDecode(response.body)['success'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> unmuteUser({required int userId, required int mutedUserId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/users/$userId/mutes/$mutedUserId'),
+        headers: token != null ? ApiConfig.authHeaders(token) : null,
+      );
+      return response.statusCode == 200 &&
+          (jsonDecode(response.body)['success'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int> bulkMuteUsers({required int userId, required List<int> ids}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/$userId/mutes/bulk'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'ids': ids}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data']?['muted'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<int> bulkBlockUsers({required int userId, required List<int> ids}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/block-bulk'),
+        headers: {
+          if (token != null) ...ApiConfig.authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'user_id': userId, 'blocked_user_ids': ids}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['data']?['blocked'] as num?)?.toInt() ?? 0;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Downloads followers CSV to a temp file via Dio. Returns the local
+  /// path on success, null on failure.
+  Future<String?> exportFollowersCsv({required int userId}) async {
+    try {
+      final token = (await LocalStorageService.getInstance()).getAuthToken();
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}followers-$today.csv';
+      final dio = Dio();
+      final response = await dio.download(
+        '$_baseUrl/follows/$userId/followers/export.csv',
+        path,
+        options: Options(
+          headers: token != null ? ApiConfig.authHeaders(token) : null,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.statusCode == 200) return path;
+    } catch (_) {}
+    return null;
   }
 }
 

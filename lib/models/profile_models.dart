@@ -3,7 +3,7 @@
 import 'dart:convert';
 
 import 'post_models.dart';
-import 'photo_models.dart';
+import '../photos/models/photo_models.dart';
 import '../config/api_config.dart';
 
 class FullProfile {
@@ -12,12 +12,14 @@ class FullProfile {
   final String lastName;
   final String? username;
   final String? phoneNumber;
+  final String? nidaNumber; // Own profile only — backend gates this
   final String? email; // Own profile only — backend gates this
   final DateTime? dateOfBirth;
   final String? gender;
   final String? bio;
   final List<String>? interests;
   final String? relationshipStatus;
+  final PartnerLink? partner;
   final String? profilePhotoUrl;
   final String? coverPhotoUrl;
   final ProfileStats stats;
@@ -43,12 +45,14 @@ class FullProfile {
     required this.lastName,
     this.username,
     this.phoneNumber,
+    this.nidaNumber,
     this.email,
     this.dateOfBirth,
     this.gender,
     this.bio,
     this.interests,
     this.relationshipStatus,
+    this.partner,
     this.profilePhotoUrl,
     this.coverPhotoUrl,
     required this.stats,
@@ -124,6 +128,7 @@ class FullProfile {
       lastName: json['last_name'] ?? '',
       username: json['username'],
       phoneNumber: json['phone_number'],
+      nidaNumber: json['nida_number'] as String?,
       email: json['email'],
       dateOfBirth: json['date_of_birth'] != null
           ? DateTime.tryParse(json['date_of_birth'])
@@ -166,6 +171,9 @@ class FullProfile {
           ? DateTime.tryParse(json['last_active_at'])
           : null,
       createdAt: DateTime.parse(json['created_at']),
+      partner: json['partner'] is Map<String, dynamic>
+          ? PartnerLink.fromJson(json['partner'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -262,6 +270,30 @@ class FullProfile {
       default:
         return relationshipStatus;
     }
+  }
+}
+
+/// A partner the user has tagged on their profile (unilateral link).
+class PartnerLink {
+  final int id;
+  final String name;
+  final String? username;
+  final String? photoUrl;
+
+  const PartnerLink({
+    required this.id,
+    required this.name,
+    required this.username,
+    required this.photoUrl,
+  });
+
+  factory PartnerLink.fromJson(Map<String, dynamic> json) {
+    return PartnerLink(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: (json['name'] as String?) ?? '',
+      username: json['username'] as String?,
+      photoUrl: ApiConfig.sanitizeUrl(json['photo_url'] as String?),
+    );
   }
 }
 

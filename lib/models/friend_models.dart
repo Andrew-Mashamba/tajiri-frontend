@@ -233,6 +233,7 @@ class FollowUser {
   final String lastName;
   final String? username;
   final String? profilePhotoPath;
+  final String? profilePhotoUrlOverride; // explicit URL from backend
   final String? bio;
   final String? locationString;
   final bool isOnline;
@@ -243,12 +244,19 @@ class FollowUser {
   final String? friendshipStatus; // none, pending_sent, pending_received, friends
   final int? mutualFriendsCount;
 
+  // Followers manager fields (owner mode)
+  final DateTime? followedAt;
+  final DateTime? lastInteractionAt;
+  final bool isMutual;
+  final bool isMuted;
+
   FollowUser({
     required this.id,
     required this.firstName,
     required this.lastName,
     this.username,
     this.profilePhotoPath,
+    this.profilePhotoUrlOverride,
     this.bio,
     this.locationString,
     this.isOnline = false,
@@ -258,6 +266,10 @@ class FollowUser {
     this.isFriend = false,
     this.friendshipStatus,
     this.mutualFriendsCount,
+    this.followedAt,
+    this.lastInteractionAt,
+    this.isMutual = false,
+    this.isMuted = false,
   });
 
   factory FollowUser.fromJson(Map<String, dynamic> json) {
@@ -267,6 +279,9 @@ class FollowUser {
       lastName: json['last_name'] ?? '',
       username: json['username'],
       profilePhotoPath: json['profile_photo_path'],
+      profilePhotoUrlOverride: json['profile_photo_url'] is String
+          ? json['profile_photo_url'] as String
+          : null,
       bio: json['bio'],
       locationString: json['location_string'],
       isOnline: json['is_online'] == true,
@@ -276,16 +291,28 @@ class FollowUser {
       isFriend: json['is_friend'] == true,
       friendshipStatus: json['friendship_status'],
       mutualFriendsCount: json['mutual_friends_count'],
+      followedAt: json['followed_at'] != null
+          ? DateTime.tryParse(json['followed_at'].toString())
+          : null,
+      lastInteractionAt: json['last_interaction_at'] != null
+          ? DateTime.tryParse(json['last_interaction_at'].toString())
+          : null,
+      isMutual: json['is_mutual'] == true,
+      isMuted: json['is_muted'] == true,
     );
   }
 
   String get fullName => '$firstName $lastName'.trim();
 
-  String? get profilePhotoUrl => profilePhotoPath != null
-      ? (profilePhotoPath!.startsWith('http')
-          ? profilePhotoPath
-          : '${ApiConfig.storageUrl}/$profilePhotoPath')
-      : null;
+  String? get profilePhotoUrl {
+    if (profilePhotoUrlOverride != null && profilePhotoUrlOverride!.isNotEmpty) {
+      return profilePhotoUrlOverride;
+    }
+    if (profilePhotoPath == null) return null;
+    return profilePhotoPath!.startsWith('http')
+        ? profilePhotoPath
+        : '${ApiConfig.storageUrl}/$profilePhotoPath';
+  }
 
   FollowUser copyWith({
     bool? isFollowing,
@@ -293,6 +320,7 @@ class FollowUser {
     bool? isSubscribed,
     bool? isFriend,
     String? friendshipStatus,
+    bool? isMuted,
   }) {
     return FollowUser(
       id: id,
@@ -300,6 +328,7 @@ class FollowUser {
       lastName: lastName,
       username: username,
       profilePhotoPath: profilePhotoPath,
+      profilePhotoUrlOverride: profilePhotoUrlOverride,
       bio: bio,
       locationString: locationString,
       isOnline: isOnline,
@@ -309,6 +338,128 @@ class FollowUser {
       isFriend: isFriend ?? this.isFriend,
       friendshipStatus: friendshipStatus ?? this.friendshipStatus,
       mutualFriendsCount: mutualFriendsCount,
+      followedAt: followedAt,
+      lastInteractionAt: lastInteractionAt,
+      isMutual: isMutual,
+      isMuted: isMuted ?? this.isMuted,
     );
   }
+}
+
+class FollowerInsights {
+  final int total;
+  final int newThisWeek;
+  final int inactive60d;
+  final int mutualGap;
+
+  const FollowerInsights({
+    required this.total,
+    required this.newThisWeek,
+    required this.inactive60d,
+    required this.mutualGap,
+  });
+
+  factory FollowerInsights.fromJson(Map<String, dynamic> json) => FollowerInsights(
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        newThisWeek: (json['new_this_week'] as num?)?.toInt() ?? 0,
+        inactive60d: (json['inactive_60d'] as num?)?.toInt() ?? 0,
+        mutualGap: (json['mutual_gap'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class SubscriberInsights {
+  final int totalActive;
+  final int newThisMonth;
+  final int expiringSoon;
+  final int churned;
+  final double mrrTzs;
+
+  const SubscriberInsights({
+    required this.totalActive,
+    required this.newThisMonth,
+    required this.expiringSoon,
+    required this.churned,
+    required this.mrrTzs,
+  });
+
+  factory SubscriberInsights.fromJson(Map<String, dynamic> json) =>
+      SubscriberInsights(
+        totalActive: (json['total_active'] as num?)?.toInt() ?? 0,
+        newThisMonth: (json['new_this_month'] as num?)?.toInt() ?? 0,
+        expiringSoon: (json['expiring_soon'] as num?)?.toInt() ?? 0,
+        churned: (json['churned'] as num?)?.toInt() ?? 0,
+        mrrTzs: (json['mrr_tzs'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One row in the creator's subscribers list.
+class SubscriberEntry {
+  final int subscriptionId;
+  final int subscriberId;
+  final String firstName;
+  final String lastName;
+  final String? username;
+  final String? profilePhotoUrl;
+  final String status; // active | cancelled | expired | paused
+  final double amountPaid;
+  final DateTime? startedAt;
+  final DateTime? expiresAt;
+  final bool autoRenew;
+  final String? tierName;
+  final double? tierPrice;
+  final String? tierPeriod;
+
+  const SubscriberEntry({
+    required this.subscriptionId,
+    required this.subscriberId,
+    required this.firstName,
+    required this.lastName,
+    required this.username,
+    required this.profilePhotoUrl,
+    required this.status,
+    required this.amountPaid,
+    required this.startedAt,
+    required this.expiresAt,
+    required this.autoRenew,
+    required this.tierName,
+    required this.tierPrice,
+    required this.tierPeriod,
+  });
+
+  String get fullName => '$firstName $lastName'.trim();
+
+  factory SubscriberEntry.fromJson(Map<String, dynamic> json) => SubscriberEntry(
+        subscriptionId: (json['subscription_id'] as num?)?.toInt() ?? 0,
+        subscriberId: (json['id'] as num?)?.toInt() ?? 0,
+        firstName: (json['first_name'] as String?) ?? '',
+        lastName: (json['last_name'] as String?) ?? '',
+        username: json['username'] as String?,
+        profilePhotoUrl: json['profile_photo_url'] as String?,
+        status: (json['status'] as String?) ?? 'active',
+        amountPaid: (json['amount_paid'] as num?)?.toDouble() ?? 0.0,
+        startedAt: json['started_at'] != null
+            ? DateTime.tryParse(json['started_at'].toString())
+            : null,
+        expiresAt: json['expires_at'] != null
+            ? DateTime.tryParse(json['expires_at'].toString())
+            : null,
+        autoRenew: json['auto_renew'] == true,
+        tierName: json['tier_name'] as String?,
+        tierPrice: (json['tier_price'] as num?)?.toDouble(),
+        tierPeriod: json['tier_period'] as String?,
+      );
+}
+
+class SubscriberListResult {
+  final bool success;
+  final List<SubscriberEntry> entries;
+  final int totalCount;
+  final String? message;
+
+  const SubscriberListResult({
+    required this.success,
+    this.entries = const [],
+    this.totalCount = 0,
+    this.message,
+  });
 }

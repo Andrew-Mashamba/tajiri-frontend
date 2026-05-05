@@ -1,39 +1,40 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:animated_flip_counter/animated_flip_counter.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:heroicons/heroicons.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../models/profile_models.dart';
-import '../../models/post_models.dart';
 import '../../models/profile_tab_config.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/profile_service.dart';
-import '../../services/post_service.dart';
+import 'cover_photo/cover_canvas.dart';
+import 'cover_photo/cover_photo_orchestrator.dart';
+import 'cover_photo/cover_upload_overlay.dart';
+import 'profile_photo/profile_photo_orchestrator.dart';
+import 'partner/partner_picker_sheet.dart';
+import '../../myposts/pages/my_posts_page.dart';
+import '../../mystreams/pages/my_streams_page.dart';
+import '../../mygroups/pages/my_groups_page.dart';
 import '../../services/friend_service.dart';
 import '../../models/friend_models.dart' hide FriendshipStatus;
 import '../../services/message_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/event_tracking_service.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/post_grid_cell.dart';
 import '../../widgets/cached_media_image.dart';
-import '../../widgets/gallery/photo_gallery_widget.dart';
-import '../../widgets/gallery/music_gallery_widget.dart';
+import '../../photos/screens/photos_screen.dart';
+import '../../myphotos/widgets/photo_gallery_widget.dart';
+import '../../mymusic/widgets/music_gallery_widget.dart';
 import '../../widgets/gallery/shop_gallery_widget.dart';
-import '../feed/livegallerywidget_screen.dart';
 import '../michangogallerywidget_screen.dart';
 import '../campaigns/create_campaign_screen.dart';
 import '../settings/settings_screen.dart';
 import '../wallet/subscribe_to_creator_screen.dart';
-import '../messages/callhistory_screen.dart';
-import '../feed/create_post_screen.dart';
-import '../feed/edit_post_screen.dart';
-import '../feed/post_detail_screen.dart';
-import '../feed/videogallerywidget_screen.dart';
+import '../../myvideos/widgets/video_gallery_widget_screen.dart';
 import '../groups/groups_screen.dart';
 import '../groups/create_group_screen.dart';
 import '../groups/group_detail_screen.dart';
@@ -42,14 +43,12 @@ import '../../models/file_models.dart';
 import '../../services/group_service.dart';
 import '../../services/file_service.dart';
 import 'profile_stats_bottom_sheet.dart';
-import '../../creator/screens/income_sources_screen.dart';
+import '../../creator/screens/creator_revenue_screen.dart';
 import 'edit_profile_screen.dart';
-import '../../creator/services/creator_service.dart';
-import '../../creator/models/flywheel_models.dart';
-import '../../utils/face_validator.dart';
 import '../../budget/budget_module.dart';
 import '../../kikoba/kikoba_module.dart';
 import '../../my_wallet/my_wallet_module.dart';
+import '../../subscriptions/subscriptions_module.dart';
 import '../../investments/investments_module.dart';
 import '../../loans/loans_module.dart';
 import '../../doctor/doctor_module.dart';
@@ -60,12 +59,12 @@ import '../../lawyer/lawyer_module.dart';
 import '../../fitness/fitness_module.dart';
 import '../../my_circle/my_circle_module.dart';
 import '../../my_family/my_family_module.dart';
+import '../../my_family/services/my_family_service.dart';
 import '../../my_pregnancy/my_pregnancy_module.dart';
 import '../../my_baby/my_baby_module.dart';
 import '../../skincare/skincare_module.dart';
 import '../../hair_nails/hair_nails_module.dart';
 import '../../business/business_module.dart';
-import '../../customer_orders/widgets/service_due_dashboard.dart';
 import '../../business/biz_tab_wrapper.dart';
 import '../../business/pages/business_documents_page.dart';
 import '../../business/pages/email/email_client_page.dart';
@@ -230,7 +229,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   final ProfileService _profileService = ProfileService();
   final FriendService _friendService = FriendService();
   final MessageService _messageService = MessageService();
-  final ImagePicker _imagePicker = ImagePicker();
 
   TabController? _tabController;
 
@@ -245,16 +243,22 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Profile photo upload
   bool _isUploadingPhoto = false;
-  // Cover photo upload
-  bool _isUploadingCoverPhoto = false;
+  // ignore: unused_field — surfaced inline in the avatar overlay area
+  String? _profilePhotoError;
+  // Cover photo upload — orchestrator + inline overlay state
+  CoverPhotoOrchestrator? _coverOrchestrator;
+  CoverUploadState _coverOverlayState = CoverUploadState.idle;
+  String? _coverOverlayError;
+  // Last successfully-compressed file, kept so Retry can re-upload
+  // without forcing the user to re-crop.
+  File? _coverLastCompressed;
   // Send friend request in progress
   bool _isSendingFriendRequest = false;
 
   // Streak data for profile (visible on all profiles)
-  CreatorStreak? _profileStreak;
 
   // Viral assists count (own profile or when > 0)
-  int _viralAssistsCount = 0;
+  int _familyCount = 0;
 
   // Cached LocalStorageService (Hive) — initialised on first use, reused after.
   LocalStorageService? _storage;
@@ -361,14 +365,19 @@ class _ProfileScreenState extends State<ProfileScreen>
   void _onTabChanged() {
     if (_tabController == null || _enabledTabs.isEmpty) return;
     setState(() {}); // Update custom tab bar selected state (e.g. after swipe)
-    // Tab content widgets (_ProfilePostsPage, PhotoGalleryWidget, etc.) handle
+    // Tab content widgets (ProfilePostsPage, PhotoGalleryWidget, etc.) handle
     // their own data loading and pagination internally.
   }
 
   Future<void> _loadProfile() async {
     debugPrint('[ProfileScreen] _loadProfile started');
+    // Only show the full-page spinner on the very first load — when we
+    // have nothing to render yet. On subsequent refreshes (e.g. after a
+    // cover-photo upload) we keep the existing UI in place and let the
+    // localized cover overlay carry the loading affordance instead.
+    final isFirstLoad = _profile == null;
     setState(() {
-      _isLoading = true;
+      if (isFirstLoad) _isLoading = true;
       _error = null;
     });
 
@@ -385,10 +394,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (result.success) {
           _profile = result.profile;
           debugPrint('[ProfileScreen] Profile loaded: ${_profile?.fullName}');
-          // Load streak for all profiles (visible to visitors)
-          _loadProfileStreak();
-          // Load viral assists count
-          _loadViralAssists();
+          // Load family count for the family stat tile.
+          _loadFamilyCount();
         } else {
           _error = result.message;
           debugPrint('[ProfileScreen] Profile error: $_error');
@@ -399,130 +406,205 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _loadProfileStreak() async {
+  Future<void> _loadFamilyCount() async {
     try {
-      final creatorService = CreatorService();
-      final streak = await creatorService.getCreatorStreak(creatorId: widget.userId);
-      if (mounted && streak != null) {
-        setState(() => _profileStreak = streak);
+      final result = await MyFamilyService().getMembers(widget.userId);
+      if (!mounted) return;
+      if (result.success) {
+        setState(() => _familyCount = result.items.length);
       }
     } catch (e, st) {
-      // Non-critical: streak badge just doesn't render. Log so it shows up
-      // in crashlytics/console rather than disappearing.
-      debugPrint('[ProfileScreen] _loadProfileStreak failed: $e\n$st');
+      // Non-critical: family stat just renders 0 if the call fails.
+      debugPrint('[ProfileScreen] _loadFamilyCount failed: $e\n$st');
     }
   }
 
-  Future<void> _loadViralAssists() async {
-    try {
-      final storage = await _ensureStorage();
-      final token = storage.getAuthToken();
-      final creatorService = CreatorService();
-      final count = await creatorService.getViralAssists(
-        creatorId: widget.userId,
-        token: token,
-      );
-      if (mounted) {
-        setState(() => _viralAssistsCount = count);
-      }
-    } catch (e, st) {
-      // Non-critical: viral-assists badge just doesn't render.
-      debugPrint('[ProfileScreen] _loadViralAssists failed: $e\n$st');
-    }
-  }
-
+  /// Drives the profile-photo flow via [ProfilePhotoOrchestrator]:
+  /// bottom sheet → pick/capture → 1:1 crop with circular preview →
+  /// chrome preview with soft face hint → compress → Dio upload with
+  /// inline overlay rendered on the avatar circle (CoverCanvas's
+  /// isUploadingAvatar). No SnackBars — inline feedback only.
+  /// Spec: docs/superpowers/specs/2026-05-02-profile-photo-upload-design.md
   Future<void> _updateProfilePhoto() async {
     if (_isUploadingPhoto || !_isOwnProfile) return;
 
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
-    );
-
-    if (image == null || !mounted) return;
-
+    final orchestrator = ProfilePhotoOrchestrator(profileService: _profileService);
     setState(() => _isUploadingPhoto = true);
 
-    // Optional face detection (non-blocking). If detection fails the upload
-    // still proceeds; the server will fall back to its own auto-crop.
-    Map<String, int>? faceBbox;
     try {
-      final bounds = await FaceValidator.detectLargestFace(File(image.path));
-      if (bounds != null) {
-        faceBbox = {
-          'x': bounds.left.round(),
-          'y': bounds.top.round(),
-          'width': bounds.width.round(),
-          'height': bounds.height.round(),
-        };
-      }
-    } catch (e, st) {
-      debugPrint('[ProfileScreen] FaceValidator failed (continuing without bbox): $e\n$st');
-    }
-
-    final result = await _profileService.updateProfilePhoto(
-      userId: widget.userId,
-      photo: File(image.path),
-      faceBbox: faceBbox,
-    );
-
-    if (!mounted) return;
-
-    setState(() => _isUploadingPhoto = false);
-
-    if (result.success) {
-      // Update local user so profile photo reflects across the app
-      final storage = await _ensureStorage();
-      final user = storage.getUser();
-      if (user != null && result.photoUrl != null && user.userId == widget.userId) {
-        user.applyServerProfile({'profile_photo_url': result.photoUrl});
-        await storage.saveUser(user);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStringsScope.of(context)?.photoUpdated ?? 'Photo updated')),
+      final outcome = await orchestrator.run(
+        context: context,
+        userId: widget.userId,
+        currentPhotoUrl: _profile?.profilePhotoUrl,
+        currentCoverUrl: _profile?.coverPhotoUrl,
+        avatarInitials: _profile?.initials,
+        fullName: _profile?.fullName,
+        username: _profile?.username,
       );
-      _loadProfile();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? (AppStringsScope.of(context)?.photoUpdateFailed ?? 'Failed to update photo'))),
-      );
+      if (!mounted) return;
+
+      if (outcome.cancelled) {
+        setState(() => _isUploadingPhoto = false);
+        return;
+      }
+
+      if (outcome.success) {
+        // Evict any cached version of the previous avatar so the new one
+        // takes effect immediately across the app.
+        final previousUrl = _profile?.profilePhotoUrl;
+        if (previousUrl != null && previousUrl.isNotEmpty) {
+          try {
+            await CachedNetworkImage.evictFromCache(previousUrl);
+          } catch (_) {}
+        }
+        // Persist the new URL into Hive so all other surfaces (chats,
+        // post avatars, drawers) see the change without waiting for
+        // their own refresh cycles.
+        if (outcome.newPhotoUrl != null && outcome.newPhotoUrl!.isNotEmpty) {
+          final storage = await _ensureStorage();
+          final user = storage.getUser();
+          if (user != null && user.userId == widget.userId) {
+            user.applyServerProfile({'profile_photo_url': outcome.newPhotoUrl});
+            await storage.saveUser(user);
+          }
+        }
+        if (!mounted) return;
+        setState(() => _isUploadingPhoto = false);
+        _loadProfile(); // silent refetch — won't trigger full-page spinner
+        return;
+      }
+
+      // Failed (not cancelled, not success). Inline error rendered via
+      // _profilePhotoError so the avatar circle shows the recovery affordance.
+      setState(() {
+        _isUploadingPhoto = false;
+        _profilePhotoError = outcome.errorMessage;
+      });
+    } finally {
+      orchestrator.dispose();
     }
   }
 
+  /// Drives the cover-photo flow via [CoverPhotoOrchestrator]:
+  /// bottom sheet → pick/capture → crop (16:9) → live preview → compress
+  /// → Dio upload with inline progress overlay on the cover canvas.
+  /// Spec: docs/superpowers/specs/2026-05-02-cover-photo-upload-design.md
   Future<void> _updateCoverPhoto() async {
-    if (_isUploadingCoverPhoto || !_isOwnProfile) return;
+    if (!_isOwnProfile) return;
+    if (_coverOverlayState == CoverUploadState.uploading) return;
 
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1080,
-      imageQuality: 85,
-    );
+    final orchestrator = CoverPhotoOrchestrator(profileService: _profileService);
+    setState(() => _coverOrchestrator = orchestrator);
 
-    if (image == null || !mounted) return;
+    orchestrator.phaseListenable.addListener(() {
+      if (!mounted) return;
+      // Phase only flips between idle/uploading. Errors are reported via
+      // the outcome and surfaced through _coverOverlayState below.
+    });
 
-    setState(() => _isUploadingCoverPhoto = true);
-
-    final result = await _profileService.updateCoverPhoto(
+    final outcome = await orchestrator.run(
+      context: context,
       userId: widget.userId,
-      photo: File(image.path),
+      currentCoverUrl: _profile?.coverPhotoUrl,
+      avatarUrl: _profile?.profilePhotoUrl,
+      avatarInitials: _profile?.initials,
+      fullName: _profile?.fullName,
+      username: _profile?.username,
     );
+    if (!mounted) {
+      orchestrator.dispose();
+      return;
+    }
 
+    if (outcome.cancelled) {
+      orchestrator.dispose();
+      setState(() {
+        _coverOrchestrator = null;
+        _coverOverlayState = CoverUploadState.idle;
+        _coverOverlayError = null;
+      });
+      return;
+    }
+
+    if (outcome.success) {
+      // Evict the previous cover URL from the cached_network_image cache so
+      // CachedMediaImage refetches the new bytes immediately rather than
+      // showing the stale cached image until next app launch.
+      final previousCoverUrl = _profile?.coverPhotoUrl;
+      if (previousCoverUrl != null && previousCoverUrl.isNotEmpty) {
+        try {
+          await CachedNetworkImage.evictFromCache(previousCoverUrl);
+        } catch (_) {}
+      }
+      orchestrator.dispose();
+      setState(() {
+        _coverOrchestrator = null;
+        _coverOverlayState = CoverUploadState.idle;
+        _coverOverlayError = null;
+        _coverLastCompressed = null;
+      });
+      _loadProfile(); // pull canonical state with the new cover_photo_url
+      return;
+    }
+
+    // Failed (not cancelled). Keep overlay in error state so the user can
+    // tap Retry without re-cropping. Stash the compressed file from the
+    // orchestrator so retry can re-upload it directly.
+    setState(() {
+      _coverOverlayState = CoverUploadState.error;
+      _coverOverlayError = outcome.errorMessage;
+      _coverLastCompressed = orchestrator.lastCompressedFile;
+    });
+  }
+
+  void _cancelCoverUpload() {
+    _coverOrchestrator?.cancel();
+  }
+
+  void _dismissCoverOverlay() {
+    _coverOrchestrator?.dispose();
+    setState(() {
+      _coverOrchestrator = null;
+      _coverOverlayState = CoverUploadState.idle;
+      _coverOverlayError = null;
+      _coverLastCompressed = null;
+    });
+  }
+
+  Future<void> _retryCoverUpload() async {
+    final compressed = _coverLastCompressed;
+    final orchestrator = _coverOrchestrator;
+    if (compressed == null || orchestrator == null) {
+      // Fall back to restarting the whole flow.
+      _dismissCoverOverlay();
+      _updateCoverPhoto();
+      return;
+    }
+    setState(() {
+      _coverOverlayState = CoverUploadState.uploading;
+      _coverOverlayError = null;
+    });
+    final outcome = await orchestrator.retryUpload(
+      userId: widget.userId,
+      compressedFile: compressed,
+    );
     if (!mounted) return;
-
-    setState(() => _isUploadingCoverPhoto = false);
-
-    if (result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStringsScope.of(context)?.coverPhotoUpdated ?? 'Cover photo updated')),
-      );
-      _loadProfile();
+    if (outcome.success) {
+      orchestrator.dispose();
+      setState(() {
+        _coverOrchestrator = null;
+        _coverOverlayState = CoverUploadState.idle;
+        _coverOverlayError = null;
+        _coverLastCompressed = null;
+      });
+      _loadProfile(); // refetch with the new cover_photo_url
+    } else if (outcome.cancelled) {
+      _dismissCoverOverlay();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? (AppStringsScope.of(context)?.coverPhotoUpdateFailed ?? 'Failed to update photo'))),
-      );
+      setState(() {
+        _coverOverlayState = CoverUploadState.error;
+        _coverOverlayError = outcome.errorMessage;
+      });
     }
   }
 
@@ -672,53 +754,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     });
   }
 
-  void _showLogoutDialog() {
-    final s = AppStringsScope.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(s?.logoutConfirmTitle ?? 'Log out'),
-        content: Text(s?.logoutConfirmMessage ?? 'Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(s?.no ?? 'No'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              if (context.mounted) {
-                await AuthService.instance.logout(context);
-              }
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade400),
-            child: Text(s?.yesLogout ?? 'Yes, log out'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Format count for profile stats (e.g. 1200 → 1.2K, 1500000 → 1.5M)
-  List<String> _getMilestoneBadges(int followerCount) {
-    final badges = <String>[];
-    if (followerCount >= 100) badges.add('100');
-    if (followerCount >= 500) badges.add('500');
-    if (followerCount >= 1000) badges.add('1K');
-    if (followerCount >= 5000) badges.add('5K');
-    if (followerCount >= 10000) badges.add('10K');
-    if (followerCount >= 50000) badges.add('50K');
-    if (followerCount >= 100000) badges.add('100K');
-    return badges;
-  }
-
-  static String _formatStatCount(int value) {
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}K';
-    return value.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -809,6 +844,17 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'saved':
         Navigator.pushNamed(context, '/saved-posts');
         return;
+      case 'photos':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PhotosScreen(
+              userId: widget.userId,
+              isCurrentUser: _isOwnProfile,
+            ),
+          ),
+        );
+        return;
       case 'settings':
         Navigator.push(
           context,
@@ -845,9 +891,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildSliverAppBar() {
-    final s = AppStringsScope.of(context);
+    // The cover image is cropped at 16:9. Make the SliverAppBar's expanded
+    // canvas exactly 16:9 (relative to screen width) so BoxFit.cover can
+    // render the user's crop 1:1 with no horizontal cropping at the sides.
+    // Add the status-bar inset on top so the actual visible cover remains
+    // a true 16:9 below the notch.
+    final mq = MediaQuery.of(context);
+    final coverHeight = mq.size.width * 9 / 16;
     return SliverAppBar(
-      expandedHeight: 280,
+      expandedHeight: coverHeight + mq.padding.top,
       pinned: true,
       backgroundColor: TajiriAppBar.surfaceColor,
       foregroundColor: TajiriAppBar.primaryTextColor,
@@ -855,298 +907,39 @@ class _ProfileScreenState extends State<ProfileScreen>
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
-      title: Text(
-        _isOwnProfile ? (s?.profileTab ?? 'Me') : (_profile?.fullName ?? ''),
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-      actions: [
-        if (_isOwnProfile) ...[
-          TajiriAppBar.action(
-            icon: HeroIcons.cog6Tooth,
-            tooltip: AppStringsScope.of(context)?.settings ?? 'Settings',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SettingsScreen(currentUserId: _currentUserId),
-                ),
-              );
-              // Refresh profile (e.g. username) and tabs when returning from settings
-              if (mounted) {
-                _loadProfile();
-                _refreshTabs();
-              }
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: HeroIcon(
-              HeroIcons.ellipsisVertical,
-              style: HeroIconStyle.outline,
-              size: TajiriAppBar.actionIconSize,
-              color: TajiriAppBar.primaryTextColor,
-            ),
-            onSelected: (value) {
-              switch (value) {
-                case 'edit_profile':
-                  _showEditProfileDialog();
-                  break;
-                case 'wallet':
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MyWalletModule(userId: _currentUserId),
-                    ),
-                  );
-                  break;
-                case 'calls':
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CallHistoryScreen(currentUserId: _currentUserId),
-                    ),
-                  );
-                  break;
-                case 'saved':
-                  Navigator.pushNamed(context, '/saved-posts');
-                  break;
-                case 'logout':
-                  _showLogoutDialog();
-                  break;
-              }
-            },
-            itemBuilder: (ctx) {
-              final s = AppStringsScope.of(ctx);
-              return [
-                PopupMenuItem(
-                  value: 'edit_profile',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.edit),
-                      const SizedBox(width: 8),
-                      Text(s?.editProfile ?? 'Edit profile'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'wallet',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.account_balance_wallet),
-                      const SizedBox(width: 8),
-                      Text(s?.tajiriPay ?? 'Tajiri Pay'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'calls',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.phone),
-                      const SizedBox(width: 8),
-                      Text(s?.calls ?? 'Calls'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'saved',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bookmark_outline_rounded),
-                      const SizedBox(width: 8),
-                      Text(s?.savedTitle ?? 'Saved'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'logout',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.logout, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Text(s?.logout ?? 'Log out', style: const TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ];
-            },
-          ),
-        ],
-      ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Cover Photo
-            _profile?.coverPhotoUrl != null && _profile!.coverPhotoUrl!.isNotEmpty
-                ? CachedMediaImage(
-                    imageUrl: _profile!.coverPhotoUrl,
-                    fit: BoxFit.cover,
-                    errorWidget: _buildDefaultCover(),
-                  )
-                : _buildDefaultCover(),
-
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                ),
-              ),
-            ),
-
-            // Edit cover button (min 48dp touch target)
-            if (_isOwnProfile)
-              Positioned(
-                right: 16,
-                bottom: 100,
-                child: IconButton(
-                  onPressed: _updateCoverPhoto,
-                  icon: const Icon(Icons.camera_alt),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black54,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(48, 48),
-                  ),
-                ),
-              ),
-
-            // Profile photo and name
-            Positioned(
-              left: 16,
-              bottom: 16,
-              right: 16,
-              child: Row(
-                children: [
-                  // Profile photo — circular display; whole avatar tappable (≥48dp)
-                  Semantics(
-                    button: _isOwnProfile,
-                    label: _isOwnProfile ? (AppStringsScope.of(context)?.changeProfilePhoto ?? 'Change profile photo') : null,
-                    child: GestureDetector(
-                      onTap: _isOwnProfile ? _updateProfilePhoto : null,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 4),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: _profile?.profilePhotoUrl != null &&
-                                      _profile!.profilePhotoUrl!.isNotEmpty
-                                  ? CachedMediaImage(
-                                      imageUrl: _profile!.profilePhotoUrl!,
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : CircleAvatar(
-                                      radius: 50,
-                                      backgroundColor: Theme.of(context).colorScheme.primary,
-                                      child: Text(
-                                        _profile?.initials ?? '?',
-                                        style: const TextStyle(
-                                          fontSize: 36,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          if (_isOwnProfile)
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  size: 20,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          if (_isUploadingPhoto)
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.black54,
-                                ),
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Name and username
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _profile?.fullName ?? '',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (_profile?.username != null)
-                          Text(
-                            '@${_profile!.username}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        // CoverCanvas defers to the FlexibleSpaceBar's own height
+        // constraint here (no inner SizedBox), so collapse mode can stay
+        // at the default parallax behavior without distorting the image.
+        background: CoverCanvas(
+          cover: (_profile?.coverPhotoUrl != null && _profile!.coverPhotoUrl!.isNotEmpty)
+              ? CoverImageSource.url(_profile!.coverPhotoUrl!)
+              : const CoverImageSource.empty(),
+          avatarUrl: _profile?.profilePhotoUrl,
+          avatarInitials: _profile?.initials,
+          // Name + @handle live as a clean header inside the white card
+          // below the stats row, not over the cover photo. Keeps the
+          // cover image uncluttered and centralizes the user identity.
+          fullName: null,
+          username: null,
+          onCameraTap: _isOwnProfile ? _updateCoverPhoto : null,
+          onAvatarTap: _isOwnProfile ? _updateProfilePhoto : null,
+          showAvatarEditBadge: _isOwnProfile,
+          isUploadingAvatar: _isUploadingPhoto,
+          fallback: _buildDefaultCover(),
+          overlay: (_isOwnProfile && _coverOverlayState != CoverUploadState.idle)
+              ? CoverUploadOverlay(
+                  state: _coverOverlayState,
+                  progress: _coverOrchestrator?.progressListenable.value ?? 0,
+                  errorMessage: _coverOverlayError,
+                  onCancel: _coverOverlayState == CoverUploadState.uploading
+                      ? _cancelCoverUpload
+                      : _dismissCoverOverlay,
+                  onRetry: _coverOverlayState == CoverUploadState.error
+                      ? _retryCoverUpload
+                      : null,
+                )
+              : null,
         ),
       ),
     );
@@ -1304,110 +1097,175 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  /// Width of each tile in the stats row. Sized so the longest label
+  /// ("Subscribers") fits with comfortable horizontal padding; the row
+  /// scrolls horizontally if the total width exceeds the screen.
+  static const double _kStatTileWidth = 104.0;
+
+
   Widget _buildProfileInfo() {
     const cardRadius = 24.0;
     const horizontalPadding = 20.0;
-    const sectionSpacing = 20.0;
+    const sectionSpacing = 12.0;
 
     final followersCount = _profile?.stats.followersCount ?? 0;
     final followingCount = _profile?.stats.followingCount ?? 0;
     final subscribersCount = _profile?.stats.subscribersCount ?? 0;
     final friendsCount = _profile?.stats.friendsCount ?? 0;
 
-    final milestoneBadges = _getMilestoneBadges(followersCount);
-
     final List<Widget> columnChildren = <Widget>[
-      // 1. Stats row
+      // 1. Stats row — soft-chip pattern. Each chip carries its own
+      //    shape via a 1px hairline border, so no dividers are needed.
+      //    Counts animate odometer-style on first paint via
+      //    AnimatedFlipCounter; the row staggers in via flutter_animate.
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            _buildStatItem(
-              _formatStatCount(followersCount),
-              AppStringsScope.of(context)?.followers ?? 'Followers',
-              onTap: () => _openStatsBottomSheet(ProfileStatsType.followers, followersCount),
+            _StatChip(
+              count: followersCount,
+              label: AppStringsScope.of(context)?.followers ?? 'Followers',
+              onTap: () => _isOwnProfile
+                  ? Navigator.pushNamed(context, '/followers/manage')
+                  : _openStatsBottomSheet(ProfileStatsType.followers, followersCount),
             ),
-            _buildStatDivider(),
-            _buildStatItem(
-              _formatStatCount(followingCount),
-              AppStringsScope.of(context)?.following ?? 'Following',
-              onTap: () => _openStatsBottomSheet(ProfileStatsType.following, followingCount),
+            const _StatDivider(),
+            _StatChip(
+              count: followingCount,
+              label: AppStringsScope.of(context)?.following ?? 'Following',
+              onTap: () => _isOwnProfile
+                  ? Navigator.pushNamed(context, '/following/manage')
+                  : _openStatsBottomSheet(ProfileStatsType.following, followingCount),
             ),
-            _buildStatDivider(),
-            _buildStatItem(
-              _formatStatCount(subscribersCount),
-              AppStringsScope.of(context)?.subscribers ?? 'Subscribers',
-              onTap: () => _openStatsBottomSheet(ProfileStatsType.subscribers, subscribersCount),
+            const _StatDivider(),
+            _StatChip(
+              count: subscribersCount,
+              label: AppStringsScope.of(context)?.subscribers ?? 'Subscribers',
+              onTap: () => _isOwnProfile
+                  ? Navigator.pushNamed(context, '/subscribers/manage')
+                  : _openStatsBottomSheet(ProfileStatsType.subscribers, subscribersCount),
             ),
-            _buildStatDivider(),
-            _buildStatItem(
-              _formatStatCount(friendsCount),
-              AppStringsScope.of(context)?.friends ?? 'Friends',
-              onTap: () => _openStatsBottomSheet(ProfileStatsType.friends, friendsCount),
+            const _StatDivider(),
+            _StatChip(
+              count: friendsCount,
+              label: AppStringsScope.of(context)?.friends ?? 'Friends',
+              onTap: () => _isOwnProfile
+                  ? Navigator.pushNamed(context, '/friends/manage')
+                  : _openStatsBottomSheet(ProfileStatsType.friends, friendsCount),
             ),
-            if (_isOwnProfile || _viralAssistsCount > 0) ...[
-              _buildStatDivider(),
-              _buildStatItem(
-                _formatStatCount(_viralAssistsCount),
-                AppStringsScope.of(context)?.viralAssists ?? 'Viral Assists',
+            if (_isOwnProfile || _familyCount > 0) ...[
+              const _StatDivider(),
+              _StatChip(
+                count: _familyCount,
+                label: (AppStringsScope.of(context)?.isSwahili ?? false)
+                    ? 'Familia'
+                    : 'Family',
+                onTap: () {
+                  if (!_isOwnProfile) {
+                    _openStatsBottomSheet(
+                      ProfileStatsType.family,
+                      _familyCount,
+                    );
+                    return;
+                  }
+                  final isSw =
+                      AppStringsScope.of(context)?.isSwahili ?? false;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => _ProfileTabPage(
+                        title: isSw ? 'Familia' : 'Family',
+                        icon: Icons.family_restroom_rounded,
+                        tabId: 'family',
+                        userId: widget.userId,
+                        currentUserId: _currentUserId,
+                        isOwnProfile: true,
+                        profile: _profile,
+                        onRefresh: _loadProfile,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
-          ],
+          ]
+              .animate(interval: 60.ms)
+              .fadeIn(duration: 240.ms, curve: Curves.easeOutCubic)
+              .slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic),
         ),
       ),
-      // Streak badge (visible on all profiles)
-      if (_profileStreak != null && _profileStreak!.currentStreakDays > 0) ...[
-        const SizedBox(height: 12),
+      // Identity header: full name (bold) + @handle (muted) — single
+      // source of truth, lives in the white card under the stats row.
+      // Owner sees a trailing edit pencil that pushes EditProfileScreen.
+      // Leading gap is part of this conditional so it collapses when
+      // both name and handle are missing.
+      if ((_profile?.fullName != null && _profile!.fullName.isNotEmpty) ||
+          (_profile?.username != null && _profile!.username!.isNotEmpty)) ...[
+        const SizedBox(height: 14),
         Row(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(Icons.local_fire_department_rounded, size: 14, color: const Color(0xFF1A1A1A)),
-            const SizedBox(width: 2),
-            Text(
-              '${_profileStreak!.currentStreakDays}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_profile?.fullName != null && _profile!.fullName.isNotEmpty)
+                    Text(
+                      _profile!.fullName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
+                        letterSpacing: -0.4,
+                        height: 1.1,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (_profile?.username != null &&
+                      _profile!.username!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '@${_profile!.username}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF666666),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(width: 4),
-            Text(
-              AppStringsScope.of(context)?.streakDays ?? 'day streak',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
-            ),
+            if (_isOwnProfile) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _showEditProfileDialog,
+                icon: const Icon(Icons.edit_rounded),
+                iconSize: 20,
+                color: const Color(0xFF1A1A1A),
+                tooltip: AppStringsScope.of(context)?.isSwahili == true
+                    ? 'Hariri wasifu'
+                    : 'Edit profile',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 48,
+                  minHeight: 48,
+                ),
+              ),
+            ],
           ],
         ),
       ],
-      // Follower milestone badge
-      if (milestoneBadges.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.verified_rounded, size: 12, color: Colors.white),
-              const SizedBox(width: 2),
-              Text(
-                milestoneBadges.last,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ],
-      const SizedBox(height: sectionSpacing),
 
-      // Spec §G.4 — service-due dashboard (customer-side)
-      if (_isOwnProfile) ...[
-        ServiceDueDashboard(userId: widget.userId),
+      // 3. Action buttons (when viewing someone else). Leading gap is
+      // part of the conditional — collapses on own-profile view.
+      if (!_isOwnProfile) ...[
         const SizedBox(height: sectionSpacing),
-      ],
-
-      // 3. Action buttons (when viewing someone else)
-      if (!_isOwnProfile)
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: Row(
@@ -1491,6 +1349,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ],
           ),
         ),
+      ],
 
       // 4. Bio
       if (_profile?.bio != null && _profile!.bio!.isNotEmpty) ...[
@@ -1507,7 +1366,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
       // 5. Interests
       if (_profile?.interests != null && _profile!.interests!.isNotEmpty) ...[
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1587,7 +1446,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 24),
+      // Top padding tightened so the stats row sits flush against the
+      // cover canvas above instead of leaving a visible gap.
+      padding: const EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1740,49 +1601,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildStatDivider() {
-    return Container(
-      width: 1,
-      height: 32,
-      color: Colors.grey.shade300,
-    );
-  }
-
-
-  Widget _buildStatItem(String count, String label, {VoidCallback? onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Column(
-            children: [
-              Text(
-                count,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _openStatsBottomSheet(ProfileStatsType statsType, int count) {
     ProfileStatsBottomSheet.show(
       context,
@@ -1854,7 +1672,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     final relLabel = _localizedRelationship(p.relationshipStatus);
     if (relLabel != null && relLabel.isNotEmpty) {
-      basics.add(_buildInfoItem(Icons.favorite_border, relLabel));
+      basics.add(_buildRelationshipRow(p, relLabel));
     }
     if (!_isOwnProfile && p.lastActiveAt != null) {
       basics.add(_buildInfoItem(Icons.access_time_rounded, _formatRelativeAgo(p.lastActiveAt!)));
@@ -2045,6 +1863,153 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  bool _isRomanticStatus(String? raw) {
+    if (raw == null) return false;
+    switch (raw.toLowerCase()) {
+      case 'married':
+      case 'engaged':
+      case 'in_relationship':
+      case 'dating':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// Builds the relationship row in the basics group. Three shapes:
+  ///   • partner already tagged → label + inline avatar + @handle, tappable
+  ///   • own profile, romantic status, no partner → label + "+ Tag" pill
+  ///   • everyone else → plain info item
+  Widget _buildRelationshipRow(FullProfile p, String relLabel) {
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+
+    if (p.partner != null) {
+      final partner = p.partner!;
+      final handle = (partner.username ?? '').isNotEmpty
+          ? '@${partner.username}'
+          : partner.name;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.of(context).pushNamed('/profile/${partner.id}'),
+            onLongPress: _isOwnProfile ? () => _showPartnerActions(p) : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.favorite_border, size: 18, color: Colors.grey.shade600),
+                  const SizedBox(width: 10),
+                  Text(
+                    relLabel,
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  ),
+                  Text(
+                    isSw ? ' na ' : ' to ',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                  ),
+                  _PartnerAvatar(photoUrl: partner.photoUrl, name: partner.name),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      handle,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF1A1A1A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_isOwnProfile && _isRomanticStatus(p.relationshipStatus)) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(Icons.favorite_border, size: 18, color: Colors.grey.shade600),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                relLabel,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _TagPartnerPill(
+              label: isSw ? '+ Mtaje mpenzi' : '+ Tag partner',
+              onTap: _openPartnerPicker,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildInfoItem(Icons.favorite_border, relLabel);
+  }
+
+  Future<void> _openPartnerPicker() async {
+    final result = await PartnerPickerSheet.show(
+      context,
+      currentUserId: widget.userId,
+      existingPartnerId: _profile?.partner?.id,
+    );
+    if (result != null && mounted) {
+      _loadProfile();
+    }
+  }
+
+  void _showPartnerActions(FullProfile p) {
+    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF1A1A1A)),
+              title: Text(isSw ? 'Badili mpenzi' : 'Change partner'),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _openPartnerPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.heart_broken_outlined, color: Color(0xFF1A1A1A)),
+              title: Text(isSw ? 'Ondoa mpenzi' : 'Remove partner'),
+              onTap: () async {
+                Navigator.of(sheetCtx).pop();
+                await _removePartner();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _removePartner() async {
+    final ok = await ProfileService().removePartner(userId: widget.userId);
+    if (ok && mounted) _loadProfile();
+  }
+
   String _formatRelativeAgo(DateTime time) {
     final s = AppStringsScope.of(context);
     final isSw = s?.isSwahili ?? false;
@@ -2207,7 +2172,7 @@ class _ProfileTabPage extends StatelessWidget {
             ),
           ],
         ),
-        centerTitle: true,
+        centerTitle: false,
       ),
       body: _buildContent(context),
     );
@@ -2236,7 +2201,7 @@ class _ProfileTabPage extends StatelessWidget {
   Widget _buildContent(BuildContext context) {
     switch (tabId) {
       case 'posts':
-        return _ProfilePostsPage(
+        return MyPostsPage(
           userId: userId,
           currentUserId: currentUserId,
           isOwnProfile: isOwnProfile,
@@ -2260,7 +2225,7 @@ class _ProfileTabPage extends StatelessWidget {
           onUploadComplete: onRefresh,
         );
       case 'live':
-        return LiveGalleryWidgetScreen(
+        return MyStreamsPage(
           userId: userId,
           isOwnProfile: isOwnProfile,
         );
@@ -2280,7 +2245,7 @@ class _ProfileTabPage extends StatelessWidget {
               : null,
         );
       case 'groups':
-        return _ProfileGroupsPage(
+        return MyGroupsPage(
           userId: userId,
           currentUserId: currentUserId,
           isOwnProfile: isOwnProfile,
@@ -2304,6 +2269,8 @@ class _ProfileTabPage extends StatelessWidget {
         return KikobaModule(userId: userId);
       case 'my_wallet':
         return MyWalletModule(userId: userId);
+      case 'subscriptions':
+        return SubscriptionsModule(userId: userId);
       case 'investments':
         return InvestmentsModule(userId: userId);
       case 'loans':
@@ -2478,23 +2445,14 @@ class _ProfileTabPage extends StatelessWidget {
       case 'games':
         return GamesModule(userId: userId);
 
-      case 'friends':
-        return _ProfileFriendsPage(
-          userId: userId,
-          profile: profile,
-        );
       case 'creator':
         if (!isOwnProfile) return _privateInfoPlaceholder(context);
-        // Mapato (Income Sources) is now the landing for the lib/creator/
-        // module. Tier / streak / multipliers / projected-payout moved
-        // behind the "Stats" action button on the IncomeSourcesScreen
-        // AppBar — not lost, just one tap deeper.
-        return IncomeSourcesView(creatorId: userId);
-      case 'about':
-        return _ProfileAboutPage(
-          profile: profile,
-          isOwnProfile: isOwnProfile,
-        );
+        // Creator tab landing = the 9-card revenue-sources grid
+        // (Posts / Streams / Subscribers / Brand Deals / Ad Revenue /
+        // My Photos / My Videos / My Music / My Files). The full
+        // 15-section revenue report is one tap away via the "Full
+        // revenue report" link on the grid.
+        return CreatorRevenueScreen(creatorId: userId);
       // ── My Cars ──
       case 'my_cars':
         return MyCarsModule(userId: userId);
@@ -2724,1359 +2682,8 @@ class _ProfileTabPage extends StatelessWidget {
 /// - Post type indicators (carousel, video, audio, pin)
 /// - Pull-to-refresh
 /// - Scroll-direction-aware thumbnail prefetching
-class _ProfilePostsPage extends StatefulWidget {
-  final int userId;
-  final int currentUserId;
-  final bool isOwnProfile;
-
-  const _ProfilePostsPage({
-    required this.userId,
-    required this.currentUserId,
-    required this.isOwnProfile,
-  });
-
-  @override
-  State<_ProfilePostsPage> createState() => _ProfilePostsPageState();
-}
-
-class _ProfilePostsPageState extends State<_ProfilePostsPage> {
-  final PostService _postService = PostService();
-  final ScrollController _scrollController = ScrollController();
-
-  List<Post> _posts = [];
-  bool _isLoading = true;
-  bool _isLoadingMore = false;
-  bool _hasMore = true;
-  int _page = 1;
-  double _lastScrollOffset = 0;
-  static const int _perPage = 24; // 8 rows of 3
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-    _loadPosts();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  /// Prefetch next page at ~70% scroll through current content.
-  void _onScroll() {
-    if (!_hasMore || _isLoadingMore) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    if (currentScroll >= maxScroll * 0.7) {
-      _loadMorePosts();
-    }
-
-    // Prefetch thumbnails for upcoming rows
-    _prefetchVisibleThumbnails();
-  }
-
-  Future<void> _loadPosts() async {
-    setState(() {
-      _isLoading = true;
-      _page = 1;
-    });
-
-    final result = await _postService.getPosts(
-      userId: widget.currentUserId,
-      profileUserId: widget.userId,
-      page: 1,
-      perPage: _perPage,
-    );
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (result.success) {
-          _posts = _sortWithPinnedFirst(result.posts);
-          final meta = result.meta;
-          _hasMore = meta != null
-              ? meta.currentPage < meta.lastPage
-              : result.posts.length >= _perPage;
-          _page = 2;
-        }
-      });
-    }
-  }
-
-  Future<void> _loadMorePosts() async {
-    if (_isLoadingMore || !_hasMore) return;
-    setState(() => _isLoadingMore = true);
-
-    final result = await _postService.getPosts(
-      userId: widget.currentUserId,
-      profileUserId: widget.userId,
-      page: _page,
-      perPage: _perPage,
-    );
-
-    if (mounted) {
-      setState(() {
-        _isLoadingMore = false;
-        if (result.success) {
-          // Append new posts (pinned are only in first page)
-          _posts.addAll(result.posts);
-          final meta = result.meta;
-          _hasMore = meta != null
-              ? meta.currentPage < meta.lastPage
-              : result.posts.length >= _perPage;
-          _page++;
-        }
-      });
-    }
-  }
-
-  /// Sort posts so pinned posts (up to 3) appear first, rest reverse-chronological.
-  List<Post> _sortWithPinnedFirst(List<Post> posts) {
-    final pinned = posts.where((p) => p.isPinned).take(3).toList();
-    final unpinned = posts.where((p) => !p.isPinned || !pinned.contains(p)).toList();
-    return [...pinned, ...unpinned];
-  }
-
-  /// Scroll-direction-aware prefetch: prefetches thumbnails 2-3 rows ahead
-  /// in the direction the user is scrolling. Lower priority than on-screen loads
-  /// (handled by ImagePreloader's sequential processing with delays).
-  void _prefetchVisibleThumbnails() {
-    if (!mounted || _posts.isEmpty) return;
-    final cellSize = (MediaQuery.of(context).size.width - 2) / 3;
-    if (cellSize <= 0) return;
-
-    final scrollOffset = _scrollController.position.pixels;
-    final viewportHeight = _scrollController.position.viewportDimension;
-    final scrollingDown = scrollOffset >= _lastScrollOffset;
-    _lastScrollOffset = scrollOffset;
-
-    final rowHeight = cellSize + 1; // cell + 1px gap
-
-    if (scrollingDown) {
-      // Prefetch 3 rows below the viewport
-      final bottomRow = ((scrollOffset + viewportHeight) / rowHeight).ceil();
-      final prefetchStartIndex = (bottomRow * 3).clamp(0, _posts.length);
-      final prefetchEndIndex = ((bottomRow + 3) * 3).clamp(0, _posts.length);
-
-      if (prefetchStartIndex >= _posts.length) return;
-
-      final urls = <String?>[];
-      for (int i = prefetchStartIndex; i < prefetchEndIndex; i++) {
-        urls.add(_posts[i].thumbnailUrl);
-      }
-      ImagePreloader.precacheImages(context, urls);
-    } else {
-      // Prefetch 3 rows above the viewport
-      final topRow = (scrollOffset / rowHeight).floor();
-      final prefetchStartRow = (topRow - 3).clamp(0, (_posts.length / 3).ceil());
-      final prefetchEndRow = topRow.clamp(0, (_posts.length / 3).ceil());
-      final prefetchStartIndex = (prefetchStartRow * 3).clamp(0, _posts.length);
-      final prefetchEndIndex = (prefetchEndRow * 3).clamp(0, _posts.length);
-
-      if (prefetchStartIndex >= prefetchEndIndex) return;
-
-      final urls = <String?>[];
-      for (int i = prefetchStartIndex; i < prefetchEndIndex; i++) {
-        urls.add(_posts[i].thumbnailUrl);
-      }
-      ImagePreloader.precacheImages(context, urls);
-    }
-  }
-
-  void _onPostTap(Post post) {
-    final index = _posts.indexWhere((p) => p.id == post.id);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PostDetailScreen(
-          postId: post.id,
-          currentUserId: widget.currentUserId,
-          initialPost: post,
-          posts: _posts,
-          initialIndex: index >= 0 ? index : 0,
-        ),
-      ),
-    ).then((result) {
-      if (result == true && mounted) _loadPosts();
-    });
-  }
-
-  void _onPostLongPress(Post post) {
-    if (widget.isOwnProfile) {
-      _showPostOptionsMenu(post);
-    } else {
-      showPostPeekPreview(context, post);
-    }
-  }
-
-  void _showPostOptionsMenu(Post post) {
-    final s = AppStringsScope.of(context);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.edit_rounded),
-                title: Text(s?.edit ?? 'Edit'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _editPost(post);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                title: Text(
-                  s?.delete ?? 'Delete',
-                  style: const TextStyle(color: Colors.red),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _confirmDeletePost(post);
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _editPost(Post post) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditPostScreen(post: post),
-      ),
-    );
-    if (result == true && mounted) {
-      _loadPosts();
-    }
-  }
-
-  void _confirmDeletePost(Post post) {
-    final s = AppStringsScope.of(context);
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(s?.deletePostConfirmTitle ?? 'Delete post'),
-          content: Text(s?.deletePostConfirmMessage ??
-              'Are you sure you want to delete this post?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(s?.cancel ?? 'Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                _deletePost(post);
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: Text(s?.delete ?? 'Delete'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _deletePost(Post post) async {
-    final result = await _postService.deletePost(
-      post.id,
-      userId: widget.currentUserId,
-    );
-    if (!mounted) return;
-
-    if (result.success) {
-      setState(() {
-        _posts.removeWhere((p) => p.id == post.id);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message ?? 'Post deleted'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message ??
-              AppStringsScope.of(context)?.deletePostFailed ??
-              'Failed to delete post'),
-          backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Shimmer loading state
-    if (_isLoading && _posts.isEmpty) {
-      return _buildShimmerGrid(context);
-    }
-
-    // Empty state
-    if (_posts.isEmpty) {
-      return _buildEmptyState(context);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadPosts,
-      child: CustomScrollView(
-        controller: _scrollController,
-        // Increase cache extent for smoother scrolling (pre-build ~4 rows off-screen)
-        cacheExtent: (MediaQuery.of(context).size.width / 3) * 4,
-        slivers: [
-          // Posts management header (own profile only)
-          if (widget.isOwnProfile)
-            SliverToBoxAdapter(child: _buildPostsHeader(context)),
-          // Posts grid
-          SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 1,
-              mainAxisSpacing: 1,
-              childAspectRatio: 1.0,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final post = _posts[index];
-                return PostGridCell(
-                  post: post,
-                  onTap: () => _onPostTap(post),
-                  onLongPress: () => _onPostLongPress(post),
-                );
-              },
-              childCount: _posts.length,
-              addAutomaticKeepAlives: false,
-              addRepaintBoundaries: false, // We handle RepaintBoundary in PostGridCell
-            ),
-          ),
-          // Loading more indicator
-          if (_isLoadingMore)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Shimmer placeholder grid while loading.
-  Widget _buildShimmerGrid(BuildContext context) {
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
-        childAspectRatio: 1.0,
-      ),
-      itemCount: 18, // 6 rows
-      itemBuilder: (context, index) {
-        return _ShimmerCell(index: index);
-      },
-    );
-  }
-
-  Widget _buildPostsHeader(BuildContext context) {
-    final s = AppStringsScope.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: const Color(0xFFFAFAFA),
-      child: Row(
-        children: [
-          // Post count
-          Text(
-            '${_posts.length} ${s?.post ?? 'Posts'}',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          const Spacer(),
-          // Create post
-          _PostsHeaderButton(
-            icon: Icons.add_rounded,
-            label: s?.createPost ?? 'Create post',
-            onTap: () async {
-              final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
-                ),
-              );
-              if (result == true && mounted) _loadPosts();
-            },
-          ),
-          const SizedBox(width: 8),
-          // Saved posts
-          _PostsHeaderButton(
-            icon: Icons.bookmark_outline_rounded,
-            label: s?.savedTitle ?? 'Saved',
-            onTap: () => Navigator.pushNamed(context, '/saved-posts'),
-          ),
-          const SizedBox(width: 8),
-          // Drafts
-          _PostsHeaderButton(
-            icon: Icons.edit_note_rounded,
-            label: s?.drafts ?? 'Drafts',
-            onTap: () async {
-              final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
-                ),
-              );
-              if (result == true && mounted) _loadPosts();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.grid_on_rounded, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(
-            widget.isOwnProfile
-                ? (AppStringsScope.of(context)?.noPostsMe ?? "You haven't posted yet")
-                : (AppStringsScope.of(context)?.noPosts ?? 'No posts'),
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
-          if (widget.isOwnProfile) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Share your first photo or video',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreatePostScreen(currentUserId: widget.currentUserId),
-                  ),
-                );
-                if (result == true && mounted) _loadPosts();
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF1A1A1A),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: const Icon(Icons.add, size: 18),
-              label: Text(AppStringsScope.of(context)?.createPostNow ?? 'Post now'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact header button for posts management toolbar.
-class _PostsHeaderButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _PostsHeaderButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F0F0),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFF1A1A1A)),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1A1A1A),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Animated shimmer placeholder cell for loading grid.
-class _ShimmerCell extends StatefulWidget {
-  final int index;
-  const _ShimmerCell({required this.index});
-
-  @override
-  State<_ShimmerCell> createState() => _ShimmerCellState();
-}
-
-class _ShimmerCellState extends State<_ShimmerCell>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-    _animation = Tween<double>(begin: 0.04, end: 0.12).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, _) {
-        return Container(
-          color: Color.lerp(
-            Colors.grey.shade200,
-            Colors.grey.shade300,
-            _animation.value / 0.12,
-          ),
-        );
-      },
-    );
-  }
-}
 
 /// Groups page content - full management for own profile
-class _ProfileGroupsPage extends StatefulWidget {
-  final int userId;
-  final int currentUserId;
-  final bool isOwnProfile;
-
-  const _ProfileGroupsPage({
-    required this.userId,
-    required this.currentUserId,
-    required this.isOwnProfile,
-  });
-
-  @override
-  State<_ProfileGroupsPage> createState() => _ProfileGroupsPageState();
-}
-
-class _ProfileGroupsPageState extends State<_ProfileGroupsPage> {
-  final GroupService _groupService = GroupService();
-
-  List<Group> _allGroups = [];
-  List<GroupInvitation> _invitations = [];
-  bool _isLoading = true;
-  String? _error;
-
-  // Categorized groups
-  List<Group> get _adminGroups => _allGroups.where((g) =>
-      g.userRole == 'admin' || g.creatorId == widget.currentUserId).toList();
-  List<Group> get _systemGroups => _allGroups.where((g) => g.isSystem).toList();
-  List<Group> get _memberGroups => _allGroups.where((g) =>
-      !g.isSystem &&
-      g.userRole != 'admin' &&
-      g.creatorId != widget.currentUserId).toList();
-
-  static const Color _textPrimary = Color(0xFF1A1A1A);
-  static const Color _textSecondary = Color(0xFF666666);
-  static const Color _cardBg = Color(0xFFFFFFFF);
-  static const Color _accent = Color(0xFF999999);
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    await Future.wait([
-      _loadGroups(),
-      if (widget.isOwnProfile) _loadInvitations(),
-    ]);
-  }
-
-  Future<void> _loadGroups() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    final result = await _groupService.getUserGroups(widget.userId);
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (result.success) {
-          _allGroups = result.groups;
-        } else {
-          _error = result.message ?? (AppStringsScope.of(context)?.failedToLoadGroups ?? 'Failed to load groups');
-        }
-      });
-    }
-  }
-
-  Future<void> _loadInvitations() async {
-    if (!mounted || !widget.isOwnProfile) return;
-
-    final result = await _groupService.getUserInvitations(widget.currentUserId);
-
-    if (mounted) {
-      setState(() {
-        if (result.success) {
-          _invitations = result.invitations;
-        }
-      });
-    }
-  }
-
-  Future<void> _handleInvitation(GroupInvitation invitation, String response) async {
-    final success = await _groupService.respondToInvitation(invitation.id, response);
-    if (mounted) {
-      final s = AppStringsScope.of(context);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response == 'accepted'
-                ? (s?.joinedGroup ?? 'Umejiunga na kikundi')
-                : (s?.declinedInvitation ?? 'Umekataa mwaliko')),
-          ),
-        );
-        _loadData(); // Refresh both groups and invitations
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(s?.actionFailed ?? 'Imeshindwa. Jaribu tena.')),
-        );
-      }
-    }
-  }
-
-  void _openGroupDetail(Group group) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => GroupDetailScreen(
-          groupId: group.id,
-          currentUserId: widget.currentUserId,
-        ),
-      ),
-    ).then((_) {
-      if (mounted) _loadData();
-    });
-  }
-
-  void _createGroup() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreateGroupScreen(creatorId: widget.currentUserId),
-      ),
-    );
-    if (result == true && mounted) {
-      _loadData();
-    }
-  }
-
-  void _discoverGroups() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => GroupsScreen(currentUserId: widget.currentUserId),
-      ),
-    ).then((_) {
-      if (mounted) _loadData();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStringsScope.of(context);
-
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return _buildErrorState(s);
-    }
-
-    final hasAnyContent = _allGroups.isNotEmpty || _invitations.isNotEmpty;
-
-    if (!hasAnyContent) {
-      return _buildEmptyState(s);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      color: _textPrimary,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          // Quick actions for own profile
-          if (widget.isOwnProfile) ...[
-            _buildQuickActions(s),
-            const SizedBox(height: 16),
-          ],
-
-          // Pending invitations section
-          if (widget.isOwnProfile && _invitations.isNotEmpty) ...[
-            _buildSectionHeader(
-              s?.groupInvitations ?? 'Mialiko',
-              Icons.mail_outline,
-              count: _invitations.length,
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 8),
-            ..._invitations.map((inv) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildInvitationCard(inv, s),
-            )),
-            const SizedBox(height: 16),
-          ],
-
-          // Admin/Created groups section
-          if (_adminGroups.isNotEmpty) ...[
-            _buildSectionHeader(
-              s?.groupsICreated ?? 'Nilivyounda',
-              Icons.admin_panel_settings_outlined,
-              count: _adminGroups.length,
-            ),
-            const SizedBox(height: 8),
-            ..._adminGroups.map((group) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildGroupCard(group, s, showAdminBadge: true),
-            )),
-            const SizedBox(height: 16),
-          ],
-
-          // System groups section
-          if (_systemGroups.isNotEmpty) ...[
-            _buildSectionHeader(
-              s?.systemGroups ?? 'Vikundi vya Mfumo',
-              Icons.school_outlined,
-              count: _systemGroups.length,
-              subtitle: s?.systemGroupsSubtitle ?? 'Shule, Mahali, Mwajiri',
-            ),
-            const SizedBox(height: 8),
-            ..._systemGroups.map((group) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildGroupCard(group, s, isSystem: true),
-            )),
-            const SizedBox(height: 16),
-          ],
-
-          // Other member groups section
-          if (_memberGroups.isNotEmpty) ...[
-            _buildSectionHeader(
-              s?.otherGroups ?? 'Vikundi Vingine',
-              Icons.group_outlined,
-              count: _memberGroups.length,
-            ),
-            const SizedBox(height: 8),
-            ..._memberGroups.map((group) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildGroupCard(group, s),
-            )),
-          ],
-
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions(AppStrings? s) {
-    return Row(
-      children: [
-        Expanded(
-          child: _QuickActionButton(
-            icon: Icons.add,
-            label: s?.createGroup ?? 'Unda Kikundi',
-            onTap: _createGroup,
-            isPrimary: true,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _QuickActionButton(
-            icon: Icons.search,
-            label: s?.discoverGroups ?? 'Gundua',
-            onTap: _discoverGroups,
-            isPrimary: false,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionHeader(
-    String title,
-    IconData icon, {
-    int? count,
-    String? subtitle,
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: (color ?? _textPrimary).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 20, color: color ?? _textPrimary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: _textPrimary,
-                      ),
-                    ),
-                    if (count != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: (color ?? _textSecondary).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          count.toString(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: color ?? _textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (subtitle != null)
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 12, color: _textSecondary),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGroupCard(Group group, AppStrings? s, {bool showAdminBadge = false, bool isSystem = false}) {
-    return Material(
-      color: _cardBg,
-      borderRadius: BorderRadius.circular(12),
-      elevation: 1,
-      shadowColor: Colors.black.withOpacity(0.08),
-      child: InkWell(
-        onTap: () => _openGroupDetail(group),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Group avatar
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isSystem ? Colors.blue.shade50 : _accent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: group.coverPhotoUrl != null && group.coverPhotoUrl!.isNotEmpty
-                    ? CachedMediaImage(
-                        imageUrl: group.coverPhotoUrl!,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                      )
-                    : Icon(
-                        isSystem ? _getSystemGroupIcon(group.name) : Icons.group,
-                        size: 28,
-                        color: isSystem ? Colors.blue.shade400 : _textSecondary,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              // Group info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            group.name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: _textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (showAdminBadge)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              s?.adminBadge ?? 'Msimamizi',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green.shade700,
-                              ),
-                            ),
-                          ),
-                        if (isSystem)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              s?.systemBadge ?? 'Mfumo',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blue.shade600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.people_outline, size: 14, color: _textSecondary),
-                        const SizedBox(width: 4),
-                        Text(
-                          s?.membersCount(group.membersCount) ?? '${group.membersCount} wanachama',
-                          style: const TextStyle(fontSize: 12, color: _textSecondary),
-                        ),
-                        const SizedBox(width: 12),
-                        _buildPrivacyIndicator(group.privacy, s),
-                      ],
-                    ),
-                    if (group.description != null && group.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        group.description!,
-                        style: const TextStyle(fontSize: 12, color: _textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              // Arrow indicator
-              Icon(Icons.chevron_right, color: _accent, size: 24),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInvitationCard(GroupInvitation invitation, AppStrings? s) {
-    final group = invitation.group;
-    final inviter = invitation.inviter;
-
-    return Material(
-      color: Colors.orange.shade50,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Group avatar
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: _accent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: group?.coverPhotoUrl != null && group!.coverPhotoUrl!.isNotEmpty
-                      ? CachedMediaImage(
-                          imageUrl: group.coverPhotoUrl!,
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                        )
-                      : const Icon(Icons.group, size: 24, color: _textSecondary),
-                ),
-                const SizedBox(width: 12),
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group?.name ?? (s?.groups ?? 'Kikundi'),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        inviter != null
-                            ? (s?.invitedBy(inviter.fullName) ?? 'Umealikwa na ${inviter.fullName}')
-                            : (s?.invitedToJoin ?? 'Umealikwa kujiunga'),
-                        style: const TextStyle(fontSize: 12, color: _textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton(
-                      onPressed: () => _handleInvitation(invitation, 'rejected'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _textSecondary,
-                        side: BorderSide(color: _accent.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(s?.declineInvitation ?? 'Kataa'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: () => _handleInvitation(invitation, 'accepted'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _textPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(s?.acceptInvitation ?? 'Kubali'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrivacyIndicator(String privacy, AppStrings? s) {
-    IconData icon;
-    String label;
-    switch (privacy) {
-      case 'private':
-        icon = Icons.lock_outline;
-        label = s?.privacyPrivate ?? 'Binafsi';
-        break;
-      case 'secret':
-        icon = Icons.visibility_off_outlined;
-        label = s?.privacySecret ?? 'Siri';
-        break;
-      default:
-        icon = Icons.public;
-        label = s?.privacyPublic ?? 'Wazi';
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: _textSecondary),
-        const SizedBox(width: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary)),
-      ],
-    );
-  }
-
-  IconData _getSystemGroupIcon(String groupName) {
-    final nameLower = groupName.toLowerCase();
-    if (nameLower.contains('shule') || nameLower.contains('school') || nameLower.contains('msingi')) {
-      return Icons.school_outlined;
-    }
-    if (nameLower.contains('chuo') || nameLower.contains('university')) {
-      return Icons.account_balance_outlined;
-    }
-    if (nameLower.contains('kazi') || nameLower.contains('employer') || nameLower.contains('mwajiri')) {
-      return Icons.work_outline;
-    }
-    if (nameLower.contains('mkoa') || nameLower.contains('wilaya') || nameLower.contains('location')) {
-      return Icons.location_on_outlined;
-    }
-    return Icons.groups_outlined;
-  }
-
-  Widget _buildErrorState(AppStrings? s) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: _textSecondary),
-            const SizedBox(height: 16),
-            Text(
-              _error ?? (s?.somethingWrong ?? 'Kuna tatizo'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: _textSecondary),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 48,
-              child: FilledButton.icon(
-                onPressed: _loadData,
-                icon: const Icon(Icons.refresh),
-                label: Text(s?.retry ?? 'Jaribu tena'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _textPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(AppStrings? s) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.group_outlined, size: 64, color: _accent),
-            const SizedBox(height: 16),
-            Text(
-              s?.groups ?? 'Vikundi',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.isOwnProfile
-                  ? (s?.noGroupsYet ?? 'Hujajiunga na kikundi chochote bado')
-                  : (s?.noGroups ?? 'Hakuna vikundi'),
-              style: const TextStyle(fontSize: 14, color: _textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            if (widget.isOwnProfile) ...[
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: _discoverGroups,
-                  icon: const Icon(Icons.search),
-                  label: Text(s?.searchGroups ?? 'Tafuta Vikundi'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _textPrimary,
-                    side: const BorderSide(color: _textPrimary),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: _createGroup,
-                  icon: const Icon(Icons.add),
-                  label: Text(s?.createGroup ?? 'Unda Kikundi'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _textPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Quick action button for groups page
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool isPrimary;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.isPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const textPrimary = Color(0xFF1A1A1A);
-    const cardBg = Color(0xFFFFFFFF);
-
-    return Material(
-      color: isPrimary ? textPrimary : cardBg,
-      borderRadius: BorderRadius.circular(12),
-      elevation: isPrimary ? 0 : 1,
-      shadowColor: Colors.black.withOpacity(0.08),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: isPrimary
-              ? null
-              : BoxDecoration(
-                  border: Border.all(color: textPrimary.withOpacity(0.2)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isPrimary ? cardBg : textPrimary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isPrimary ? cardBg : textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Documents/Files page content - Dropbox-like file management
 class _ProfileDocumentsPage extends StatefulWidget {
   final int userId;
@@ -5136,416 +3743,6 @@ class _BreadcrumbItem {
 }
 
 /// Friends page content
-class _ProfileFriendsPage extends StatefulWidget {
-  final int userId;
-  final FullProfile? profile;
-
-  const _ProfileFriendsPage({
-    required this.userId,
-    this.profile,
-  });
-
-  @override
-  State<_ProfileFriendsPage> createState() => _ProfileFriendsPageState();
-}
-
-class _ProfileFriendsPageState extends State<_ProfileFriendsPage> {
-  final FriendService _friendService = FriendService();
-  final ScrollController _scrollController = ScrollController();
-
-  List<UserProfile> _friends = [];
-  bool _isLoading = true;
-  bool _isLoadingMore = false;
-  bool _hasMore = true;
-  int _page = 1;
-  static const int _perPage = 20;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-    _loadFriends();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_hasMore || _isLoadingMore) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    if (currentScroll >= maxScroll * 0.7) {
-      _loadMoreFriends();
-    }
-  }
-
-  Future<void> _loadFriends() async {
-    setState(() {
-      _isLoading = true;
-      _page = 1;
-    });
-
-    final result = await _friendService.getFriends(
-      userId: widget.userId,
-      page: 1,
-      perPage: _perPage,
-    );
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (result.success) {
-          _friends = result.friends;
-          final meta = result.meta;
-          _hasMore = meta != null
-              ? meta.currentPage < meta.lastPage
-              : result.friends.length >= _perPage;
-          _page = 2;
-        }
-      });
-    }
-  }
-
-  Future<void> _loadMoreFriends() async {
-    if (_isLoadingMore || !_hasMore) return;
-    setState(() => _isLoadingMore = true);
-
-    final result = await _friendService.getFriends(
-      userId: widget.userId,
-      page: _page,
-      perPage: _perPage,
-    );
-
-    if (mounted) {
-      setState(() {
-        _isLoadingMore = false;
-        if (result.success) {
-          _friends.addAll(result.friends);
-          final meta = result.meta;
-          _hasMore = meta != null
-              ? meta.currentPage < meta.lastPage
-              : result.friends.length >= _perPage;
-          _page++;
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_friends.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              AppStringsScope.of(context)?.noFriends ?? 'No friends yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadFriends,
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _friends.length + (_isLoadingMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _friends.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          final friend = _friends[index];
-          return ListTile(
-            leading: CircleAvatar(
-              radius: 24,
-              backgroundImage: friend.profilePhotoUrl != null
-                  ? NetworkImage(friend.profilePhotoUrl!)
-                  : null,
-              child: friend.profilePhotoUrl == null
-                  ? Text(
-                      friend.fullName.isNotEmpty
-                          ? friend.fullName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  : null,
-            ),
-            title: Text(
-              friend.fullName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: friend.location.isNotEmpty
-                ? Text(
-                    friend.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                  )
-                : null,
-            onTap: () {
-              Navigator.pushNamed(context, '/profile/${friend.id}');
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// About page content
-class _ProfileAboutPage extends StatelessWidget {
-  final FullProfile? profile;
-  final bool isOwnProfile;
-
-  const _ProfileAboutPage({
-    this.profile,
-    required this.isOwnProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (profile == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Personal Info
-          _buildSection(
-            context,
-            title: 'Taarifa Binafsi',
-            icon: Icons.person,
-            children: [
-              if (profile?.dateOfBirth != null)
-                _buildRow('Tarehe ya Kuzaliwa', _formatFullDate(profile!.dateOfBirth!, isSw: isSw)),
-              if (profile?.genderLabel != null)
-                _buildRow('Jinsia', profile!.genderLabel!),
-              if (profile?.relationshipStatusLabel != null)
-                _buildRow('Hali ya Uhusiano', profile!.relationshipStatusLabel!),
-              if (profile?.phoneNumber != null)
-                _buildRow('Simu', profile!.phoneNumber!),
-            ],
-          ),
-
-          // Location
-          if (profile?.location != null) ...[
-            const SizedBox(height: 16),
-            _buildSection(
-              context,
-              title: 'Mahali',
-              icon: Icons.location_on,
-              children: [
-                if (profile!.location!.regionName != null)
-                  _buildRow('Mkoa', profile!.location!.regionName!),
-                if (profile!.location!.districtName != null)
-                  _buildRow('Wilaya', profile!.location!.districtName!),
-                if (profile!.location!.wardName != null)
-                  _buildRow('Kata', profile!.location!.wardName!),
-              ],
-            ),
-          ],
-
-          // Education
-          if (profile?.hasEducation == true) ...[
-            const SizedBox(height: 16),
-            _buildSection(
-              context,
-              title: 'Elimu',
-              icon: Icons.school,
-              children: [
-                if (profile?.universityEducation != null)
-                  _buildEducationItem(
-                    'Chuo Kikuu',
-                    profile!.universityEducation!.universityName ?? '',
-                    profile!.universityEducation!.programmeName,
-                  ),
-                if (profile?.secondarySchool != null)
-                  _buildEducationItem(
-                    'Sekondari',
-                    profile!.secondarySchool!.schoolName ?? '',
-                    null,
-                  ),
-                if (profile?.primarySchool != null)
-                  _buildEducationItem(
-                    'Msingi',
-                    profile!.primarySchool!.schoolName ?? '',
-                    null,
-                  ),
-              ],
-            ),
-          ],
-
-          // Career
-          if (profile?.currentEmployer != null) ...[
-            const SizedBox(height: 16),
-            _buildSection(
-              context,
-              title: 'Kazi',
-              icon: Icons.work,
-              children: [
-                _buildRow(
-                  isSw ? 'Mwajiri' : 'Employer',
-                  profile!.currentEmployer!.employerName ?? '',
-                ),
-                if (profile!.currentEmployer!.sector != null)
-                  _buildRow(
-                    isSw ? 'Sekta' : 'Sector',
-                    profile!.currentEmployer!.sector!,
-                  ),
-                if (profile!.currentEmployer!.ownership != null)
-                  _buildRow(
-                    isSw ? 'Umiliki' : 'Ownership',
-                    profile!.currentEmployer!.ownership!,
-                  ),
-              ],
-            ),
-          ],
-
-          // Account
-          const SizedBox(height: 16),
-          _buildSection(
-            context,
-            title: 'Akaunti',
-            icon: Icons.info_outline,
-            children: [
-              _buildRow(
-                'Alijiunga',
-                _formatFullDate(profile?.createdAt ?? DateTime.now(), isSw: isSw),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSection(
-    BuildContext context, {
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
-    final nonEmpty = children.where((w) => w is! SizedBox || (w.height ?? 0) > 0).toList();
-    if (nonEmpty.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          ...nonEmpty,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(String label, String value) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-          const SizedBox(width: 16),
-          Flexible(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEducationItem(String level, String institution, String? detail) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(level, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(institution, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-          if (detail != null) ...[
-            const SizedBox(height: 2),
-            Text(detail, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatFullDate(DateTime date, {required bool isSw}) {
-    return '${date.day} ${_localizedMonth(date.month, isSw: isSw)} ${date.year}';
-  }
-}
 
 /// Placeholder tab for features coming soon.
 class _ComingSoonTab extends StatelessWidget {
@@ -5653,6 +3850,210 @@ class _MyJobTokenWrapper extends StatelessWidget {
         }
         return myjob_home.MyJobPage(token: token);
       },
+    );
+  }
+}
+
+/// Stat tile used in the profile stats row. Borderless / chrome-less —
+/// visual separation between adjacent tiles comes from [_StatDivider].
+/// Tap gives haptic feedback and a brief 0.96 scale-down. Counts <
+/// [_flipMax] animate odometer-style via AnimatedFlipCounter; counts ≥
+/// [_flipMax] use the compact `K`/`M` form because the flip widget
+/// doesn't compact-format internally.
+class _StatChip extends StatefulWidget {
+  /// Threshold above which the chip falls back to a compact `12.3K`
+  /// static label instead of the digit-by-digit flip counter.
+  static const int _flipMax = 10000;
+
+  final int count;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _StatChip({
+    required this.count,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  State<_StatChip> createState() => _StatChipState();
+}
+
+class _StatChipState extends State<_StatChip> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (!mounted || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  static String _compact(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF1A1A1A);
+    const muted = Color(0xFF666666);
+    final hasTap = widget.onTap != null;
+    final useFlip = widget.count < _StatChip._flipMax;
+
+    const countStyle = TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+      height: 1.0,
+      letterSpacing: -0.3,
+      color: ink,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: hasTap
+          ? (_) {
+              HapticFeedback.selectionClick();
+              _setPressed(true);
+            }
+          : null,
+      onTapUp: hasTap ? (_) => _setPressed(false) : null,
+      onTapCancel: hasTap ? () => _setPressed(false) : null,
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          width: _ProfileScreenState._kStatTileWidth,
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          // No background, no border, no shadow — visual separation
+          // is carried by the vertical _StatDivider between tiles.
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (useFlip)
+                AnimatedFlipCounter(
+                  value: widget.count,
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutCubic,
+                  thousandSeparator: ',',
+                  textStyle: countStyle,
+                )
+              else
+                Text(
+                  _compact(widget.count),
+                  style: countStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              const SizedBox(height: 2),
+              Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
+                  letterSpacing: 0.1,
+                  color: muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Thin vertical separator placed between adjacent [_StatChip]s in the
+/// profile stats row. Carries 8dp horizontal margin so each chip has
+/// breathing room on either side.
+class _StatDivider extends StatelessWidget {
+  const _StatDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 32,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: const Color(0xFFE5E5E5),
+    );
+  }
+}
+
+/// 16dp inline avatar shown in the relationship row when a partner is
+/// tagged. Falls back to a single-letter circle when no photo is set.
+class _PartnerAvatar extends StatelessWidget {
+  final String? photoUrl;
+  final String name;
+
+  const _PartnerAvatar({required this.photoUrl, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    const double r = 9;
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: r,
+        backgroundColor: const Color(0xFFF0F0F0),
+        backgroundImage: CachedNetworkImageProvider(photoUrl!),
+        onBackgroundImageError: (_, _) {},
+      );
+    }
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
+    return CircleAvatar(
+      radius: r,
+      backgroundColor: const Color(0xFFE5E5E5),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1A1A1A),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact "+ Tag partner" pill used in the relationship row when the
+/// owner has a romantic status but no partner yet.
+class _TagPartnerPill extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _TagPartnerPill({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFE5E5E5)),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

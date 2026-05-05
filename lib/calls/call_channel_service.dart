@@ -177,7 +177,8 @@ class CallChannelService {
 
   Future<String?> _authChannel(String channelName, String? authToken, int? userId) async {
     if (_socketId == null) return null;
-    final url = '${ApiConfig.baseUrl}/broadcasting/auth';
+    // Laravel mounts /broadcasting/auth on the web origin (not /api).
+    final url = '${ApiConfig.broadcastAuthBaseUrl}/broadcasting/auth';
     try {
       final headers = <String, String>{
         'Content-Type': 'application/json',

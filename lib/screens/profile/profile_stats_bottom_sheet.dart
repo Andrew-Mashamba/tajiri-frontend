@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/friend_models.dart';
+import '../../my_family/models/my_family_models.dart';
+import '../../my_family/services/my_family_service.dart';
 import '../../services/friend_service.dart';
 import '../../services/message_service.dart';
 import '../../widgets/user_avatar.dart';
@@ -11,6 +13,7 @@ enum ProfileStatsType {
   following,
   subscribers,
   friends,
+  family,
 }
 
 /// Bottom sheet to display profile stats lists (followers, following, subscribers, friends)
@@ -28,7 +31,8 @@ class ProfileStatsBottomSheet extends StatefulWidget {
     required this.initialCount,
   });
 
-  /// Show the bottom sheet
+  /// Show the bottom sheet. Read-only public view — no add/edit
+  /// affordances. Family management lives in MyFamilyModule.
   static Future<void> show(
     BuildContext context, {
     required int userId,
@@ -58,8 +62,14 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
 
   final FriendService _friendService = FriendService();
   final MessageService _messageService = MessageService();
+  final MyFamilyService _familyService = MyFamilyService();
 
   List<FollowUser> _users = [];
+  /// Family-specific list. Populated when [statsType] == family. We keep a
+  /// separate list because FamilyMember doesn't map cleanly to FollowUser
+  /// (no follow/friendship state, has relationship label, may not be a
+  /// linked TAJIRI account).
+  List<FamilyMember> _familyMembers = [];
   bool _isLoading = true;
   bool _loadingMore = false;
   String? _error;
@@ -78,6 +88,25 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
       _isLoading = true;
       _error = null;
     });
+
+    // Family is a separate non-paginated branch.
+    if (widget.statsType == ProfileStatsType.family) {
+      final familyResult = await _familyService.getMembers(widget.userId);
+      if (!mounted) return;
+      if (familyResult.success) {
+        setState(() {
+          _isLoading = false;
+          _familyMembers = familyResult.items;
+          _lastPage = 1; // family list isn't paginated
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _error = familyResult.message;
+        });
+      }
+      return;
+    }
 
     FollowListResult result;
 
@@ -103,6 +132,9 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
           page: _page,
         );
         break;
+      case ProfileStatsType.family:
+        // Already handled above the switch.
+        return;
       case ProfileStatsType.friends:
         // For friends, convert UserProfile to FollowUser
         final friendsResult = await _friendService.getFriends(
@@ -215,6 +247,7 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
         );
         break;
       case ProfileStatsType.friends:
+      case ProfileStatsType.family:
         // Already handled above
         return;
     }
@@ -246,6 +279,7 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
 
   String get _title {
     final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
     switch (widget.statsType) {
       case ProfileStatsType.followers:
         return s?.followers ?? 'Followers';
@@ -255,6 +289,8 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
         return s?.subscribers ?? 'Subscribers';
       case ProfileStatsType.friends:
         return s?.friends ?? 'Friends';
+      case ProfileStatsType.family:
+        return isSw ? 'Familia' : 'Family';
     }
   }
 
@@ -268,11 +304,14 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
         return Icons.card_membership_outlined;
       case ProfileStatsType.friends:
         return Icons.group_outlined;
+      case ProfileStatsType.family:
+        return Icons.family_restroom_outlined;
     }
   }
 
   String get _emptyMessage {
     final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
     switch (widget.statsType) {
       case ProfileStatsType.followers:
         return s?.noFollowers ?? 'No followers yet';
@@ -282,6 +321,8 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
         return s?.noSubscribers ?? 'No subscribers yet';
       case ProfileStatsType.friends:
         return s?.noFriends ?? 'No friends yet';
+      case ProfileStatsType.family:
+        return isSw ? 'Hakuna familia bado' : 'No family members yet';
     }
   }
 
@@ -323,17 +364,27 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
   }
 
   Widget _buildHeader() {
+    // Family count tracks the loaded list (so a fresh refetch is reflected
+    // even if the owner edited the list elsewhere). Other types keep the
+    // initialCount that was passed in.
+    final count = widget.statsType == ProfileStatsType.family
+        ? _familyMembers.length
+        : widget.initialCount;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '$_title (${widget.initialCount})',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: _kPrimary,
+          Expanded(
+            child: Text(
+              '$_title ($count)',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: _kPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
@@ -382,7 +433,10 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
       );
     }
 
-    if (_users.isEmpty) {
+    final isFamily = widget.statsType == ProfileStatsType.family;
+    final isEmpty = isFamily ? _familyMembers.isEmpty : _users.isEmpty;
+
+    if (isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -401,6 +455,23 @@ class _ProfileStatsBottomSheetState extends State<ProfileStatsBottomSheet> {
               ),
             ],
           ),
+        ),
+      );
+    }
+
+    if (isFamily) {
+      return RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          itemCount: _familyMembers.length,
+          itemBuilder: (context, index) {
+            final member = _familyMembers[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _FamilyMemberCard(member: member),
+            );
+          },
         ),
       );
     }
@@ -717,6 +788,9 @@ class _ActionButtonState extends State<_ActionButton> {
         return _buildSubscribeButton();
       case ProfileStatsType.friends:
         return _buildFriendButton();
+      case ProfileStatsType.family:
+        // Family list never renders this _ActionButton — has its own card.
+        return const SizedBox.shrink();
     }
   }
 
@@ -878,6 +952,159 @@ class _ActionButtonState extends State<_ActionButton> {
             ),
           ),
         );
+    }
+  }
+}
+
+/// Card for one family member inside the family bottom sheet.
+/// Shows avatar + name + relationship label + (when linked) a "Tajiri" badge.
+/// Tapping a *linked* member opens their profile screen via /profile/:id.
+class _FamilyMemberCard extends StatelessWidget {
+  final FamilyMember member;
+  static const Color _kPrimary = Color(0xFF1A1A1A);
+  static const Color _kSecondary = Color(0xFF666666);
+
+  const _FamilyMemberCard({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
+    final isLinked = member.isLinked && member.userId != null && member.userId! > 0;
+    final relationshipLabel = _localizedRelationship(member.relationship, isSw);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLinked
+            ? () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/profile/${member.userId}');
+              }
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              UserAvatar(
+                photoUrl: member.photoUrl,
+                name: member.name,
+                radius: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      member.name,
+                      style: const TextStyle(
+                        color: _kPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            relationshipLabel,
+                            style: const TextStyle(
+                              color: _kSecondary,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isLinked) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'TAJIRI',
+                              style: TextStyle(
+                                color: Color(0xFF1B5E20),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (isLinked)
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: _kSecondary,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _localizedRelationship(Relationship r, bool isSw) {
+    switch (r) {
+      case Relationship.parent:
+        return isSw ? 'Mzazi' : 'Parent';
+      case Relationship.child:
+        return isSw ? 'Mtoto' : 'Child';
+      case Relationship.spouse:
+        return isSw ? 'Mke/Mume' : 'Spouse';
+      case Relationship.sibling:
+        return isSw ? 'Ndugu' : 'Sibling';
+      case Relationship.grandparent:
+        return isSw ? 'Babu/Bibi' : 'Grandparent';
+      case Relationship.grandchild:
+        return isSw ? 'Mjukuu' : 'Grandchild';
+      case Relationship.aunt:
+        return isSw ? 'Shangazi' : 'Aunt';
+      case Relationship.uncle:
+        return isSw ? 'Mjomba' : 'Uncle';
+      case Relationship.cousin:
+        return isSw ? 'Binamu' : 'Cousin';
+      case Relationship.niece:
+        return isSw ? 'Mpwa wa kike' : 'Niece';
+      case Relationship.nephew:
+        return isSw ? 'Mpwa wa kiume' : 'Nephew';
+      case Relationship.inLaw:
+        return isSw ? 'Mwana wa ndugu' : 'In-law';
+      case Relationship.stepChild:
+        return isSw ? 'Mtoto wa kambo' : 'Step-child';
+      case Relationship.stepParent:
+        return isSw ? 'Mzazi wa kambo' : 'Step-parent';
+      case Relationship.guardian:
+        return isSw ? 'Mlezi' : 'Guardian';
+      case Relationship.other:
+        return isSw ? 'Mwingine' : 'Other';
     }
   }
 }

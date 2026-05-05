@@ -16,7 +16,7 @@ import 'screens/feed/thread_viewer_screen.dart';
 import 'screens/feed/digest_screen.dart';
 import 'screens/feed/saved_posts_screen.dart';
 import 'creator/screens/weekly_report_screen.dart';
-import 'screens/feed/musicgallerywidget_screen.dart';
+import 'mymusic/widgets/music_gallery_widget_screen.dart';
 import 'screens/michangogallerywidget_screen.dart';
 import 'screens/friends/friends_screen.dart';
 import 'screens/messages/conversations_screen.dart';
@@ -24,9 +24,18 @@ import 'screens/messages/search_conversations_screen.dart';
 import 'screens/messages/select_user_for_chat_screen.dart';
 import 'screens/friends/chat_screen.dart';
 import 'models/message_models.dart';
-import 'screens/photos/photos_screen.dart';
-import 'screens/photos/album_detail_screen.dart';
+import 'photos/screens/photos_screen.dart';
+import 'photos/screens/album_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'creator/screens/creator_revenue_report_screen.dart';
+import 'creator/screens/earnings_provenance_screen.dart';
+import 'creator/screens/creator_tier_screen.dart';
+import 'screens/profile/followers/followers_manage_screen.dart';
+import 'screens/profile/following/following_manage_screen.dart';
+import 'screens/profile/friends/friends_manage_screen.dart';
+import 'screens/profile/subscribers/subscribers_manage_screen.dart';
+import 'services/network_state_service.dart';
+import 'widgets/offline_banner_host.dart';
 import 'screens/clips/clips_screen.dart';
 import 'screens/groups/events_screen.dart';
 // ignore: unused_import
@@ -43,8 +52,13 @@ import 'screens/shop/checkout_screen.dart';
 import 'screens/shop/wishlist_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
+import 'creator/screens/creator_revenue_screen.dart';
 import 'creator/screens/sponsored_posts_screen.dart';
-import 'creator/screens/income_sources_screen.dart';
+import 'revenue/pages/revenue_index_page.dart';
+import 'myphotos/pages/my_photos_page.dart';
+import 'myvideos/pages/my_videos_page.dart';
+import 'mymusic/pages/my_music_page.dart';
+import 'myfiles/pages/my_files_page.dart';
 import 'creator/screens/income_source_detail_screen.dart';
 import 'creator/screens/income_activity_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
@@ -112,6 +126,9 @@ void main() async {
 
   // Fire-and-forget: refresh feed cache if stale (>15 min)
   BackgroundSyncService.instance.initialize().ignore();
+
+  // Start app-wide connectivity listener (drives the offline banner).
+  NetworkStateService.instance.start().ignore();
 
   runApp(const TajiriApp());
 }
@@ -237,9 +254,17 @@ class _TajiriAppState extends State<TajiriApp> {
               locale: locale,
               home: const SplashScreen(),
               builder: (context, child) {
+                // Playbook §2218 — clamp text scaling at the root so OS
+                // font enlargement (up to 3.1× on iOS) doesn't break
+                // AppBars, tab bars, and primary CTAs.
+                final clamped = MediaQuery.withClampedTextScaling(
+                  minScaleFactor: 0.85,
+                  maxScaleFactor: 1.4,
+                  child: child ?? const SizedBox.shrink(),
+                );
                 return GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
-                  child: child ?? const SizedBox.shrink(),
+                  child: OfflineBannerHost(child: clamped),
                 );
               },
               onGenerateRoute: (settings) {
@@ -307,6 +332,106 @@ class _TajiriAppState extends State<TajiriApp> {
               ),
             );
 
+          case 'followers':
+            // /followers/manage — owner-only follower management page.
+            if (pathSegments.length >= 2 && pathSegments[1] == 'manage') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      );
+                    }
+                    return FollowersManageScreen(currentUserId: snapshot.data!);
+                  },
+                ),
+                settings: settings,
+              );
+            }
+            return null;
+
+          case 'following':
+            // /following/manage — owner-only following management page.
+            if (pathSegments.length >= 2 && pathSegments[1] == 'manage') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      );
+                    }
+                    return FollowingManageScreen(currentUserId: snapshot.data!);
+                  },
+                ),
+                settings: settings,
+              );
+            }
+            return null;
+
+          case 'friends':
+            // /friends/manage — owner-only friends management page.
+            if (pathSegments.length >= 2 && pathSegments[1] == 'manage') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      );
+                    }
+                    return FriendsManageScreen(currentUserId: snapshot.data!);
+                  },
+                ),
+                settings: settings,
+              );
+            }
+            return null;
+
+          case 'subscribers':
+            // /subscribers/manage — creator-only subscribers management page.
+            if (pathSegments.length >= 2 && pathSegments[1] == 'manage') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      );
+                    }
+                    return SubscribersManageScreen(currentUserId: snapshot.data!);
+                  },
+                ),
+                settings: settings,
+              );
+            }
+            return null;
+
           case 'saved-posts':
             return MaterialPageRoute(
               builder: (_) => FutureBuilder<int>(
@@ -354,6 +479,53 @@ class _TajiriAppState extends State<TajiriApp> {
               }
             }
             break;
+
+          case 'creator-earnings':
+            // Lands on the canonical 15-section revenue report.
+            // The legacy cross-stream dashboard remains reachable
+            // from the report's "Other views" footer.
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return CreatorRevenueReportScreen(creatorId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'earnings-provenance':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return EarningsProvenanceScreen(
+                    currentUserId: snapshot.data!,
+                    postId: args['postId'] as int?,
+                    stream: args['stream'] as String?,
+                  );
+                },
+              ),
+            );
+
+          case 'creator-tier':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return CreatorTierScreen(currentUserId: snapshot.data!);
+                },
+              ),
+            );
 
           case 'thread':
             if (pathSegments.length > 1) {
@@ -444,15 +616,79 @@ class _TajiriAppState extends State<TajiriApp> {
             );
 
           // ── lib/creator/ module routes ───────────────────────────────
-          // Landing for the creator module is IncomeSourcesScreen (Mapato).
-          //   /creator                    → IncomeSourcesScreen (landing)
+          // Landing = 9-card CreatorRevenueScreen (revenue sources).
+          //   /creator                    → CreatorRevenueScreen (grid)
+          //   /creator-earnings           → CreatorRevenueReportScreen (15-section report)
           //   /creator/source/:sourceId   → IncomeSourceDetailScreen
           //   /creator/activity           → IncomeActivityScreen
           // /mapato/* kept as alias for backward compatibility with any
           // already-deployed deep links / FCM payloads in flight.
+          case 'revenue':
+            return MaterialPageRoute(
+              builder: (_) => const RevenueIndexPage(),
+            );
+
+          case 'my-photos':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return MyPhotosPage(userId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'my-videos':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return MyVideosPage(userId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'my-music':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return MyMusicPage(userId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'my-files':
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return MyFilesPage(userId: snapshot.data!);
+                },
+              ),
+            );
+
           case 'creator':
           case 'mapato': {
             if (pathSegments.length == 1) {
+              // Landing page = the 9-card revenue-sources grid
+              // (Posts / Streams / Subscribers / Brand Deals /
+              // Ad Revenue / My Photos / My Videos / My Music /
+              // My Files). The 15-section revenue report is reachable
+              // via the prominent "Full revenue report" link on the
+              // grid, and via the dedicated /creator-earnings route.
               return MaterialPageRoute(
                 builder: (_) => FutureBuilder<int>(
                   future: getCurrentUserId(),
@@ -460,7 +696,21 @@ class _TajiriAppState extends State<TajiriApp> {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    return IncomeSourcesScreen(creatorId: snapshot.data!);
+                    return Scaffold(
+                      backgroundColor: const Color(0xFFFAFAFA),
+                      appBar: AppBar(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1A1A1A),
+                        elevation: 0,
+                        scrolledUnderElevation: 1,
+                        title: const Text(
+                          'Mapato',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      body: CreatorRevenueScreen(creatorId: snapshot.data!),
+                    );
                   },
                 ),
               );

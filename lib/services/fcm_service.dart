@@ -1,5 +1,6 @@
 // FCM: foreground/background/opened handlers. Payload contract: new_message -> open chat; call_incoming -> open incoming call screen.
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -32,11 +33,20 @@ class FcmService {
       FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    await FirebaseMessaging.instance.requestPermission();
-    final token = await FirebaseMessaging.instance.getToken();
-    if (kDebugMode && token != null) debugPrint('[FCM] Token: $token');
+    // On iOS, APNs registration is async — getToken() throws
+    // `apns-token-not-set` if called before iOS hands the token over.
+    // Order matters: set up listeners + local notifications FIRST so a
+    // message arriving during the APNs handshake is still routable. Token
+    // fetch is best-effort and wrapped to never abort init.
 
-    // Initialize local notifications
+    // 1. Permission prompt (cheap on Android, OS dialog on iOS).
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FCM] requestPermission failed: $e');
+    }
+
+    // 2. Initialize local notifications.
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -46,20 +56,44 @@ class FcmService {
     );
     const initSettings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
-
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // Create Android notification channels
+    // 3. Create Android notification channels.
     await _createNotificationChannels();
 
+    // 4. Wire up listeners — must happen before any async gap that could
+    // hold off on errors, so we never miss a foreground / tap event.
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
 
     final initial = await FirebaseMessaging.instance.getInitialMessage();
     if (initial != null) _pendingInitialMessage = initial;
+
+    // 5. Best-effort token fetch (debug log only; sendTokenToBackend
+    // does the APNs-aware version on demand). Wrap in try/catch so an
+    // iOS APNs-not-ready error doesn't abort init.
+    unawaited(_logTokenWhenReady());
+  }
+
+  Future<void> _logTokenWhenReady() async {
+    if (!kDebugMode) return;
+    try {
+      // iOS: wait briefly for APNs handshake before asking for the FCM token.
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        for (var i = 0; i < 6; i++) {
+          final apns = await FirebaseMessaging.instance.getAPNSToken();
+          if (apns != null) break;
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) debugPrint('[FCM] Token: $token');
+    } catch (e) {
+      debugPrint('[FCM] Token fetch deferred: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------

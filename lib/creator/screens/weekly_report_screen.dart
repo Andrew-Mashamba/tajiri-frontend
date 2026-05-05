@@ -288,7 +288,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isUp ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+        color: isUp ? const Color(0xFFF5F5F5) : const Color(0xFFFFE5E5),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -296,7 +296,7 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: isUp ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+          color: isUp ? const Color(0xFF1A1A1A) : const Color(0xFFD32F2F),
         ),
       ),
     );

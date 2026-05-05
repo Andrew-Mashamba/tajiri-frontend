@@ -66,17 +66,17 @@ class StateBadge extends StatelessWidget {
   static _BadgeTheme _themeFor(SourceState s) {
     switch (s) {
       case SourceState.earning:
-        return const _BadgeTheme(bg: Color(0xFFE8F5E9), fg: Color(0xFF1B5E20));
+        return const _BadgeTheme(bg: Color(0xFFF5F5F5), fg: Color(0xFF1A1A1A));
       case SourceState.live:
-        return const _BadgeTheme(bg: Color(0xFFFCE4EC), fg: Color(0xFF880E4F));
+        return const _BadgeTheme(bg: Color(0xFFFFE5E5), fg: Color(0xFFD32F2F));
       case SourceState.pending:
-        return const _BadgeTheme(bg: Color(0xFFFFF8E1), fg: Color(0xFF7A5800));
+        return const _BadgeTheme(bg: Color(0xFFF5F5F5), fg: Color(0xFF666666));
       case SourceState.ready:
-        return const _BadgeTheme(bg: Color(0xFFE3F2FD), fg: Color(0xFF0D47A1));
+        return const _BadgeTheme(bg: Color(0xFFFAFAFA), fg: Color(0xFF666666));
       case SourceState.paused:
       case SourceState.locked:
       case SourceState.unknown:
-        return const _BadgeTheme(bg: Color(0xFFF2F2F2), fg: Color(0xFF666666));
+        return const _BadgeTheme(bg: Color(0xFFF5F5F5), fg: Color(0xFF666666));
     }
   }
 }

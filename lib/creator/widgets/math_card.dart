@@ -122,7 +122,7 @@ class _MathRow extends StatelessWidget {
               ? null
               : const BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Color(0xFFF0F0F0)),
+                    bottom: BorderSide(color: Color(0xFFE5E5E5)),
                   ),
                 )),
       child: Row(

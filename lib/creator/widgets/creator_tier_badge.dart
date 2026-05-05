@@ -34,9 +34,9 @@ class CreatorTierBadge extends StatelessWidget {
   Color get _tierColor {
     switch (tier.toLowerCase()) {
       case 'legend': return const Color(0xFF1A1A1A);
-      case 'star': return const Color(0xFF333333);
-      case 'established': return const Color(0xFF555555);
-      default: return const Color(0xFF888888);
+      case 'star': return const Color(0xFF1A1A1A);
+      case 'established': return const Color(0xFF666666);
+      default: return const Color(0xFF999999);
     }
   }
 

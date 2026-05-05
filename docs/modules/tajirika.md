@@ -214,14 +214,14 @@ Push notifications for partner events. The existing `AppNotification` model (`li
 - Re-verification expiry alerts
 - Account health warnings (rating drop, inactive status)
 
-### PhotoService + VideoUploadService (`lib/services/photo_service.dart`, `lib/services/video_upload_service.dart`)
+### PhotoService + VideoUploadService (`lib/photos/services/photo_service.dart`, `lib/services/video_upload_service.dart`)
 
-Portfolio media management. The existing `Photo` model (`lib/models/photo_models.dart`) tracks photos with `filePath`, `thumbnailPath`, `width`, `height`, `caption`, `locationName`, organized in `PhotoAlbum` collections with `privacy` settings.
+Portfolio media management. The existing `Photo` model (`lib/photos/models/photo_models.dart`) tracks photos with `filePath`, `thumbnailPath`, `width`, `height`, `caption`, `locationName`, organized in `PhotoAlbum` collections with `privacy` settings.
 
 - `PhotoService.uploadPhoto()` — Portfolio photo uploads (before/after work photos, credentials)
 - `VideoUploadService` — Video showcase uploads (work demonstrations, introductions), uses Dio for chunked upload with 10-min timeout
 - Portfolio photos organized in albums per skill category
-- The existing `PhotosScreen` and `AlbumDetailScreen` (`lib/screens/photos/`) provide album management UI
+- The existing `PhotosScreen` and `AlbumDetailScreen` (`lib/photos/screens/`) provide album management UI
 
 ### PostService + StoryService (`lib/services/post_service.dart`, `lib/services/story_service.dart`)
 
@@ -346,7 +346,7 @@ TajirikaPartner {
     districts[]   → District ids
     wards[]       → Ward ids
   }
-  portfolio[]     → Photo/Video references (PhotoAlbum via lib/models/photo_models.dart)
+  portfolio[]     → Photo/Video references (PhotoAlbum via lib/photos/models/photo_models.dart)
   training {
     completed[]   → TrainingCourse ids with certificates
     enrolled[]    → in-progress courses

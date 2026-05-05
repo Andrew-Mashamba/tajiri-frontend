@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/profile_models.dart';
@@ -7,8 +8,15 @@ import '../../services/user_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/local_storage_service.dart';
 
-/// Edit profile form. Syncs to backend via PUT /api/users/phone/{phone} and local storage.
-/// Navigation: Home → Profile → ⋮ menu or Edit profile → this screen.
+/// Edit profile form. Syncs to backend via PUT /api/users/phone/{phone}
+/// and the local Hive user object. Reachable from:
+///   • Profile header → edit pencil (next to display name)
+///   • Settings → Edit profile
+///
+/// Playbook compliance: monochrome, 48dp targets, no SnackBars (errors
+/// surface as a dismissible inline banner at the top of the form),
+/// `_rounded` icons, FilledButton primary save action, OutlinedButton
+/// retry, BorderRadius.circular(12) on inputs.
 class EditProfileScreen extends StatefulWidget {
   final int currentUserId;
   final FullProfile? initialProfile;
@@ -28,11 +36,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _userService = UserService();
   final _profileService = ProfileService();
 
-  late TextEditingController _firstNameController;
-  late TextEditingController _lastNameController;
-  late TextEditingController _bioController;
-  late TextEditingController _usernameController;
-  late TextEditingController _interestsController;
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
+  late final TextEditingController _bioController;
+  late final TextEditingController _usernameController;
+  late final TextEditingController _interestsController;
 
   DateTime? _dateOfBirth;
   String? _gender;
@@ -40,12 +48,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
-  String? _error;
+  String? _screenError;   // full-screen load error
+  String? _formError;     // transient banner at the top of the form
   FullProfile? _profile;
 
-  static const _minTouchTargetHeight = 48.0;
-  static const _primaryColor = Color(0xFF1A1A1A);
-  static const _backgroundColor = Color(0xFFFAFAFA);
+  static const double _kFieldHeight = 48.0;
+  static const Color _kPrimary = Color(0xFF1A1A1A);
+  static const Color _kSecondary = Color(0xFF666666);
+  static const Color _kTertiary = Color(0xFF999999);
+  static const Color _kBackground = Color(0xFFFAFAFA);
+  static const Color _kSurface = Colors.white;
+  static const Color _kDanger = Color(0xFFD32F2F);
 
   @override
   void initState() {
@@ -78,7 +91,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _loadProfile() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _screenError = null;
     });
 
     final result = await _profileService.getProfile(
@@ -93,7 +106,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (result.success && result.profile != null) {
         _applyProfile(result.profile!);
       } else {
-        _error = result.message ?? (AppStringsScope.of(context)?.failedToLoadProfile ?? 'Failed to load profile');
+        _screenError = result.message ??
+            (AppStringsScope.of(context)?.failedToLoadProfile ??
+                'Failed to load profile');
       }
     });
   }
@@ -112,51 +127,56 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final interestsStr = _interestsController.text.trim();
     final interests = interestsStr.isEmpty
         ? <String>[]
-        : interestsStr.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        : interestsStr
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
 
     return {
       'first_name': _firstNameController.text.trim(),
       'last_name': _lastNameController.text.trim(),
-      if (_dateOfBirth != null) 'date_of_birth': _dateOfBirth!.toIso8601String().split('T').first,
+      if (_dateOfBirth != null)
+        'date_of_birth': _dateOfBirth!.toIso8601String().split('T').first,
       if (_gender != null) 'gender': _gender,
-      'bio': _bioController.text.trim().isEmpty ? null : _bioController.text.trim(),
-      'username': _usernameController.text.trim().isEmpty ? null : _usernameController.text.trim(),
-      if (_relationshipStatus != null) 'relationship_status': _relationshipStatus,
+      'bio': _bioController.text.trim().isEmpty
+          ? null
+          : _bioController.text.trim(),
+      'username': _usernameController.text.trim().isEmpty
+          ? null
+          : _usernameController.text.trim(),
+      if (_relationshipStatus != null)
+        'relationship_status': _relationshipStatus,
       'interests': interests.isEmpty ? null : interests,
     };
   }
 
   Future<void> _save() async {
+    setState(() => _formError = null);
     if (!_formKey.currentState!.validate()) return;
 
     final phone = _profile?.phoneNumber;
     if (phone == null || phone.isEmpty) {
-      if (mounted) {
-        final s = AppStringsScope.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(s?.phoneUnknown ?? 'Phone number unknown')),
-        );
-      }
+      final s = AppStringsScope.of(context);
+      setState(() {
+        _formError = s?.phoneUnknown ?? 'Phone number unknown';
+      });
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-      _error = null;
-    });
+    setState(() => _isSaving = true);
 
     final payload = _buildPayload();
     final result = await _userService.updateProfileByPhone(phone, payload);
 
     if (!mounted) return;
 
-    setState(() => _isSaving = false);
-
     if (!result.success) {
       final s = AppStringsScope.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? (s?.saveFailed ?? 'Failed to save'))),
-      );
+      setState(() {
+        _isSaving = false;
+        _formError = result.message ?? (s?.saveFailed ?? 'Failed to save');
+      });
       return;
     }
 
@@ -188,154 +208,200 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       await storage.updateUser(updated);
     }
 
+    ProfileService.invalidate(widget.currentUserId);
     if (mounted) {
-      final s = AppStringsScope.of(context);
-      ProfileService.invalidate(widget.currentUserId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(s?.profileSaved ?? 'Profile saved')),
-      );
+      HapticFeedback.lightImpact();
       Navigator.of(context).pop(true);
     }
   }
+
+  // ── build ──
 
   @override
   Widget build(BuildContext context) {
     final s = AppStringsScope.of(context);
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: _kBackground,
       appBar: TajiriAppBar(title: s?.editProfile ?? 'Edit profile'),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 64, color: Colors.grey.shade400),
-                          const SizedBox(height: 16),
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: _loadProfile,
-                              child: Text(s?.retry ?? 'Retry'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Form(
-                      key: _formKey,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const SizedBox(height: 24),
-                            _buildField(
-                              context: context,
-                              label: s?.firstName ?? 'First name',
-                              controller: _firstNameController,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return s?.enterFirstName ?? 'Enter first name';
-                                return null;
-                              },
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildField(
-                              context: context,
-                              label: s?.lastName ?? 'Last name',
-                              controller: _lastNameController,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return s?.enterLastName ?? 'Enter last name';
-                                return null;
-                              },
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildDateOfBirthField(context, s),
-                            const SizedBox(height: 16),
-                            _buildGenderField(context, s),
-                            const SizedBox(height: 16),
-                            _buildField(
-                              context: context,
-                              label: s?.bioLabel ?? 'Bio',
-                              controller: _bioController,
-                              maxLines: 3,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildField(
-                              context: context,
-                              label: s?.usernameLabel ?? 'Username',
-                              controller: _usernameController,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildRelationshipField(context, s),
-                            const SizedBox(height: 16),
-                            _buildField(
-                              context: context,
-                              label: s?.interestsLabel ?? 'Interests',
-                              controller: _interestsController,
-                              maxLines: 2,
-                            ),
-                            const SizedBox(height: 32),
-                            SizedBox(
-                              height: 56,
-                              child: Material(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                elevation: 2,
-                                shadowColor: Colors.black.withOpacity(0.1),
-                                child: InkWell(
-                                  onTap: _isSaving ? null : _save,
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Center(
-                                    child: _isSaving
-                                        ? const SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          )
-                                        : Text(
-                                            s?.save ?? 'Save',
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: _primaryColor,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+            ? const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _kPrimary,
+                ),
+              )
+            : _screenError != null
+                ? _buildScreenError(s)
+                : _buildForm(s),
+      ),
+    );
+  }
+
+  Widget _buildScreenError(dynamic s) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline_rounded,
+                size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              _screenError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _kSecondary, fontSize: 14),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _loadProfile,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _kPrimary,
+                side: const BorderSide(color: _kPrimary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+              ),
+              child: Text(s?.retry ?? 'Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm(dynamic s) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: AutofillGroup(
+        child: Form(
+        key: _formKey,
+        // Validate only after the user has interacted with the form
+        // (per playbook §2316 — don't show errors while still typing).
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: SingleChildScrollView(
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 16),
+              if (_formError != null) ...[
+                _ErrorBanner(
+                  message: _formError!,
+                  onDismiss: () => setState(() => _formError = null),
+                ),
+                const SizedBox(height: 16),
+              ],
+              _buildField(
+                label: s?.firstName ?? 'First name',
+                controller: _firstNameController,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return s?.enterFirstName ?? 'Enter first name';
+                  }
+                  return null;
+                },
+                textCapitalization: TextCapitalization.words,
+                autofillHints: const [AutofillHints.givenName],
+                keyboardType: TextInputType.name,
+              ),
+              const SizedBox(height: 16),
+              _buildField(
+                label: s?.lastName ?? 'Last name',
+                controller: _lastNameController,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return s?.enterLastName ?? 'Enter last name';
+                  }
+                  return null;
+                },
+                textCapitalization: TextCapitalization.words,
+                autofillHints: const [AutofillHints.familyName],
+                keyboardType: TextInputType.name,
+              ),
+              const SizedBox(height: 16),
+              _buildDateOfBirthField(s),
+              const SizedBox(height: 16),
+              _buildGenderField(s),
+              const SizedBox(height: 16),
+              _buildField(
+                label: s?.bioLabel ?? 'Bio',
+                controller: _bioController,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              _buildField(
+                label: s?.usernameLabel ?? 'Username',
+                controller: _usernameController,
+                autofillHints: const [AutofillHints.username],
+                keyboardType: TextInputType.text,
+              ),
+              const SizedBox(height: 16),
+              _buildRelationshipField(s),
+              const SizedBox(height: 16),
+              _buildField(
+                label: s?.interestsLabel ?? 'Interests',
+                controller: _interestsController,
+                maxLines: 2,
+              ),
+              const SizedBox(height: 32),
+              _buildSaveButton(s),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton(dynamic s) {
+    return SizedBox(
+      height: 56,
+      child: FilledButton(
+        onPressed: _isSaving ? null : _save,
+        style: FilledButton.styleFrom(
+          backgroundColor: _kPrimary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: _kPrimary.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(s?.save ?? 'Save'),
       ),
     );
   }
 
   Widget _buildField({
-    required BuildContext context,
     required String label,
     required TextEditingController controller,
     String? Function(String?)? validator,
     int maxLines = 1,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    Iterable<String>? autofillHints,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    void Function(String)? onSubmitted,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,32 +411,69 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: _primaryColor,
+            color: _kPrimary,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           validator: validator,
           maxLines: maxLines,
-          textCapitalization: textCapitalization,
           minLines: maxLines > 1 ? 2 : null,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            errorStyle: const TextStyle(fontSize: 12),
-          ),
+          textCapitalization: textCapitalization,
+          autofillHints: autofillHints,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction ??
+              (maxLines > 1 ? TextInputAction.newline : TextInputAction.next),
+          onFieldSubmitted: onSubmitted,
+          style: const TextStyle(fontSize: 14, color: _kPrimary),
+          decoration: _inputDecoration(),
         ),
       ],
     );
   }
 
-  Widget _buildDateOfBirthField(BuildContext context, dynamic s) {
+  InputDecoration _inputDecoration({String? hintText}) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: _kTertiary, fontSize: 14),
+      filled: true,
+      fillColor: _kSurface,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kPrimary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kDanger, width: 1.0),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kDanger, width: 1.5),
+      ),
+      errorStyle: const TextStyle(fontSize: 12, color: _kDanger),
+    );
+  }
+
+  Widget _buildDateOfBirthField(dynamic s) {
     final label = s?.dateOfBirth ?? 'Date of birth';
-    final value = _dateOfBirth != null
-        ? '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}'
+    final hasValue = _dateOfBirth != null;
+    final value = hasValue
+        ? '${_dateOfBirth!.day.toString().padLeft(2, '0')}/'
+            '${_dateOfBirth!.month.toString().padLeft(2, '0')}/'
+            '${_dateOfBirth!.year}'
         : (s?.selectDate ?? 'Select date');
 
     return Column(
@@ -381,42 +484,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: _primaryColor,
+            color: _kPrimary,
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: _minTouchTargetHeight,
-          child: Material(
-            color: Colors.white,
+        Material(
+          color: _kSurface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: _pickDateOfBirth,
             borderRadius: BorderRadius.circular(12),
-            elevation: 0,
-            child: InkWell(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _dateOfBirth ?? DateTime(2000),
-                  firstDate: DateTime(1920),
-                  lastDate: DateTime.now(),
-                );
-                if (picked != null && mounted) setState(() => _dateOfBirth = picked);
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 20, color: Colors.grey.shade600),
-                    const SizedBox(width: 12),
-                    Text(
+            child: Container(
+              constraints:
+                  const BoxConstraints(minHeight: _kFieldHeight),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    size: 20,
+                    color: _kSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       value,
                       style: TextStyle(
                         fontSize: 14,
-                        color: _dateOfBirth != null ? _primaryColor : Colors.grey.shade600,
+                        color: hasValue ? _kPrimary : _kTertiary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: _kTertiary,
+                  ),
+                ],
               ),
             ),
           ),
@@ -425,73 +532,139 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildGenderField(BuildContext context, dynamic s) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          s?.gender ?? 'Gender',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: _primaryColor,
+  Future<void> _pickDateOfBirth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(2000),
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: _kPrimary,
+            onPrimary: Colors.white,
+            surface: _kSurface,
+            onSurface: _kPrimary,
           ),
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: _minTouchTargetHeight,
-          child: DropdownButtonFormField<String>(
-            value: _gender,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            items: [
-              DropdownMenuItem(value: 'male', child: Text(s?.male ?? 'Male')),
-              DropdownMenuItem(value: 'female', child: Text(s?.female ?? 'Female')),
-            ],
-            onChanged: (v) => setState(() => _gender = v),
-          ),
-        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _dateOfBirth = picked);
+    }
+  }
+
+  Widget _buildGenderField(dynamic s) {
+    return _buildDropdownField<String>(
+      label: s?.gender ?? 'Gender',
+      value: _gender,
+      onChanged: (v) => setState(() => _gender = v),
+      items: [
+        DropdownMenuItem(value: 'male', child: Text(s?.male ?? 'Male')),
+        DropdownMenuItem(value: 'female', child: Text(s?.female ?? 'Female')),
       ],
     );
   }
 
-  Widget _buildRelationshipField(BuildContext context, dynamic s) {
+  Widget _buildRelationshipField(dynamic s) {
+    return _buildDropdownField<String>(
+      label: s?.relationshipStatus ?? 'Relationship status',
+      value: _relationshipStatus,
+      onChanged: (v) => setState(() => _relationshipStatus = v),
+      items: [
+        DropdownMenuItem(value: 'single', child: Text(s?.single ?? 'Single')),
+        DropdownMenuItem(value: 'married', child: Text(s?.married ?? 'Married')),
+        DropdownMenuItem(value: 'engaged', child: Text(s?.engaged ?? 'Engaged')),
+        DropdownMenuItem(
+            value: 'complicated',
+            child: Text(s?.complicated ?? 'Complicated')),
+      ],
+    );
+  }
+
+  Widget _buildDropdownField<T>({
+    required String label,
+    required T? value,
+    required ValueChanged<T?> onChanged,
+    required List<DropdownMenuItem<T>> items,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          s?.relationshipStatus ?? 'Relationship status',
+          label,
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: _primaryColor,
+            color: _kPrimary,
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: _minTouchTargetHeight,
-          child: DropdownButtonFormField<String>(
-            value: _relationshipStatus,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            items: [
-              DropdownMenuItem(value: 'single', child: Text(s?.single ?? 'Single')),
-              DropdownMenuItem(value: 'married', child: Text(s?.married ?? 'Married')),
-              DropdownMenuItem(value: 'engaged', child: Text(s?.engaged ?? 'Engaged')),
-              DropdownMenuItem(value: 'complicated', child: Text(s?.complicated ?? 'Complicated')),
-            ],
-            onChanged: (v) => setState(() => _relationshipStatus = v),
-          ),
+        DropdownButtonFormField<T>(
+          initialValue: value,
+          decoration: _inputDecoration(),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              color: _kSecondary),
+          style: const TextStyle(fontSize: 14, color: _kPrimary),
+          dropdownColor: _kSurface,
+          borderRadius: BorderRadius.circular(12),
+          items: items,
+          onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+/// Inline error banner shown at the top of the form when a save
+/// attempt fails. Replaces SnackBars (playbook §99).
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  static const Color _kDanger = Color(0xFFD32F2F);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+      decoration: BoxDecoration(
+        color: _kDanger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kDanger.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 18, color: _kDanger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _kDanger,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close_rounded, size: 18, color: _kDanger),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: 36,
+            ),
+            tooltip: 'Dismiss',
+          ),
+        ],
+      ),
     );
   }
 }

@@ -378,9 +378,9 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
   }
 
   Widget _inlineErrorBanner(AppStrings? s) {
-    const Color errBg = Color(0xFFFFEBEE);
-    const Color errBorder = Color(0xFFEF9A9A);
-    const Color errFg = Color(0xFFC62828);
+    const Color errBg = Color(0xFFFFE5E5);
+    const Color errBorder = Color(0xFFD32F2F);
+    const Color errFg = Color(0xFFD32F2F);
     return Semantics(
       liveRegion: true,
       child: Container(

@@ -114,6 +114,18 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
           );
         });
       }
+      // Integrity layer §II — session_exit_after_view (bounce) signal.
+      // Fires when the user dismisses a post in under 2 seconds —
+      // suggests low quality / not-interesting content. Feeds the
+      // bounce_penalty clamp in the EarningsEngine integrity pipeline.
+      if (dwellMs < 2000) {
+        _postService.postFeedback(
+          postId: _currentPostId!,
+          userId: widget.currentUserId,
+          signalType: 'session_exit_after_view',
+          metadata: {'dwell_ms': dwellMs},
+        );
+      }
     }
   }
 

@@ -11,6 +11,8 @@ import 'email_settings_screen.dart';
 import 'location_settings_screen.dart';
 import 'education_settings_screen.dart';
 import 'work_settings_screen.dart';
+import 'phone_settings_screen.dart';
+import 'nida_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'security/security_settings_screen.dart';
 import 'notification_settings_screen.dart';
@@ -123,6 +125,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: s.profile,
                 subtitle: s.editProfileSubtitle,
                 onTap: () => _navigateToEditProfile(),
+              ),
+              _buildSettingsTile(
+                icon: Icons.phone_outlined,
+                title: s.phoneNumber,
+                subtitle: _isSwahili
+                    ? 'Tazama namba ya akaunti yako'
+                    : 'View your account phone number',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PhoneSettingsScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingsTile(
+                icon: Icons.badge_outlined,
+                title: 'NIDA',
+                subtitle: _isSwahili
+                    ? 'Hifadhi namba yako ya kitambulisho'
+                    : 'Save your National ID number',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NidaSettingsScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
+                },
               ),
               _buildSettingsTile(
                 icon: Icons.email_outlined,

@@ -201,7 +201,7 @@ Screens organized by feature in subdirectories:
 - `screens/feed/` - News feed and post creation
 - `screens/messages/` - Chat and conversations
 - `screens/friends/` - Friend list and requests
-- `screens/photos/` - Photo galleries
+- `photos/screens/` - Photo galleries
 - `screens/music/` - Music player and library
 - `screens/calls/` - Call history
 - `screens/settings/` - App settings

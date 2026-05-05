@@ -38,7 +38,7 @@ class CollaborationCard extends StatelessWidget {
           // Avatar
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFE0E0E0),
+            backgroundColor: const Color(0xFFE5E5E5),
             backgroundImage: suggestion.partnerAvatarUrl != null
                 ? NetworkImage(suggestion.partnerAvatarUrl!)
                 : null,

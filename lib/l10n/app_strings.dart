@@ -970,6 +970,7 @@ class AppStrings {
       case 'banking': return isSwahili ? 'Pochi' : 'Wallet';
       case 'investments': return isSwahili ? 'Uwekezaji' : 'Invest';
       case 'loans': return isSwahili ? 'Mikopo' : 'Loans';
+      case 'subscriptions': return isSwahili ? 'Usajili' : 'Subscriptions';
       // Health
       case 'doctor': return isSwahili ? 'Daktari' : 'Doctor';
       case 'pharmacy': return isSwahili ? 'Dawa' : 'Pharmacy';
@@ -2469,6 +2470,39 @@ class AppStrings {
   String get remindersTitle => isSwahili ? 'Vikumbusho' : 'Reminders';
   String get remindersTitleLabel => isSwahili ? 'Kichwa' : 'Title';
   String get remindersTitleRequired => isSwahili ? 'Kichwa kinahitajika' : 'Title is required';
+
+  // ── Photos module ───────────────────────────────────────────────────
+  // Duplicates of cancel / save / back / retry / privacy / privacyPublic /
+  // privacyFriends / privacyPrivate / uploadPhotos / album / noPhotos /
+  // uploading were removed — those getters already live higher in this
+  // file. Reuse them from there.
+  String get photosTitle => isSwahili ? 'Picha' : 'Photos';
+  String get albumsTitle => isSwahili ? 'Albamu' : 'Albums';
+  String get noPhotosSubtitle => isSwahili ? 'Gusa pakia kuweka picha yako ya kwanza' : 'Tap upload to add your first photo';
+  String get noAlbums => isSwahili ? 'Hakuna albamu' : 'No albums yet';
+  String get createNewAlbum => isSwahili ? 'Unda Albamu Mpya' : 'Create New Album';
+  String get photosSelected => isSwahili ? 'Picha zimechaguliwa' : 'Photos selected';
+  String get chooseAlbumOptional => isSwahili ? 'Chagua albamu (hiari)' : 'Choose album (optional)';
+  String get noAlbum => isSwahili ? 'Hakuna albamu' : 'No album';
+  String get createNewAlbumShort => isSwahili ? '+ Unda albamu mpya' : '+ Create new album';
+  String get albumName => isSwahili ? 'Jina la albamu' : 'Album name';
+  String get descriptionOptional => isSwahili ? 'Maelezo (hiari)' : 'Description (optional)';
+  String get captionHint => isSwahili ? 'Caption kwa picha zote' : 'Caption for all photos';
+  String get upload => isSwahili ? 'Pakia' : 'Upload';
+  String get createAlbum => isSwahili ? 'Unda Albamu' : 'Create Album';
+  String get editAlbum => isSwahili ? 'Hariri Albamu' : 'Edit Album';
+  String get deleteAlbum => isSwahili ? 'Futa Albamu' : 'Delete Album';
+  String get enterAlbumName => isSwahili ? 'Ingiza jina la albamu' : 'Enter album name';
+  String get albumCreated => isSwahili ? 'Albamu imeundwa' : 'Album created';
+  String get albumUpdated => isSwahili ? 'Albamu imesasishwa' : 'Album updated';
+  String get albumDeleted => isSwahili ? 'Albamu imefutwa' : 'Album deleted';
+  String get uploadComplete => isSwahili ? 'Picha zimepakiwa' : 'Photos uploaded';
+  String get of => isSwahili ? 'kati ya' : 'of';
+  String get discardUpload => isSwahili ? 'Tupa pakia?' : 'Discard upload?';
+  String get discardUploadBody => isSwahili ? 'Picha zako hazijapakiwa. Unataka kutoka?' : 'Your photos have not been uploaded. Leave anyway?';
+  String get keepEditing => isSwahili ? 'Endelea kubadili' : 'Keep editing';
+  String get discard => isSwahili ? 'Tupa' : 'Discard';
+  String get remove => isSwahili ? 'Ondoa' : 'Remove';
 
   // Method-style stubs — use methods (not getters) so callers can pass args.
   String remindersTabToday(int count) =>

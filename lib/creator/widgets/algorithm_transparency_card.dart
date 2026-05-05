@@ -109,7 +109,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isPositive ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                  color: isPositive ? const Color(0xFFF5F5F5) : const Color(0xFFFFE5E5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -118,7 +118,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
                     Icon(
                       isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                       size: 14,
-                      color: isPositive ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                      color: isPositive ? const Color(0xFF1A1A1A) : const Color(0xFFD32F2F),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -126,7 +126,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: isPositive ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                        color: isPositive ? const Color(0xFF1A1A1A) : const Color(0xFFD32F2F),
                       ),
                     ),
                   ],
@@ -184,7 +184,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
 
           // Predicted earnings
           if (predictedEarnings != null && predictedEarnings! > 0) ...[
-            const Divider(height: 24, color: Color(0xFFF0F0F0)),
+            const Divider(height: 24, color: Color(0xFFE5E5E5)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -239,7 +239,7 @@ class AlgorithmTransparencyCard extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFFF2F2F2),
+            color: const Color(0xFFF5F5F5),
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,

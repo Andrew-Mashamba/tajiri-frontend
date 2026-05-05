@@ -22,7 +22,11 @@ class CreatorDashboardSection extends StatefulWidget {
   State<CreatorDashboardSection> createState() => _CreatorDashboardSectionState();
 }
 
-class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
+class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final CreatorService _creatorService = CreatorService();
   final CollaborationService _collaborationService = CollaborationService();
   final PaymentService _paymentService = PaymentService();
@@ -76,6 +80,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin requires this
     final strings = AppStringsScope.of(context);
     if (_loading) {
       return const Padding(
@@ -355,7 +360,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                       onPressed: () => Navigator.pushNamed(context, '/weekly-report/${widget.userId}'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF1A1A1A),
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: const BorderSide(color: Color(0xFFE5E5E5)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(strings?.weeklyReport ?? 'Weekly Report', style: const TextStyle(fontSize: 13)),
@@ -370,7 +375,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection> {
                       onPressed: () => Navigator.pushNamed(context, '/analytics/${widget.userId}'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF1A1A1A),
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: const BorderSide(color: Color(0xFFE5E5E5)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(strings?.viewAnalytics ?? 'Analytics', style: const TextStyle(fontSize: 13)),
