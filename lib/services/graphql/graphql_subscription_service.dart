@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
+
+import '../../models/friend_models.dart';
 import '../../models/subscription_models.dart';
 import 'tajiri_graphql_client.dart';
 
@@ -61,6 +66,9 @@ class GraphqlSubscriptionService {
   static final Map<String, String?> _subscriberCursors = {};
   static final Map<String, String?> _earningCursors = {};
   static final Map<String, String?> _payoutCursors = {};
+  static String? _managedSubscriberCursor;
+  static String? _managedSubscriberKey;
+  static final Map<int, String?> _publicSubscriberCursors = {};
 
   static Map<String, dynamic> _tierToLegacy(Map<String, dynamic> tier) {
     return {
@@ -103,6 +111,41 @@ class GraphqlSubscriptionService {
         'creator': _userToLegacy(sub['creator'] as Map<String, dynamic>),
       if (sub['subscriber'] != null)
         'subscriber': _userToLegacy(sub['subscriber'] as Map<String, dynamic>),
+    };
+  }
+
+  static Map<String, dynamic> _subscriptionToSubscriberEntry(
+    Map<String, dynamic> sub,
+  ) {
+    final subscriber = sub['subscriber'] as Map<String, dynamic>? ?? {};
+    final tier = sub['tier'] as Map<String, dynamic>? ?? {};
+    return {
+      'subscription_id': int.parse(sub['id'].toString()),
+      'id': int.parse(sub['subscriberId'].toString()),
+      'first_name': subscriber['firstName'] ?? '',
+      'last_name': subscriber['lastName'] ?? '',
+      'username': subscriber['username'],
+      'profile_photo_url': subscriber['profilePhotoUrl'],
+      'status': sub['status'],
+      'amount_paid': (sub['amountPaid'] as num).toDouble(),
+      'started_at': sub['startedAt'],
+      'expires_at': sub['expiresAt'],
+      'auto_renew': sub['autoRenew'] == true,
+      'tier_name': tier['name'],
+      'tier_price': (tier['price'] as num?)?.toDouble(),
+      'tier_period': tier['billingPeriod'],
+    };
+  }
+
+  static Map<String, dynamic> _followUserToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.parse(row['id'].toString()),
+      'first_name': row['firstName'] ?? '',
+      'last_name': row['lastName'] ?? '',
+      'username': row['username'],
+      'profile_photo_path': row['profilePhotoUrl'],
+      'is_following': row['isFollowing'] == true,
+      'is_followed_by': row['isFollowedBy'] == true,
     };
   }
 
@@ -442,6 +485,239 @@ class GraphqlSubscriptionService {
       return SubscriptionListResult(success: true, subscriptions: items);
     } catch (e) {
       return SubscriptionListResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
+  static Future<SubscriberListResult> getManagedSubscribers({
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final key = '${q ?? ''}|${filter ?? ''}|${sort ?? ''}|$perPage';
+      if (page == 1) {
+        _managedSubscriberCursor = null;
+        _managedSubscriberKey = key;
+      } else if (_managedSubscriberKey != key) {
+        return const SubscriberListResult(
+          success: false,
+          message: 'Filter changed — restart from page 1',
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query ManagedCreatorSubscribers($q: String, $filter: String, $sort: String, $cursor: String, $limit: Int!) {
+          managedCreatorSubscribers(q: $q, filter: $filter, sort: $sort, cursor: $cursor, limit: $limit) {
+            totalCount
+            hasMore
+            nextCursor
+            items {
+              $_subscriptionFields
+            }
+          }
+        }
+        ''',
+        variables: {
+          'limit': perPage,
+          if (q != null && q.isNotEmpty) 'q': q,
+          if (filter != null) 'filter': filter,
+          if (sort != null) 'sort': sort,
+          if (page > 1 && _managedSubscriberCursor != null)
+            'cursor': _managedSubscriberCursor,
+        },
+        auth: true,
+      );
+      final conn =
+          data['managedCreatorSubscribers'] as Map<String, dynamic>? ?? {};
+      final entries = (conn['items'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map((row) =>
+              SubscriberEntry.fromJson(_subscriptionToSubscriberEntry(row)))
+          .toList();
+      _managedSubscriberCursor = conn['nextCursor']?.toString();
+      return SubscriberListResult(
+        success: true,
+        entries: entries,
+        totalCount: (conn['totalCount'] as num?)?.toInt() ?? entries.length,
+      );
+    } catch (e) {
+      return SubscriberListResult(success: false, message: 'Kosa: $e');
+    }
+  }
+
+  static Future<SubscriberInsights?> getSubscriberInsights() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query SubscriberListInsights {
+          subscriberListInsights {
+            totalActive
+            newThisMonth
+            expiringSoon
+            churned
+            mrrTzs
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['subscriberListInsights'] as Map<String, dynamic>?;
+      if (row == null) return null;
+      return SubscriberInsights.fromJson({
+        'total_active': row['totalActive'],
+        'new_this_month': row['newThisMonth'],
+        'expiring_soon': row['expiringSoon'],
+        'churned': row['churned'],
+        'mrr_tzs': row['mrrTzs'],
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> revokeSubscriber(int subscriptionId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation RevokeCreatorSubscriber($subscriptionId: ID!) {
+          revokeCreatorSubscriber(subscriptionId: $subscriptionId)
+        }
+        ''',
+        variables: {'subscriptionId': subscriptionId.toString()},
+        auth: true,
+      );
+      return data['revokeCreatorSubscriber'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<int> bulkRevokeSubscribers(List<int> subscriptionIds) async {
+    if (subscriptionIds.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkRevokeCreatorSubscribers($subscriptionIds: [ID!]!) {
+          bulkRevokeCreatorSubscribers(subscriptionIds: $subscriptionIds)
+        }
+        ''',
+        variables: {
+          'subscriptionIds':
+              subscriptionIds.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkRevokeCreatorSubscribers'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<String?> exportSubscribersCsv({
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query SubscriberListExportCsv($q: String, $filter: String, $sort: String) {
+          subscriberListExportCsv(q: $q, filter: $filter, sort: $sort)
+        }
+        ''',
+        variables: {
+          if (q != null) 'q': q,
+          if (filter != null) 'filter': filter,
+          if (sort != null) 'sort': sort,
+        },
+        auth: true,
+      );
+      final csv = data['subscriberListExportCsv'] as String?;
+      if (csv == null || csv.isEmpty) return null;
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}subscribers-$today.csv';
+      await File(path).writeAsString(csv);
+      return path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getPublicSubscribers({
+    required int userId,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      if (page == 1) _publicSubscriberCursors.remove(userId);
+      final cursor = page > 1 ? _publicSubscriberCursors[userId] : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          users: <FollowUser>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query UserSubscribers(\$userId: ID!, \$cursor: String, \$limit: Int!) {
+          userSubscribers(userId: \$userId, cursor: \$cursor, limit: \$limit) {
+            items {
+              id
+              firstName
+              lastName
+              username
+              profilePhotoUrl
+              isFollowing
+              isFollowedBy
+            }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'userId': userId.toString(),
+          'limit': perPage,
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data['userSubscribers'] as Map<String, dynamic>? ?? {};
+      final users = (conn['items'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map((row) => FollowUser.fromJson(_followUserToLegacy(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      _publicSubscriberCursors[userId] = conn['nextCursor']?.toString();
+      final lastPage = hasMore ? page + 1 : page;
+      return (
+        success: true,
+        users: users,
+        currentPage: page,
+        lastPage: lastPage,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        users: <FollowUser>[],
+        currentPage: page,
+        lastPage: page,
+        message: 'Kosa: $e',
+      );
     }
   }
 

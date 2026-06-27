@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/friend_models.dart';
 import '../config/api_config.dart';
 import 'graphql/graphql_social_service.dart';
+import 'graphql/graphql_subscription_service.dart';
 import 'local_storage_service.dart';
 import 'post_service.dart';
 
@@ -443,6 +444,23 @@ class FriendService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSubscriptionService.getPublicSubscribers(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/users/$userId/subscribers?page=$page&per_page=$perPage';
       if (currentUserId != null) {
@@ -614,6 +632,15 @@ class FriendService {
     String? filter, // new | expiring | churned | null (active default)
     String? sort,   // newest | oldest | name | expiring | null
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getManagedSubscribers(
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+      );
+    }
     try {
       final params = <String, String>{
         'page': '$page',
@@ -647,6 +674,9 @@ class FriendService {
   }
 
   Future<SubscriberInsights?> getSubscriberInsights({required int creatorId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getSubscriberInsights();
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await httpGetWithRetry(
@@ -668,6 +698,9 @@ class FriendService {
     required int creatorId,
     required int subscriptionId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.revokeSubscriber(subscriptionId);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -686,6 +719,9 @@ class FriendService {
     required int creatorId,
     required List<int> subscriptionIds,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.bulkRevokeSubscribers(subscriptionIds);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -708,6 +744,9 @@ class FriendService {
   }
 
   Future<String?> exportSubscribersCsv({required int creatorId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.exportSubscribersCsv();
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final dir = await getTemporaryDirectory();
