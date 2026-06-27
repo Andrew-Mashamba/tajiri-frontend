@@ -3,10 +3,11 @@
 // Fetches recorded micro-transactions (GET /transactions) with business fallback.
 
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../business/services/business_service.dart';
 import '../../expenses/services/expenses_service.dart';
+import '../../services/graphql/graphql_transaction_service.dart';
 import '../models/transaction_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -25,6 +26,29 @@ class TransactionService {
     String? direction,
     String? module,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlTransactionService.listRecordedTransactions(
+        businessId: businessId,
+        page: page,
+        perPage: perPage,
+        status: status,
+        direction: direction,
+        module: module,
+      );
+      if (result.success && result.items.isNotEmpty) {
+        return result;
+      }
+      if (businessId != null &&
+          (!result.success || result.items.isEmpty)) {
+        return _compositeFallback(
+          token,
+          businessId,
+          status: status,
+          direction: direction,
+        );
+      }
+      return result;
+    }
     try {
       final params = <String, String>{
         'page': '$page',
@@ -36,7 +60,7 @@ class TransactionService {
       if (module != null && module.isNotEmpty) params['module'] = module;
 
       final uri = Uri.parse('$_baseUrl/transactions').replace(queryParameters: params);
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);

@@ -1,6 +1,6 @@
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL business module — businesses, invoices, expenses, customers, debts, employees, payroll.
+/// GraphQL business module — businesses, invoices, expenses, customers, debts, employees, payroll, POs.
 class GraphqlBusinessService {
   static const _businessFields = r'''
     id userId name businessType phone email address
@@ -45,6 +45,11 @@ class GraphqlBusinessService {
   static const _payrollRunFields = r'''
     id businessId month year employees { $_payrollEntryFields }
     totalGross totalNet totalPaye totalNssf totalSdl totalWcf status createdAt
+  ''';
+
+  static const _purchaseOrderFields = r'''
+    id businessId poNumber supplierId supplierName items
+    subtotal vatAmount totalAmount status expectedDeliveryDate notes createdAt
   ''';
 
   static Map<String, dynamic> _businessFromGql(Map<String, dynamic> row) => {
@@ -806,6 +811,126 @@ class GraphqlBusinessService {
       return [];
     } catch (_) {
       return [];
+    }
+  }
+
+  static Map<String, dynamic> _purchaseOrderFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'po_number': row['poNumber'],
+        'supplier_id': row['supplierId'],
+        'supplier_name': row['supplierName'],
+        'items': row['items'] ?? [],
+        'subtotal': row['subtotal'],
+        'vat_amount': row['vatAmount'],
+        'total_amount': row['totalAmount'],
+        'status': row['status'],
+        'expected_delivery_date': row['expectedDeliveryDate'],
+        'notes': row['notes'],
+        'created_at': row['createdAt'],
+      };
+
+  static Future<List<Map<String, dynamic>>> getPurchaseOrders(
+    int businessId, {
+    String? status,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessPurchaseOrders(\$businessId: ID!, \$status: String) {
+          businessPurchaseOrders(businessId: \$businessId, status: \$status) {
+            $_purchaseOrderFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (status != null) 'status': status,
+        },
+        auth: true,
+      );
+      final rows = data['businessPurchaseOrders'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_purchaseOrderFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createPurchaseOrder(
+    int businessId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessPurchaseOrder(\$input: CreateBusinessPurchaseOrderInput!) {
+          createBusinessPurchaseOrder(input: \$input) { $_purchaseOrderFields }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': businessId.toString(),
+            if (body['supplier_id'] != null)
+              'supplierId': body['supplier_id'].toString(),
+            if (body['supplier_name'] != null) 'supplierName': body['supplier_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['status'] != null) 'status': body['status'],
+            if (body['expected_delivery_date'] != null)
+              'expectedDeliveryDate': body['expected_delivery_date'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessPurchaseOrder'];
+      if (row is Map<String, dynamic>) return _purchaseOrderFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> markPurchaseOrderReceived(int poId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation MarkBusinessPurchaseOrderReceived(\$poId: ID!) {
+          markBusinessPurchaseOrderReceived(poId: \$poId) { $_purchaseOrderFields }
+        }
+        ''',
+        variables: {'poId': poId.toString()},
+        auth: true,
+      );
+      final row = result['markBusinessPurchaseOrderReceived'];
+      if (row is Map<String, dynamic>) return _purchaseOrderFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> cancelPurchaseOrder(int poId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CancelBusinessPurchaseOrder(\$poId: ID!) {
+          cancelBusinessPurchaseOrder(poId: \$poId) { $_purchaseOrderFields }
+        }
+        ''',
+        variables: {'poId': poId.toString()},
+        auth: true,
+      );
+      final row = result['cancelBusinessPurchaseOrder'];
+      if (row is Map<String, dynamic>) return _purchaseOrderFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

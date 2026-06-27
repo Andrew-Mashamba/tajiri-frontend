@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_transaction_service.dart';
 import 'transaction_local_store.dart';
 import 'transaction_trace_context.dart';
 
@@ -100,6 +101,10 @@ class CentralTransactionService {
     required Map<String, dynamic> body,
     bool attachTraceHeader = true,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      await GraphqlTransactionService.recordTransaction(body);
+      return;
+    }
     try {
       final hdr = attachTraceHeader
           ? ApiConfig.authHeaders(token)

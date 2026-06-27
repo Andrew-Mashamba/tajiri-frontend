@@ -1445,6 +1445,17 @@ class BusinessService {
 
   static Future<BusinessResult<PurchaseOrder>> createPurchaseOrder(
       String token, int? businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend && businessId != null) {
+      final data = await GraphqlBusinessService.createPurchaseOrder(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create purchase order');
+      }
+      return BusinessResult(
+        success: true,
+        data: PurchaseOrder.fromJson(data),
+        message: 'Purchase order created',
+      );
+    }
     try {
       final url = businessId != null
           ? '$_baseUrl/business/$businessId/purchase-orders'
@@ -1466,6 +1477,14 @@ class BusinessService {
 
   static Future<BusinessListResult<PurchaseOrder>> getPurchaseOrders(
       String token, int businessId, {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getPurchaseOrders(
+        businessId,
+        status: status,
+      );
+      final list = rows.map((e) => PurchaseOrder.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/purchase-orders';
       if (status != null && status.isNotEmpty) url += '?status=$status';
@@ -1486,6 +1505,17 @@ class BusinessService {
 
   static Future<BusinessResult<PurchaseOrder>> markPOReceived(
       String token, int poId, {Iterable<dynamic>? items}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.markPurchaseOrderReceived(poId);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to mark PO received');
+      }
+      return BusinessResult(
+        success: true,
+        data: PurchaseOrder.fromJson(data),
+        message: 'Agizo limepokelewa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/purchase-orders/$poId/received';
       final res = await http.post(Uri.parse(url),
@@ -1506,6 +1536,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> cancelPO(
       String token, int poId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.cancelPurchaseOrder(poId);
+      return BusinessResult(
+        success: data != null,
+        message: data != null ? 'Agizo limefutwa' : 'Failed to cancel PO',
+      );
+    }
     try {
       final url = '$_baseUrl/business/purchase-orders/$poId/cancel';
       final res = await http.post(Uri.parse(url),
