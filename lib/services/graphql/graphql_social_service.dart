@@ -129,6 +129,390 @@ class GraphqlSocialService {
   static final Map<String, String?> _savedCursors = {};
   static final Map<int, String?> _followerCursors = {};
   static final Map<int, String?> _followingCursors = {};
+  static String? _friendsCursor;
+  static String? _mutualFriendsCursor;
+  static String? _searchUsersCursor;
+
+  static Map<String, dynamic> _userProfileFromFollowRow(Map<String, dynamic> row) {
+    final legacy = _followUserToLegacy(row);
+    return {
+      'id': legacy['id'],
+      'first_name': legacy['first_name'],
+      'last_name': legacy['last_name'],
+      'username': legacy['username'],
+      'profile_photo_path': legacy['profile_photo_url'],
+    };
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<UserProfile> friends,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getFriends({int page = 1, int perPage = 20}) async {
+    try {
+      if (page == 1) _friendsCursor = null;
+      final cursor = page > 1 ? _friendsCursor : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          friends: <UserProfile>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyFriends(\$cursor: String) {
+          myFriends(cursor: \$cursor) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {if (cursor != null) 'cursor': cursor},
+        auth: true,
+      );
+      final conn = data['myFriends'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final friends = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => UserProfile.fromJson(_userProfileFromFollowRow(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) _friendsCursor = nextCursor;
+      return (
+        success: true,
+        friends: friends,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        friends: <UserProfile>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FriendRequest> received,
+        List<FriendRequest> sent,
+        String? message,
+      })> getFriendRequests() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query FriendRequests {
+          friendRequests {
+            received {
+              id
+              requestType
+              createdAt
+              user { id username displayName avatarUrl isFollowing isFollowedBy }
+            }
+            sent {
+              id
+              requestType
+              createdAt
+              user { id username displayName avatarUrl isFollowing isFollowedBy }
+            }
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final bundle = data['friendRequests'] as Map<String, dynamic>? ?? {};
+      FriendRequest mapReq(Map<String, dynamic> row) {
+        return FriendRequest.fromJson({
+          'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+          'type': row['requestType'] ?? 'received',
+          'created_at': row['createdAt'],
+          'user': _userProfileFromFollowRow(row['user'] as Map<String, dynamic>? ?? {}),
+        });
+      }
+
+      final received = (bundle['received'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(mapReq)
+          .toList();
+      final sent = (bundle['sent'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(mapReq)
+          .toList();
+      return (success: true, received: received, sent: sent, message: null);
+    } catch (e) {
+      return (
+        success: false,
+        received: <FriendRequest>[],
+        sent: <FriendRequest>[],
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<FriendshipStatusResult> checkFriendshipStatus(int otherUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query FriendshipStatus($otherUserId: ID!) {
+          friendshipStatus(otherUserId: $otherUserId) {
+            status
+            isRequester
+            canSendRequest
+            canAccept
+            canCancel
+          }
+        }
+        ''',
+        variables: {'otherUserId': otherUserId.toString()},
+        auth: true,
+      );
+      final row = data['friendshipStatus'] as Map<String, dynamic>? ?? {};
+      return FriendshipStatusResult.fromJson({
+        'status': row['status'] ?? 'none',
+        'is_requester': row['isRequester'] ?? false,
+        'can_send_request': row['canSendRequest'] ?? true,
+        'can_accept': row['canAccept'] ?? false,
+        'can_cancel': row['canCancel'] ?? false,
+      });
+    } catch (_) {
+      return FriendshipStatusResult(status: 'none');
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<UserProfile> friends,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getMutualFriends({
+    required int otherUserId,
+    int page = 1,
+  }) async {
+    try {
+      if (page == 1) _mutualFriendsCursor = null;
+      final cursor = page > 1 ? _mutualFriendsCursor : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          friends: <UserProfile>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MutualFriends(\$otherUserId: ID!, \$cursor: String) {
+          mutualFriends(otherUserId: \$otherUserId, cursor: \$cursor) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'otherUserId': otherUserId.toString(),
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data['mutualFriends'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final friends = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => UserProfile.fromJson(_userProfileFromFollowRow(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) _mutualFriendsCursor = nextCursor;
+      return (
+        success: true,
+        friends: friends,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        friends: <UserProfile>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<UserProfile> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> searchUsers({
+    required String query,
+    int page = 1,
+  }) async {
+    try {
+      if (page == 1) _searchUsersCursor = null;
+      final cursor = page > 1 ? _searchUsersCursor : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          users: <UserProfile>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query SearchUsers(\$q: String!, \$cursor: String) {
+          searchUsers(q: \$q, cursor: \$cursor) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'q': query,
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data['searchUsers'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final users = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => UserProfile.fromJson(_userProfileFromFollowRow(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) _searchUsersCursor = nextCursor;
+      return (
+        success: true,
+        users: users,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        users: <UserProfile>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<bool> sendFriendRequest(int targetUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation SendFriendRequest($userId: ID!) {
+          sendFriendRequest(userId: $userId)
+        }
+        ''',
+        variables: {'userId': targetUserId.toString()},
+        auth: true,
+      );
+      return data['sendFriendRequest'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] sendFriendRequest: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> acceptFriendRequest(int requesterId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation AcceptFriendRequest($userId: ID!) {
+          acceptFriendRequest(userId: $userId)
+        }
+        ''',
+        variables: {'userId': requesterId.toString()},
+        auth: true,
+      );
+      return data['acceptFriendRequest'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] acceptFriendRequest: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> declineFriendRequest(int requesterId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation DeclineFriendRequest($userId: ID!) {
+          declineFriendRequest(userId: $userId)
+        }
+        ''',
+        variables: {'userId': requesterId.toString()},
+        auth: true,
+      );
+      return data['declineFriendRequest'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] declineFriendRequest: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> cancelFriendRequest(int targetUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation CancelFriendRequest($userId: ID!) {
+          cancelFriendRequest(userId: $userId)
+        }
+        ''',
+        variables: {'userId': targetUserId.toString()},
+        auth: true,
+      );
+      return data['cancelFriendRequest'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] cancelFriendRequest: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> removeFriend(int friendId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation RemoveFriend($userId: ID!) {
+          removeFriend(userId: $userId)
+        }
+        ''',
+        variables: {'userId': friendId.toString()},
+        auth: true,
+      );
+      return data['removeFriend'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] removeFriend: $e');
+      return false;
+    }
+  }
 
   static const _followUserFields = r'''
     id

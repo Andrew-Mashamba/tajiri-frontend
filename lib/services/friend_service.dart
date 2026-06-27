@@ -19,6 +19,19 @@ class FriendService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getFriends(page: page, perPage: perPage);
+      return FriendListResult(
+        success: result.success,
+        friends: result.friends,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends?user_id=$userId&page=$page&per_page=$perPage'),
@@ -45,6 +58,9 @@ class FriendService {
 
   /// Send a friend request
   Future<bool> sendFriendRequest(int userId, int friendId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.sendFriendRequest(friendId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/friends/request'),
@@ -64,6 +80,9 @@ class FriendService {
 
   /// Accept a friend request
   Future<bool> acceptFriendRequest(int userId, int requesterId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.acceptFriendRequest(requesterId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/friends/accept/$requesterId'),
@@ -80,6 +99,9 @@ class FriendService {
 
   /// Decline a friend request
   Future<bool> declineFriendRequest(int userId, int requesterId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.declineFriendRequest(requesterId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/friends/decline/$requesterId'),
@@ -96,6 +118,9 @@ class FriendService {
 
   /// Cancel a sent friend request
   Future<bool> cancelFriendRequest(int userId, int friendId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.cancelFriendRequest(friendId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/friends/cancel/$friendId'),
@@ -112,6 +137,9 @@ class FriendService {
 
   /// Remove a friend
   Future<bool> removeFriend(int userId, int friendId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.removeFriend(friendId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/friends/$friendId'),
@@ -128,6 +156,15 @@ class FriendService {
 
   /// Get pending friend requests
   Future<FriendRequestsResult> getFriendRequests(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getFriendRequests();
+      return FriendRequestsResult(
+        success: result.success,
+        received: result.received,
+        sent: result.sent,
+        message: result.message,
+      );
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/requests?user_id=$userId'),
@@ -200,6 +237,14 @@ class FriendService {
 
   /// Get mutual friends
   Future<FriendListResult> getMutualFriends(int userId, int otherUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getMutualFriends(otherUserId: otherUserId);
+      return FriendListResult(
+        success: result.success,
+        friends: result.friends,
+        message: result.message,
+      );
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/mutual/$otherUserId?user_id=$userId'),
@@ -222,6 +267,9 @@ class FriendService {
 
   /// Check friendship status with another user
   Future<FriendshipStatusResult> checkFriendshipStatus(int userId, int otherUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.checkFriendshipStatus(otherUserId);
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/status/$otherUserId?user_id=$userId'),
@@ -241,6 +289,19 @@ class FriendService {
 
   /// Search users
   Future<FriendListResult> searchUsers(String query, {int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.searchUsers(query: query, page: page);
+      return FriendListResult(
+        success: result.success,
+        friends: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/search?q=${Uri.encodeComponent(query)}&page=$page&per_page=$perPage'),
