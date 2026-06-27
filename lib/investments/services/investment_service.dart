@@ -1,7 +1,9 @@
 // lib/investments/services/investment_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_investment_service.dart';
 import '../models/investment_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -10,8 +12,11 @@ class InvestmentService {
   // ─── Portfolio ──────────────────────────────────────────────────
 
   Future<InvestmentResult<PortfolioSummary>> getPortfolio(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getPortfolio();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/portfolio?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -32,8 +37,11 @@ class InvestmentService {
   // ─── Government Bonds ──────────────────────────────────────────
 
   Future<InvestmentListResult<BondProduct>> getBondProducts() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getBondProducts();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/bonds/products'),
       );
       if (response.statusCode == 200) {
@@ -52,8 +60,11 @@ class InvestmentService {
   }
 
   Future<InvestmentListResult<BondHolding>> getMyBonds(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getMyBonds();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/bonds/holdings?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -78,6 +89,14 @@ class InvestmentService {
     required String paymentMethod,
     String? phoneNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.investInBond(
+        bondProductId: bondProductId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/investments/bonds/invest'),
@@ -106,8 +125,11 @@ class InvestmentService {
   // ─── Unit Trusts ───────────────────────────────────────────────
 
   Future<InvestmentListResult<UnitTrustFund>> getUnitTrustFunds() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getUnitTrustFunds();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/unit-trusts/funds'),
       );
       if (response.statusCode == 200) {
@@ -126,8 +148,11 @@ class InvestmentService {
   }
 
   Future<InvestmentListResult<UnitTrustHolding>> getMyUnitTrusts(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getMyUnitTrusts();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/unit-trusts/holdings?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -152,6 +177,14 @@ class InvestmentService {
     required String paymentMethod,
     String? phoneNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.investInUnitTrust(
+        fundId: fundId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/investments/unit-trusts/invest'),
@@ -180,11 +213,14 @@ class InvestmentService {
   // ─── DSE Stocks ────────────────────────────────────────────────
 
   Future<InvestmentListResult<Stock>> getStocks({String? sector}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getStocks(sector: sector);
+    }
     try {
       String url = '$_baseUrl/investments/stocks';
       if (sector != null) url += '?sector=$sector';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -201,8 +237,11 @@ class InvestmentService {
   }
 
   Future<InvestmentListResult<StockHolding>> getMyStocks(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getMyStocks();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/stocks/holdings?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -227,6 +266,14 @@ class InvestmentService {
     required String paymentMethod,
     String? phoneNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.buyStock(
+        stockId: stockId,
+        shares: shares,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/investments/stocks/buy'),
@@ -255,8 +302,11 @@ class InvestmentService {
   // ─── Real Estate ───────────────────────────────────────────────
 
   Future<InvestmentListResult<RealEstateProject>> getRealEstateProjects() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getRealEstateProjects();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/real-estate/projects'),
       );
       if (response.statusCode == 200) {
@@ -277,8 +327,11 @@ class InvestmentService {
   // ─── Agriculture ───────────────────────────────────────────────
 
   Future<InvestmentListResult<AgricultureProject>> getAgricultureProjects() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getAgricultureProjects();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/agriculture/projects'),
       );
       if (response.statusCode == 200) {
@@ -299,8 +352,11 @@ class InvestmentService {
   // ─── Savings Products ──────────────────────────────────────────
 
   Future<InvestmentListResult<SavingsProduct>> getSavingsProducts() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInvestmentService.getSavingsProducts();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/investments/savings/products'),
       );
       if (response.statusCode == 200) {
