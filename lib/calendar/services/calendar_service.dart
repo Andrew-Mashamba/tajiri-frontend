@@ -1,8 +1,10 @@
 // lib/calendar/services/calendar_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../reminders/models/reminder_models.dart' show ReminderItem;
+import '../../services/graphql/graphql_calendar_service.dart';
 import '../models/calendar_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -15,6 +17,13 @@ class CalendarService {
     required int year,
     required int month,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCalendarService.getEvents(
+        userId,
+        year: year,
+        month: month,
+      );
+    }
     try {
       final uri = Uri.parse('$_baseUrl/calendar/events').replace(
         queryParameters: {
@@ -23,7 +32,7 @@ class CalendarService {
           'month': month.toString(),
         },
       );
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -45,6 +54,9 @@ class CalendarService {
     int userId, {
     required DateTime date,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCalendarService.getEventsForDay(userId, date: date);
+    }
     try {
       final dateStr =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -54,7 +66,7 @@ class CalendarService {
           'date': dateStr,
         },
       );
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -74,6 +86,9 @@ class CalendarService {
 
   Future<CalendarResult<CalendarEvent>> createEvent(
       CalendarEvent event) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCalendarService.createEvent(event);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/calendar/events'),
@@ -96,6 +111,9 @@ class CalendarService {
 
   Future<CalendarResult<CalendarEvent>> updateEvent(
       int eventId, CalendarEvent event) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCalendarService.updateEvent(eventId, event);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/calendar/events/$eventId'),
@@ -117,6 +135,9 @@ class CalendarService {
   // ─── Delete event ──────────────────────────────────────────────
 
   Future<CalendarResult<void>> deleteEvent(int eventId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCalendarService.deleteEvent(eventId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/calendar/events/$eventId'),
