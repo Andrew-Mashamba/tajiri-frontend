@@ -1,6 +1,6 @@
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL business module — businesses, invoices, expenses (Phase 49).
+/// GraphQL business module — businesses, invoices, expenses, customers, debts.
 class GraphqlBusinessService {
   static const _businessFields = r'''
     id userId name businessType phone email address
@@ -16,6 +16,20 @@ class GraphqlBusinessService {
   static const _expenseFields = r'''
     id businessId category description amount expenseDate
     vendorName paymentMethod notes isRecurring createdAt
+  ''';
+
+  static const _customerFields = r'''
+    id businessId name phone email address
+    totalPurchases totalDebt notes createdAt
+  ''';
+
+  static const _debtFields = r'''
+    id businessId customerId customerName customerPhone
+    amount paidAmount description dueDate status createdAt
+  ''';
+
+  static const _debtSummaryFields = r'''
+    totalOutstanding totalOverdue overdueCount pendingCount partialCount
   ''';
 
   static Map<String, dynamic> _businessFromGql(Map<String, dynamic> row) => {
@@ -293,6 +307,251 @@ class GraphqlBusinessService {
       );
       final row = result['createBusinessExpense'];
       if (row is Map<String, dynamic>) return _expenseFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, dynamic> _customerFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'name': row['name'],
+        'phone': row['phone'],
+        'email': row['email'],
+        'address': row['address'],
+        'total_purchases': row['totalPurchases'],
+        'total_debt': row['totalDebt'],
+        'notes': row['notes'],
+        'created_at': row['createdAt'],
+      };
+
+  static Map<String, dynamic> _debtFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'customer_id': row['customerId'],
+        'customer_name': row['customerName'],
+        'customer_phone': row['customerPhone'],
+        'amount': row['amount'],
+        'paid_amount': row['paidAmount'],
+        'description': row['description'],
+        'due_date': row['dueDate'],
+        'status': row['status'],
+        'created_at': row['createdAt'],
+      };
+
+  static Map<String, dynamic> _debtSummaryFromGql(Map<String, dynamic> row) => {
+        'total_outstanding': row['totalOutstanding'],
+        'total_overdue': row['totalOverdue'],
+        'overdue_count': row['overdueCount'],
+        'pending_count': row['pendingCount'],
+        'partial_count': row['partialCount'],
+      };
+
+  static Future<List<Map<String, dynamic>>> getCustomers(
+    int businessId, {
+    String? search,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessCustomers(\$businessId: ID!, \$search: String) {
+          businessCustomers(businessId: \$businessId, search: \$search) {
+            $_customerFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (search != null) 'search': search,
+        },
+        auth: true,
+      );
+      final rows = data['businessCustomers'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_customerFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createCustomer(Map<String, dynamic> body) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessCustomer(\$input: CreateBusinessCustomerInput!) {
+          createBusinessCustomer(input: \$input) { $_customerFields }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': (body['business_id'] ?? body['businessId']).toString(),
+            'name': body['name'],
+            if (body['phone'] != null) 'phone': body['phone'],
+            if (body['email'] != null) 'email': body['email'],
+            if (body['address'] != null) 'address': body['address'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessCustomer'];
+      if (row is Map<String, dynamic>) return _customerFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateCustomer(
+    int customerId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessCustomer(
+          \$customerId: ID!
+          \$input: UpdateBusinessCustomerInput!
+        ) {
+          updateBusinessCustomer(customerId: \$customerId, input: \$input) {
+            $_customerFields
+          }
+        }
+        ''',
+        variables: {
+          'customerId': customerId.toString(),
+          'input': {
+            if (body['name'] != null) 'name': body['name'],
+            if (body['phone'] != null) 'phone': body['phone'],
+            if (body['email'] != null) 'email': body['email'],
+            if (body['address'] != null) 'address': body['address'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessCustomer'];
+      if (row is Map<String, dynamic>) return _customerFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> deleteCustomer(int customerId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation DeleteBusinessCustomer(\$customerId: ID!) {
+          deleteBusinessCustomer(customerId: \$customerId)
+        }
+        ''',
+        variables: {'customerId': customerId.toString()},
+        auth: true,
+      );
+      return result['deleteBusinessCustomer'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getDebts(
+    int businessId, {
+    String? status,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessDebts(\$businessId: ID!, \$status: String) {
+          businessDebts(businessId: \$businessId, status: \$status) {
+            $_debtFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (status != null) 'status': status,
+        },
+        auth: true,
+      );
+      final rows = data['businessDebts'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_debtFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createDebt(Map<String, dynamic> body) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessDebt(\$input: CreateBusinessDebtInput!) {
+          createBusinessDebt(input: \$input) { $_debtFields }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': (body['business_id'] ?? body['businessId']).toString(),
+            'amount': body['amount'],
+            if (body['customer_id'] != null)
+              'customerId': body['customer_id'].toString(),
+            if (body['customer_name'] != null) 'customerName': body['customer_name'],
+            if (body['customer_phone'] != null) 'customerPhone': body['customer_phone'],
+            if (body['description'] != null) 'description': body['description'],
+            if (body['due_date'] != null) 'dueDate': body['due_date'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessDebt'];
+      if (row is Map<String, dynamic>) return _debtFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> payDebt(int debtId, double amount) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation PayBusinessDebt(\$debtId: ID!, \$amount: Float!) {
+          payBusinessDebt(debtId: \$debtId, amount: \$amount) { $_debtFields }
+        }
+        ''',
+        variables: {
+          'debtId': debtId.toString(),
+          'amount': amount,
+        },
+        auth: true,
+      );
+      final row = result['payBusinessDebt'];
+      if (row is Map<String, dynamic>) return _debtFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getDebtSummary(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessDebtSummary(\$businessId: ID!) {
+          businessDebtSummary(businessId: \$businessId) { $_debtSummaryFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final row = data['businessDebtSummary'];
+      if (row is Map<String, dynamic>) return _debtSummaryFromGql(row);
       return null;
     } catch (_) {
       return null;

@@ -197,6 +197,11 @@ class BusinessService {
 
   static Future<BusinessListResult<Customer>> getCustomers(
       String token, int businessId, {String? search}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getCustomers(businessId, search: search);
+      final list = rows.map((e) => Customer.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/customers';
       if (search != null && search.isNotEmpty) url += '?search=$search';
@@ -217,6 +222,17 @@ class BusinessService {
 
   static Future<BusinessResult<Customer>> addCustomer(
       String token, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createCustomer(body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to add customer');
+      }
+      return BusinessResult(
+        success: true,
+        data: Customer.fromJson(data),
+        message: 'Mteja ameongezwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/customers';
       final res = await http.post(Uri.parse(url),
@@ -236,6 +252,13 @@ class BusinessService {
 
   static Future<BusinessResult<Customer>> updateCustomer(
       String token, int customerId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateCustomer(customerId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to update customer');
+      }
+      return BusinessResult(success: true, data: Customer.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/customers/$customerId';
       final res = await http.put(Uri.parse(url),
@@ -253,6 +276,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> deleteCustomer(
       String token, int customerId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.deleteCustomer(customerId);
+      return BusinessResult(success: ok);
+    }
     try {
       final url = '$_baseUrl/business/customers/$customerId';
       final res = await http.delete(Uri.parse(url),
@@ -269,6 +296,11 @@ class BusinessService {
 
   static Future<BusinessListResult<Debt>> getDebts(
       String token, int businessId, {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getDebts(businessId, status: status);
+      final list = rows.map((e) => Debt.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/debts';
       if (status != null && status.isNotEmpty) url += '?status=$status';
@@ -289,6 +321,17 @@ class BusinessService {
 
   static Future<BusinessResult<Debt>> createDebt(
       String token, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createDebt(body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create debt');
+      }
+      return BusinessResult(
+        success: true,
+        data: Debt.fromJson(data),
+        message: 'Deni limeongezwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/debts';
       final res = await http.post(Uri.parse(url),
@@ -308,6 +351,17 @@ class BusinessService {
 
   static Future<BusinessResult<Debt>> recordDebtPayment(
       String token, int debtId, double amount) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.payDebt(debtId, amount);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to record payment');
+      }
+      return BusinessResult(
+        success: true,
+        data: Debt.fromJson(data),
+        message: 'Malipo yamerekodwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/debts/$debtId/pay';
       final res = await http.post(Uri.parse(url),
@@ -328,6 +382,13 @@ class BusinessService {
 
   static Future<BusinessResult<DebtSummary>> getDebtSummary(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getDebtSummary(businessId);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to load debt summary');
+      }
+      return BusinessResult(success: true, data: DebtSummary.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/$businessId/debts/summary';
       final res =
