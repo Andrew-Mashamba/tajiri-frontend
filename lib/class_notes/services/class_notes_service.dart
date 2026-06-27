@@ -1,6 +1,8 @@
 // lib/class_notes/services/class_notes_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_class_notes_service.dart';
 import '../models/class_notes_models.dart';
 
 class ClassNotesService {
@@ -13,6 +15,14 @@ class ClassNotesService {
     String? search,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend && weekNumber == null) {
+      return GraphqlClassNotesService.getNotes(
+        subject: subject,
+        courseCode: courseCode,
+        search: search,
+        page: page,
+      );
+    }
     try {
       final params = <String, dynamic>{'page': page};
       if (subject != null) params['subject'] = subject;
@@ -44,6 +54,19 @@ class ClassNotesService {
     required int year,
     String? description,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlClassNotesService.uploadNote(
+        filePath: filePath,
+        title: title,
+        subject: subject,
+        courseCode: courseCode,
+        topic: topic,
+        weekNumber: weekNumber,
+        semester: semester,
+        year: year,
+        description: description,
+      );
+    }
     try {
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(filePath),
@@ -73,6 +96,9 @@ class ClassNotesService {
     required int noteId,
     required int rating,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlClassNotesService.rateNote(noteId: noteId, rating: rating);
+    }
     try {
       final res = await _dio.post('/education/notes/$noteId/rate', data: {
         'rating': rating,
@@ -84,6 +110,9 @@ class ClassNotesService {
   }
 
   Future<NotesResult<void>> bookmarkNote(int noteId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlClassNotesService.bookmarkNote(noteId);
+    }
     try {
       final res = await _dio.post('/education/notes/$noteId/bookmark');
       return NotesResult(success: res.statusCode == 200);
@@ -93,6 +122,9 @@ class ClassNotesService {
   }
 
   Future<NotesListResult<NoteRequest>> getNoteRequests() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlClassNotesService.getNoteRequests();
+    }
     try {
       final res = await _dio.get('/education/note-requests');
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -108,6 +140,9 @@ class ClassNotesService {
   }
 
   Future<NotesListResult<NoteContributor>> getLeaderboard() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlClassNotesService.getLeaderboard();
+    }
     try {
       final res = await _dio.get('/education/notes/leaderboard');
       if (res.statusCode == 200 && res.data['success'] == true) {
