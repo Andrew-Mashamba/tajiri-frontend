@@ -584,6 +584,9 @@ class FriendService {
 
   /// Unblock a user. POST /api/users/unblock
   Future<bool> unblockUser(int userId, int blockedUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.unblockUser(blockedUserId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/users/unblock'),
@@ -1124,6 +1127,9 @@ class FriendService {
   }
 
   Future<bool> muteUser({required int userId, required int mutedUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.muteUser(mutedUserId);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -1142,6 +1148,9 @@ class FriendService {
   }
 
   Future<bool> unmuteUser({required int userId, required int mutedUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.unmuteUser(mutedUserId);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.delete(
@@ -1156,6 +1165,9 @@ class FriendService {
   }
 
   Future<int> bulkMuteUsers({required int userId, required List<int> ids}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.bulkMuteUsers(ids);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -1177,6 +1189,9 @@ class FriendService {
   }
 
   Future<int> bulkBlockUsers({required int userId, required List<int> ids}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.bulkBlockUsers(ids);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(

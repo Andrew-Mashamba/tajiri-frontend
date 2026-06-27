@@ -1257,4 +1257,100 @@ class GraphqlSocialService {
       return false;
     }
   }
+
+  static Future<bool> unblockUser(int targetUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation UnblockUser($userId: ID!) {
+          unblockUser(userId: $userId)
+        }
+        ''',
+        variables: {'userId': targetUserId.toString()},
+        auth: true,
+      );
+      return data['unblockUser'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] unblockUser: $e');
+      return false;
+    }
+  }
+
+  static Future<int> bulkBlockUsers(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkBlockUsers($userIds: [ID!]!) {
+          bulkBlockUsers(userIds: $userIds)
+        }
+        ''',
+        variables: {
+          'userIds': ids.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkBlockUsers'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] bulkBlockUsers: $e');
+      return 0;
+    }
+  }
+
+  static Future<bool> muteUser(int targetUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation MuteUser($userId: ID!) {
+          muteUser(userId: $userId)
+        }
+        ''',
+        variables: {'userId': targetUserId.toString()},
+        auth: true,
+      );
+      return data['muteUser'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] muteUser: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> unmuteUser(int targetUserId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation UnmuteUser($userId: ID!) {
+          unmuteUser(userId: $userId)
+        }
+        ''',
+        variables: {'userId': targetUserId.toString()},
+        auth: true,
+      );
+      return data['unmuteUser'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] unmuteUser: $e');
+      return false;
+    }
+  }
+
+  static Future<int> bulkMuteUsers(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkMuteUsers($userIds: [ID!]!) {
+          bulkMuteUsers(userIds: $userIds)
+        }
+        ''',
+        variables: {
+          'userIds': ids.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkMuteUsers'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] bulkMuteUsers: $e');
+      return 0;
+    }
+  }
 }
