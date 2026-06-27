@@ -38,6 +38,14 @@ class PeopleSearchResult {
 /// - GET ?q=... → text search.
 /// - GET ?gender=... (or other filters) → filtered browse.
 class PeopleSearchService {
+  static const _graphqlSorts = {
+    'relevance',
+    'newest',
+    'oldest',
+    'name',
+    'last_seen',
+  };
+
   static bool _canUseGraphql({
     String sort = 'relevance',
     String? gender,
@@ -61,17 +69,15 @@ class PeopleSearchService {
     bool? shuffle,
   }) {
     if (!ApiConfig.useGraphqlBackend) return false;
-    if (sort != 'relevance') return false;
+    if (!_graphqlSorts.contains(sort)) return false;
     if (sortValues != null && sortValues.isNotEmpty) return false;
     if (shuffle == true) return false;
     return gender == null &&
         relationshipStatus == null &&
-        online != true &&
         location == null &&
         employer == null &&
         school == null &&
         sector == null &&
-        hasPhoto != true &&
         ageMin == null &&
         ageMax == null &&
         hasBusiness != true &&
@@ -141,6 +147,9 @@ class PeopleSearchService {
         page: page,
         perPage: perPage,
         friendsOfFriendsOnly: friendsOfFriendsOnly == true,
+        sort: sort,
+        hasPhoto: hasPhoto,
+        online: online,
       );
     }
     try {

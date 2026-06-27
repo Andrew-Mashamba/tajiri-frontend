@@ -1,11 +1,12 @@
 import '../../models/people_search_models.dart';
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL people search / discovery (Phase 78).
-/// Advanced filters, ETag caching, and non-relevance sorts remain REST-only.
+/// GraphQL people search / discovery (Phase 78, extended Phase 88).
+/// Gender/location/employer/school filters, multi-sort, shuffle, and ETag remain REST-only.
 class GraphqlPeopleSearchService {
   static String? _cursor;
   static int _lastPage = 1;
+  static String? _queryKey;
 
   static Map<String, dynamic> _personToLegacy(Map<String, dynamic> row) {
     final displayName = row['displayName']?.toString() ?? '';
@@ -45,11 +46,19 @@ class GraphqlPeopleSearchService {
     int page = 1,
     int perPage = 20,
     bool friendsOfFriendsOnly = false,
+    String sort = 'relevance',
+    bool? hasPhoto,
+    bool? online,
   }) async {
     try {
+      final key =
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
+        _queryKey = key;
+      } else if (_queryKey != key) {
+        return PeopleSearchResult.failure('Filter changed — restart from page 1');
       } else if (page > _lastPage + 1) {
         return PeopleSearchResult.failure('Invalid page');
       } else if (page > 1 && _cursor == null) {
@@ -63,17 +72,22 @@ class GraphqlPeopleSearchService {
       }
 
       final q = query?.trim() ?? '';
+      final graphqlSort = sort == 'relevance' ? 'newest' : sort;
       final data = await TajiriGraphqlClient.instance.query(
         '''
         query PeopleSearch(
           \$q: String
           \$cursor: String
           \$friendsOfFriendsOnly: Boolean!
+          \$sort: String
+          \$filter: PeopleSearchFilter
         ) {
           peopleSearch(
             q: \$q
             cursor: \$cursor
             friendsOfFriendsOnly: \$friendsOfFriendsOnly
+            sort: \$sort
+            filter: \$filter
           ) {
             items { $_personFields }
             nextCursor
@@ -85,6 +99,12 @@ class GraphqlPeopleSearchService {
           if (q.length >= 2) 'q': q,
           if (_cursor != null) 'cursor': _cursor,
           'friendsOfFriendsOnly': friendsOfFriendsOnly,
+          'sort': graphqlSort,
+          if (hasPhoto == true || online == true)
+            'filter': {
+              if (hasPhoto == true) 'hasPhoto': true,
+              if (online == true) 'online': true,
+            },
         },
         auth: true,
       );
