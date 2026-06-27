@@ -10,6 +10,7 @@ import '../../services/http_retry.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../config/api_config.dart';
 import '../../services/graphql/graphql_business_service.dart';
+import '../../services/graphql/graphql_media_service.dart';
 import '../models/business_models.dart';
 import '../../tra/models/tra_models.dart' show TaxDeadline;
 import '../../reminders/models/reminder_models.dart' show ReminderItem;
@@ -989,6 +990,16 @@ class BusinessService {
   static Future<BusinessListResult<Expense>> getExpenses(
       String token, int businessId,
       {int? month, int? year, String? category}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getExpenses(
+        businessId,
+        category: category,
+        month: month,
+        year: year,
+      );
+      final list = rows.map((e) => Expense.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/expenses';
       final params = <String>[];
@@ -1013,6 +1024,17 @@ class BusinessService {
 
   static Future<BusinessResult<Expense>> addExpense(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createExpense(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to add expense');
+      }
+      return BusinessResult(
+        success: true,
+        data: Expense.fromJson(data),
+        message: 'Matumizi yameongezwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/expenses';
       final res = await http.post(Uri.parse(url),
@@ -1032,6 +1054,28 @@ class BusinessService {
 
   static Future<BusinessResult<Expense>> uploadReceipt(
       String token, int expenseId, File file) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final uploaded = await GraphqlMediaService.uploadFile(
+        file,
+        mediaType: 'image',
+      );
+      if (uploaded == null) {
+        return BusinessResult(success: false, message: 'Failed to upload receipt');
+      }
+      final data = await GraphqlBusinessService.attachExpenseReceipt(
+        expenseId,
+        receiptUrl: uploaded['url']?.toString(),
+        filePath: uploaded['file_path']?.toString(),
+      );
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to attach receipt');
+      }
+      return BusinessResult(
+        success: true,
+        data: Expense.fromJson(data),
+        message: 'Risiti imepakiwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/expenses/$expenseId/receipt';
       final request = http.MultipartRequest('POST', Uri.parse(url));
@@ -1059,6 +1103,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> deleteExpense(
       String token, int expenseId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.deleteExpense(expenseId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? 'Matumizi yamefutwa' : 'Failed to delete',
+      );
+    }
     try {
       final url = '$_baseUrl/business/expenses/$expenseId';
       final res = await http.delete(Uri.parse(url),
@@ -1072,6 +1123,17 @@ class BusinessService {
 
   static Future<BusinessResult<ExpenseSummary>> getExpenseSummary(
       String token, int businessId, {int? month, int? year}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getExpenseSummary(
+        businessId,
+        month: month,
+        year: year,
+      );
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to load summary');
+      }
+      return BusinessResult(success: true, data: ExpenseSummary.fromJson(data));
+    }
     try {
       var url = '$_baseUrl/business/$businessId/expenses/summary';
       final params = <String>[];

@@ -34,7 +34,7 @@ class GraphqlBusinessService {
 
   static const _expenseFields = r'''
     id businessId category description amount expenseDate
-    vendorName paymentMethod notes isRecurring createdAt
+    vendorName paymentMethod notes isRecurring receiptPhotoUrl createdAt
   ''';
 
   static const _customerFields = r'''
@@ -192,6 +192,7 @@ class GraphqlBusinessService {
         'payment_method': row['paymentMethod'],
         'notes': row['notes'],
         'is_recurring': row['isRecurring'],
+        'receipt_photo_url': row['receiptPhotoUrl'],
         'created_at': row['createdAt'],
       };
 
@@ -753,6 +754,73 @@ class GraphqlBusinessService {
         auth: true,
       );
       final row = result['createBusinessExpense'];
+      if (row is Map<String, dynamic>) return _expenseFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getExpenseSummary(
+    int businessId, {
+    int? month,
+    int? year,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessExpenseSummary(\$businessId: ID!, \$month: Int, \$year: Int) {
+          businessExpenseSummary(
+            businessId: \$businessId
+            month: \$month
+            year: \$year
+          ) {
+            totalThisMonth totalLastMonth changePercent byCategory
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (month != null) 'month': month,
+          if (year != null) 'year': year,
+        },
+        auth: true,
+      );
+      final row = data['businessExpenseSummary'];
+      if (row is! Map<String, dynamic>) return null;
+      return {
+        'total_this_month': row['totalThisMonth'],
+        'total_last_month': row['totalLastMonth'],
+        'change_percent': row['changePercent'],
+        'by_category': row['byCategory'] ?? {},
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> attachExpenseReceipt(
+    int expenseId, {
+    String? receiptUrl,
+    String? filePath,
+  }) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation AttachBusinessExpenseReceipt(\$expenseId: ID!, \$input: AttachBusinessExpenseReceiptInput!) {
+          attachBusinessExpenseReceipt(expenseId: \$expenseId, input: \$input) { $_expenseFields }
+        }
+        ''',
+        variables: {
+          'expenseId': expenseId.toString(),
+          'input': {
+            if (receiptUrl != null) 'receiptUrl': receiptUrl,
+            if (filePath != null) 'filePath': filePath,
+          },
+        },
+        auth: true,
+      );
+      final row = result['attachBusinessExpenseReceipt'];
       if (row is Map<String, dynamic>) return _expenseFromGql(row);
       return null;
     } catch (_) {
