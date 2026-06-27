@@ -1895,4 +1895,605 @@ class GraphqlBusinessService {
     final s = value.toString();
     return s.length >= 10 ? s.substring(0, 10) : s;
   }
+
+  static const _catalogItemFields = r'''
+    id businessId supplierId name description detail kind imageUrl imageUrls
+    unitPrice compareAtPrice currency stockQuantity defaultQuantity category
+    condition availability durationMinutes pricingType allowDelivery allowPickup
+    allowShipping deliveryFee locationName isActive createdAt
+  ''';
+
+  static const _supplierAnalyticsFields = r'''
+    totalSpent orderCount poCount currentMonthSpent lastMonthSpent thisYearSpent
+    topItems monthlyTrend recentPos
+  ''';
+
+  static const _vfdConfigFields = r'''
+    id businessId tin vrn serialNumber registrationId certificateKey isActive registeredAt
+  ''';
+
+  static const _fiscalReceiptFields = r'''
+    id invoiceId receiptNumber fiscalCode qrCode tin vrn totalAmount vatAmount
+    issuedAt verificationUrl
+  ''';
+
+  static const _vfdOutboxFields = r'''
+    id payloadType status attemptCount nextRetryAt lastError requestHash retryLogs
+  ''';
+
+  static const _vfdZReportFields = r'''
+    id businessDate status totalDailyAmount vatTotal receiptCount submittedAt payload
+  ''';
+
+  static Map<String, dynamic> _catalogItemFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'name': row['name'],
+        'description': row['description'],
+        'detail': row['detail'],
+        'kind': row['kind'],
+        'image_url': row['imageUrl'],
+        'image_urls': row['imageUrls'] ?? [],
+        'unit_price': row['unitPrice'],
+        'compare_at_price': row['compareAtPrice'],
+        'currency': row['currency'],
+        'stock_quantity': row['stockQuantity'],
+        'default_quantity': row['defaultQuantity'],
+        'category': row['category'],
+        'condition': row['condition'],
+        'availability': row['availability'],
+        'duration_minutes': row['durationMinutes'],
+        'pricing_type': row['pricingType'],
+        'allow_delivery': row['allowDelivery'],
+        'allow_pickup': row['allowPickup'],
+        'allow_shipping': row['allowShipping'],
+        'delivery_fee': row['deliveryFee'],
+        'location_name': row['locationName'],
+      };
+
+  static Map<String, dynamic> _supplierAnalyticsFromGql(Map<String, dynamic> row) {
+    final topItems = (row['topItems'] as List?)?.map((item) {
+      if (item is! Map) return item;
+      final spent = item['totalSpent'] ?? item['total_spent'] ?? 0;
+      final desc = item['description']?.toString() ?? '';
+      return {
+        'name': item['name']?.toString() ?? desc,
+        'description': desc,
+        'spent': spent,
+        'total_value': spent,
+        'count': item['count'] ?? item['orderCount'] ?? item['order_count'] ?? 0,
+        'order_count': item['orderCount'] ?? item['order_count'] ?? 0,
+      };
+    }).toList();
+
+    final monthlyTrend = (row['monthlyTrend'] as List?)?.map((point) {
+      if (point is! Map) return point;
+      final monthNum = point['month'];
+      final year = point['year'];
+      final monthLabel = (monthNum != null && year != null)
+          ? '$year-${monthNum.toString().padLeft(2, '0')}'
+          : (point['month']?.toString() ?? '');
+      return {
+        'month': monthLabel,
+        'spent': point['totalSpent'] ?? point['total_spent'] ?? 0,
+        'order_count': point['orderCount'] ?? point['order_count'] ?? 0,
+      };
+    }).toList();
+
+    return {
+        'total_spent': row['totalSpent'],
+        'order_count': row['orderCount'],
+        'po_count': row['poCount'],
+        'current_month_spent': row['currentMonthSpent'],
+        'last_month_spent': row['lastMonthSpent'],
+        'this_year_spent': row['thisYearSpent'],
+        'top_items': topItems ?? [],
+        'monthly_trend': monthlyTrend ?? [],
+        'recent_pos': row['recentPos'] ?? [],
+      };
+  }
+
+  static Map<String, dynamic> _vfdConfigFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'tin': row['tin'],
+        'vrn': row['vrn'],
+        'serial_number': row['serialNumber'],
+        'registration_id': row['registrationId'],
+        'certificate_key': row['certificateKey'],
+        'is_active': row['isActive'],
+        'registered_at': row['registeredAt'],
+      };
+
+  static Map<String, dynamic> _fiscalReceiptFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'invoice_id': row['invoiceId'],
+        'receipt_number': row['receiptNumber'],
+        'fiscal_code': row['fiscalCode'],
+        'qr_code': row['qrCode'],
+        'tin': row['tin'],
+        'vrn': row['vrn'],
+        'total_amount': row['totalAmount'],
+        'vat_amount': row['vatAmount'],
+        'issued_at': row['issuedAt'],
+        'verification_url': row['verificationUrl'],
+      };
+
+  static Map<String, dynamic> _vfdOutboxFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'payload_type': row['payloadType'],
+        'status': row['status'],
+        'attempt_count': row['attemptCount'],
+        'next_retry_at': row['nextRetryAt'],
+        'last_error': row['lastError'],
+        'request_hash': row['requestHash'],
+        'retry_logs': row['retryLogs'] ?? [],
+      };
+
+  static Map<String, dynamic> _vfdZReportFromGql(Map<String, dynamic> row) {
+    final payload = row['payload'];
+    final base = {
+      'id': row['id'],
+      'business_date': row['businessDate'],
+      'status': row['status'],
+      'total_daily_amount': row['totalDailyAmount'],
+      'vat_total': row['vatTotal'],
+      'receipt_count': row['receiptCount'],
+      'submitted_at': row['submittedAt'],
+    };
+    if (payload is Map<String, dynamic>) {
+      base.addAll(payload);
+    }
+    return base;
+  }
+
+  static Future<Map<String, dynamic>?> markPurchaseOrderSent(int poId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation MarkBusinessPurchaseOrderSent(\$poId: ID!) {
+          markBusinessPurchaseOrderSent(poId: \$poId) { $_purchaseOrderFields }
+        }
+        ''',
+        variables: {'poId': poId.toString()},
+        auth: true,
+      );
+      final row = result['markBusinessPurchaseOrderSent'];
+      if (row is Map<String, dynamic>) return _purchaseOrderFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updatePurchaseOrder(
+    int poId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessPurchaseOrder(
+          \$poId: ID!
+          \$input: UpdateBusinessPurchaseOrderInput!
+        ) {
+          updateBusinessPurchaseOrder(poId: \$poId, input: \$input) {
+            $_purchaseOrderFields
+          }
+        }
+        ''',
+        variables: {
+          'poId': poId.toString(),
+          'input': {
+            if (body['supplier_id'] != null)
+              'supplierId': body['supplier_id'].toString(),
+            if (body['supplier_name'] != null) 'supplierName': body['supplier_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['status'] != null) 'status': body['status'],
+            if (body['expected_delivery_date'] != null)
+              'expectedDeliveryDate': _dateOnly(body['expected_delivery_date']),
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessPurchaseOrder'];
+      if (row is Map<String, dynamic>) return _purchaseOrderFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getSupplierCatalog(int supplierId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessSupplierCatalog(\$supplierId: ID!) {
+          businessSupplierCatalog(supplierId: \$supplierId) { $_catalogItemFields }
+        }
+        ''',
+        variables: {'supplierId': supplierId.toString()},
+        auth: true,
+      );
+      final rows = data['businessSupplierCatalog'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_catalogItemFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getSupplierAnalytics(
+    int businessId,
+    int supplierId,
+  ) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessSupplierAnalytics(\$businessId: ID!, \$supplierId: ID!) {
+          businessSupplierAnalytics(businessId: \$businessId, supplierId: \$supplierId) {
+            $_supplierAnalyticsFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'supplierId': supplierId.toString(),
+        },
+        auth: true,
+      );
+      final row = data['businessSupplierAnalytics'];
+      if (row is Map<String, dynamic>) return _supplierAnalyticsFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getVfdConfig(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessVfdConfig(\$businessId: ID!) {
+          businessVfdConfig(businessId: \$businessId) { $_vfdConfigFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final row = data['businessVfdConfig'];
+      if (row is Map<String, dynamic>) return _vfdConfigFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> registerVfd(
+    int businessId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RegisterBusinessVfd(
+          \$businessId: ID!
+          \$input: RegisterBusinessVfdInput!
+        ) {
+          registerBusinessVfd(businessId: \$businessId, input: \$input) {
+            $_vfdConfigFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'input': {
+            'tin': body['tin'],
+            if (body['vrn'] != null) 'vrn': body['vrn'],
+            if (body['serial_number'] != null) 'serialNumber': body['serial_number'],
+            if (body['registration_id'] != null)
+              'registrationId': body['registration_id'],
+            if (body['certificate_key'] != null)
+              'certificateKey': body['certificate_key'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['registerBusinessVfd'];
+      if (row is Map<String, dynamic>) return _vfdConfigFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getFiscalReceipts(
+    int businessId, {
+    int page = 1,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessFiscalReceipts(\$businessId: ID!, \$page: Int) {
+          businessFiscalReceipts(businessId: \$businessId, page: \$page) {
+            $_fiscalReceiptFields
+          }
+        }
+        ''',
+        variables: {'businessId': businessId.toString(), 'page': page},
+        auth: true,
+      );
+      final rows = data['businessFiscalReceipts'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_fiscalReceiptFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> issueFiscalReceipt(int invoiceId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation IssueBusinessFiscalReceipt(\$invoiceId: ID!) {
+          issueBusinessFiscalReceipt(invoiceId: \$invoiceId) { $_fiscalReceiptFields }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      final row = result['issueBusinessFiscalReceipt'];
+      if (row is Map<String, dynamic>) return _fiscalReceiptFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getVfdSettings(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessVfdSettings(\$businessId: ID!) {
+          businessVfdSettings(businessId: \$businessId)
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final row = data['businessVfdSettings'];
+      if (row is Map<String, dynamic>) return row;
+      return {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateVfdSettings(
+    int businessId,
+    Map<String, dynamic> settings,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessVfdSettings(
+          \$businessId: ID!
+          \$settings: JSON!
+        ) {
+          updateBusinessVfdSettings(businessId: \$businessId, settings: \$settings)
+        }
+        ''',
+        variables: {'businessId': businessId.toString(), 'settings': settings},
+        auth: true,
+      );
+      final row = result['updateBusinessVfdSettings'];
+      if (row is Map<String, dynamic>) return row;
+      return settings;
+    } catch (_) {
+      return settings;
+    }
+  }
+
+  static Future<Map<String, dynamic>> rotateVfdCredentials(int businessId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RotateBusinessVfdCredentials(\$businessId: ID!) {
+          rotateBusinessVfdCredentials(businessId: \$businessId)
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final row = result['rotateBusinessVfdCredentials'];
+      if (row is Map<String, dynamic>) return row;
+      return {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getVfdComplianceDashboard(
+    int businessId, {
+    String period = '30d',
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessVfdComplianceDashboard(\$businessId: ID!, \$period: String) {
+          businessVfdComplianceDashboard(businessId: \$businessId, period: \$period)
+        }
+        ''',
+        variables: {'businessId': businessId.toString(), 'period': period},
+        auth: true,
+      );
+      final row = data['businessVfdComplianceDashboard'];
+      if (row is Map<String, dynamic>) return row;
+      return {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getVfdOutbox(
+    int businessId, {
+    String? status,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessVfdOutbox(\$businessId: ID!, \$status: String) {
+          businessVfdOutbox(businessId: \$businessId, status: \$status) {
+            $_vfdOutboxFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (status != null) 'status': status,
+        },
+        auth: true,
+      );
+      final rows = data['businessVfdOutbox'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_vfdOutboxFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getVfdZReports(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessVfdZReports(\$businessId: ID!) {
+          businessVfdZReports(businessId: \$businessId) { $_vfdZReportFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final rows = data['businessVfdZReports'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_vfdZReportFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<bool> submitVfdZReport(
+    int businessId, {
+    String? businessDate,
+    Map<String, dynamic>? payload,
+  }) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitBusinessVfdZReport(
+          \$businessId: ID!
+          \$businessDate: String
+          \$payload: JSON
+        ) {
+          submitBusinessVfdZReport(
+            businessId: \$businessId
+            businessDate: \$businessDate
+            payload: \$payload
+          ) { id status }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (businessDate != null) 'businessDate': businessDate,
+          if (payload != null) 'payload': payload,
+        },
+        auth: true,
+      );
+      return result['submitBusinessVfdZReport'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> retryVfdOutboxItem(int outboxId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RetryBusinessVfdOutboxItem(\$outboxId: ID!) {
+          retryBusinessVfdOutboxItem(outboxId: \$outboxId) { id status }
+        }
+        ''',
+        variables: {'outboxId': outboxId.toString()},
+        auth: true,
+      );
+      return result['retryBusinessVfdOutboxItem'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> retryAllEligibleVfdOutbox(int businessId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RetryAllEligibleBusinessVfdOutbox(\$businessId: ID!) {
+          retryAllEligibleBusinessVfdOutbox(businessId: \$businessId)
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      return result['retryAllEligibleBusinessVfdOutbox'] is int;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<String?> exportVfdComplianceReport(
+    int businessId, {
+    String format = 'pdf',
+    String period = '30d',
+    bool includeDetailLogs = false,
+  }) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation ExportBusinessVfdComplianceReport(
+          \$businessId: ID!
+          \$reportFormat: String
+          \$period: String
+          \$includeDetailLogs: Boolean
+        ) {
+          exportBusinessVfdComplianceReport(
+            businessId: \$businessId
+            reportFormat: \$reportFormat
+            period: \$period
+            includeDetailLogs: \$includeDetailLogs
+          )
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'reportFormat': format,
+          'period': period,
+          'includeDetailLogs': includeDetailLogs,
+        },
+        auth: true,
+      );
+      final url = result['exportBusinessVfdComplianceReport'];
+      return url?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
 }

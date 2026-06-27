@@ -1098,6 +1098,13 @@ class BusinessService {
 
   static Future<BusinessResult<VfdConfig>> getVfdConfig(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getVfdConfig(businessId);
+      if (data == null) {
+        return BusinessResult(success: true, data: VfdConfig(businessId: businessId));
+      }
+      return BusinessResult(success: true, data: VfdConfig.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/$businessId/vfd';
       final res =
@@ -1115,6 +1122,17 @@ class BusinessService {
 
   static Future<BusinessResult<VfdConfig>> registerVfd(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.registerVfd(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to register VFD');
+      }
+      return BusinessResult(
+        success: true,
+        data: VfdConfig.fromJson(data),
+        message: 'VFD imesajiliwa kwa TRA',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/vfd/register';
       _log('POST $url');
@@ -1135,6 +1153,17 @@ class BusinessService {
 
   static Future<BusinessResult<FiscalReceipt>> issueFiscalReceipt(
       String token, int invoiceId, [int? userId]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.issueFiscalReceipt(invoiceId);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to issue fiscal receipt');
+      }
+      return BusinessResult(
+        success: true,
+        data: FiscalReceipt.fromJson(data),
+        message: 'Risiti ya TRA imetolewa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/invoices/$invoiceId/fiscal-receipt';
       _log('POST $url');
@@ -1155,6 +1184,12 @@ class BusinessService {
 
   static Future<BusinessListResult<FiscalReceipt>> getFiscalReceipts(
       String token, int businessId, [int? userId, int? page]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows =
+          await GraphqlBusinessService.getFiscalReceipts(businessId, page: page ?? 1);
+      final list = rows.map((e) => FiscalReceipt.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/fiscal-receipts';
       if (page != null) url += '?page=$page';
@@ -1818,18 +1853,132 @@ class BusinessService {
   static Future<BusinessResult<CreditNote>> createCreditNote(String token, int invoiceId, Map<String, dynamic> body) async => _ok<CreditNote>();
 
   // ---- VFD / Fiscal ----
-  static Future<BusinessResult<void>> generateVfdReceipt(String token, int invoiceId) async => _ok<void>();
-  static Future<BusinessResult<void>> retryVfdReceipt(String token, int invoiceId) async => _ok<void>();
-  static Future<BusinessResult<Map<String, dynamic>>> getVfdSettings(String token, int businessId, int userId) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
-  static Future<BusinessResult<void>> updateVfdSettings(String token, int businessId, int userId, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessResult<Map<String, dynamic>>> rotateVfdCredentials(String token, int businessId, int userId, [Map<String, dynamic>? body]) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
-  static Future<BusinessResult<Map<String, dynamic>>> getVfdComplianceDashboard(String token, int businessId, int userId, {Object? period}) async => _ok<Map<String, dynamic>>(<String, dynamic>{});
-  static Future<BusinessListResult<Map<String, dynamic>>> getVfdOutbox(String token, int businessId, int userId, {Object? status}) async => _okList<Map<String, dynamic>>();
-  static Future<BusinessListResult<Map<String, dynamic>>> getVfdZReports(String token, int businessId, int userId) async => _okList<Map<String, dynamic>>();
-  static Future<BusinessResult<void>> submitVfdZReport(String token, int businessId, int userId, {Object? businessDate, Map<String, dynamic>? body}) async => _ok<void>();
-  static Future<BusinessResult<void>> retryVfdOutboxItem(String token, int outboxId, [int? userId]) async => _ok<void>();
-  static Future<BusinessResult<void>> retryAllEligibleVfdOutbox(String token, int businessId, [int? userId]) async => _ok<void>();
-  static Future<BusinessResult<String>> exportVfdComplianceReport(String token, int businessId, int userId, {Object? format, Object? includeDetailLogs, Object? period, Map<String, dynamic>? body}) async => _ok<String>('');
+  static Future<BusinessResult<void>> generateVfdReceipt(String token, int invoiceId) async {
+    final res = await issueFiscalReceipt(token, invoiceId);
+    return BusinessResult(success: res.success, message: res.message);
+  }
+
+  static Future<BusinessResult<void>> retryVfdReceipt(String token, int invoiceId) async {
+    final res = await issueFiscalReceipt(token, invoiceId);
+    return BusinessResult(success: res.success, message: res.message);
+  }
+
+  static Future<BusinessResult<Map<String, dynamic>>> getVfdSettings(
+      String token, int businessId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getVfdSettings(businessId);
+      return BusinessResult(success: true, data: data);
+    }
+    return _ok<Map<String, dynamic>>(<String, dynamic>{});
+  }
+
+  static Future<BusinessResult<void>> updateVfdSettings(
+      String token, int businessId, int userId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      await GraphqlBusinessService.updateVfdSettings(businessId, body);
+      return BusinessResult(success: true, message: 'Saved');
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<Map<String, dynamic>>> rotateVfdCredentials(
+      String token, int businessId, int userId,
+      [Map<String, dynamic>? body]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.rotateVfdCredentials(businessId);
+      return BusinessResult(success: true, data: data);
+    }
+    return _ok<Map<String, dynamic>>(<String, dynamic>{});
+  }
+
+  static Future<BusinessResult<Map<String, dynamic>>> getVfdComplianceDashboard(
+      String token, int businessId, int userId,
+      {Object? period}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getVfdComplianceDashboard(
+        businessId,
+        period: period?.toString() ?? '30d',
+      );
+      return BusinessResult(success: true, data: data);
+    }
+    return _ok<Map<String, dynamic>>(<String, dynamic>{});
+  }
+
+  static Future<BusinessListResult<Map<String, dynamic>>> getVfdOutbox(
+      String token, int businessId, int userId,
+      {Object? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getVfdOutbox(
+        businessId,
+        status: status?.toString(),
+      );
+      return BusinessListResult(success: true, data: rows);
+    }
+    return _okList<Map<String, dynamic>>();
+  }
+
+  static Future<BusinessListResult<Map<String, dynamic>>> getVfdZReports(
+      String token, int businessId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getVfdZReports(businessId);
+      return BusinessListResult(success: true, data: rows);
+    }
+    return _okList<Map<String, dynamic>>();
+  }
+
+  static Future<BusinessResult<void>> submitVfdZReport(
+      String token, int businessId, int userId,
+      {Object? businessDate, Map<String, dynamic>? body}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.submitVfdZReport(
+        businessId,
+        businessDate: businessDate?.toString(),
+        payload: body,
+      );
+      return BusinessResult(
+        success: ok,
+        message: ok ? 'Z report submitted' : 'Failed',
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<void>> retryVfdOutboxItem(
+      String token, int outboxId, [int? userId]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.retryVfdOutboxItem(outboxId);
+      return BusinessResult(success: ok, message: ok ? 'Submitted' : 'Failed');
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<void>> retryAllEligibleVfdOutbox(
+      String token, int businessId, [int? userId]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.retryAllEligibleVfdOutbox(businessId);
+      return BusinessResult(success: ok, message: ok ? 'Done' : 'Failed');
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<String>> exportVfdComplianceReport(
+      String token, int businessId, int userId,
+      {Object? format, Object? includeDetailLogs, Object? period,
+      Map<String, dynamic>? body}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final url = await GraphqlBusinessService.exportVfdComplianceReport(
+        businessId,
+        format: format?.toString() ?? 'pdf',
+        period: period?.toString() ?? '30d',
+        includeDetailLogs: includeDetailLogs == true,
+      );
+      if (url == null || url.isEmpty) {
+        return BusinessResult(success: false, message: 'Failed');
+      }
+      return BusinessResult(success: true, data: url);
+    }
+    return _ok<String>('');
+  }
   // (getFiscalReceipts and issueFiscalReceipt are defined above as real
   // implementations; do not re-stub here.)
 
@@ -1966,10 +2115,51 @@ class BusinessService {
     }
     return _ok<void>();
   }
-  static Future<BusinessResult<void>> markPOSent(String token, int poId) async => _ok<void>();
-  static Future<BusinessResult<void>> updatePurchaseOrder(String token, int poId, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessListResult<SupplierCatalogItem>> getSupplierCatalog(String token, int supplierId) async => _okList<SupplierCatalogItem>();
-  static Future<BusinessResult<SupplierAnalytics>> getSupplierAnalytics(String token, int supplierId, [Object? params]) async => _ok<SupplierAnalytics>(SupplierAnalytics());
+  static Future<BusinessResult<void>> markPOSent(String token, int poId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.markPurchaseOrderSent(poId);
+      return BusinessResult(
+        success: data != null,
+        message: data == null ? 'Failed' : null,
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<PurchaseOrder>> updatePurchaseOrder(
+      String token, int poId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updatePurchaseOrder(poId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to update purchase order');
+      }
+      return BusinessResult(success: true, data: PurchaseOrder.fromJson(data));
+    }
+    return _ok<PurchaseOrder>();
+  }
+
+  static Future<BusinessListResult<SupplierCatalogItem>> getSupplierCatalog(
+      String token, int supplierId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getSupplierCatalog(supplierId);
+      final list = rows.map((e) => SupplierCatalogItem.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<SupplierCatalogItem>();
+  }
+
+  static Future<BusinessResult<SupplierAnalytics>> getSupplierAnalytics(
+      String token, int businessId, int supplierId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data =
+          await GraphqlBusinessService.getSupplierAnalytics(businessId, supplierId);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to load analytics');
+      }
+      return BusinessResult(success: true, data: SupplierAnalytics.fromJson(data));
+    }
+    return _ok<SupplierAnalytics>(SupplierAnalytics());
+  }
 
   // ---- Search ----
   static Future<BusinessListResult<Business>> searchBusinesses(String token, String query) async => _okList<Business>();
