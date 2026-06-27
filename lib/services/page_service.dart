@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/page_models.dart';
 import '../models/post_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_media_service.dart';
+import 'graphql/graphql_page_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -16,13 +19,22 @@ class PageService {
     String? search,
     int? currentUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final pages = await GraphqlPageService.getPages(
+        page: page,
+        perPage: perPage,
+        category: category,
+        search: search,
+      );
+      return PageListResult(success: true, pages: pages);
+    }
     try {
       String url = '$_baseUrl/pages?page=$page&per_page=$perPage';
       if (category != null) url += '&category=$category';
       if (search != null) url += '&search=$search';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -41,8 +53,11 @@ class PageService {
 
   /// Get page categories
   Future<List<PageCategory>> getCategories() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPageService.getCategories();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/pages/categories'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/pages/categories'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -60,8 +75,12 @@ class PageService {
 
   /// Get user's managed pages
   Future<PageListResult> getUserPages(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final pages = await GraphqlPageService.getUserPages();
+      return PageListResult(success: true, pages: pages);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pages/user?user_id=$userId'),
       );
 
@@ -82,8 +101,12 @@ class PageService {
 
   /// Get pages liked by user
   Future<PageListResult> getLikedPages(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final pages = await GraphqlPageService.getLikedPages();
+      return PageListResult(success: true, pages: pages);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pages/liked?user_id=$userId'),
       );
 
@@ -118,6 +141,42 @@ class PageService {
     File? profilePhoto,
     File? coverPhoto,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      String? profilePhotoPath;
+      String? coverPhotoPath;
+      if (profilePhoto != null) {
+        final uploaded = await GraphqlMediaService.uploadFile(profilePhoto);
+        profilePhotoPath = uploaded?['file_path']?.toString();
+        if (profilePhotoPath == null) {
+          return PageResult(success: false, message: 'Failed to upload profile photo');
+        }
+      }
+      if (coverPhoto != null) {
+        final uploaded = await GraphqlMediaService.uploadFile(coverPhoto);
+        coverPhotoPath = uploaded?['file_path']?.toString();
+        if (coverPhotoPath == null) {
+          return PageResult(success: false, message: 'Failed to upload cover photo');
+        }
+      }
+      final page = await GraphqlPageService.createPage(
+        name: name,
+        category: category,
+        subcategory: subcategory,
+        description: description,
+        website: website,
+        phone: phone,
+        email: email,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        profilePhotoPath: profilePhotoPath,
+        coverPhotoPath: coverPhotoPath,
+      );
+      if (page != null) {
+        return PageResult(success: true, page: page);
+      }
+      return PageResult(success: false, message: 'Failed to create page');
+    }
     try {
       var request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/pages'));
       request.fields['creator_id'] = creatorId.toString();
@@ -158,11 +217,18 @@ class PageService {
 
   /// Get a single page
   Future<PageResult> getPage(String identifier, {int? currentUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final page = await GraphqlPageService.getPage(identifier);
+      if (page != null) {
+        return PageResult(success: true, page: page);
+      }
+      return PageResult(success: false, message: 'Page not found');
+    }
     try {
       String url = '$_baseUrl/pages/$identifier';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -178,6 +244,13 @@ class PageService {
 
   /// Follow a page
   Future<FollowResult> followPage(int pageId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final count = await GraphqlPageService.followPage(pageId);
+      if (count != null) {
+        return FollowResult(success: true, followersCount: count);
+      }
+      return FollowResult(success: false, message: 'Failed to follow page');
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/pages/$pageId/follow'),
@@ -201,6 +274,13 @@ class PageService {
 
   /// Unfollow a page
   Future<FollowResult> unfollowPage(int pageId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final count = await GraphqlPageService.unfollowPage(pageId);
+      if (count != null) {
+        return FollowResult(success: true, followersCount: count);
+      }
+      return FollowResult(success: false, message: 'Failed to unfollow page');
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/pages/$pageId/follow'),
@@ -224,6 +304,13 @@ class PageService {
 
   /// Like a page
   Future<LikeResult> likePage(int pageId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final count = await GraphqlPageService.likePage(pageId);
+      if (count != null) {
+        return LikeResult(success: true, likesCount: count);
+      }
+      return LikeResult(success: false, message: 'Failed to like page');
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/pages/$pageId/like'),
@@ -247,6 +334,13 @@ class PageService {
 
   /// Unlike a page
   Future<LikeResult> unlikePage(int pageId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final count = await GraphqlPageService.unlikePage(pageId);
+      if (count != null) {
+        return LikeResult(success: true, likesCount: count);
+      }
+      return LikeResult(success: false, message: 'Failed to unlike page');
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/pages/$pageId/like'),
@@ -270,8 +364,16 @@ class PageService {
 
   /// Get page posts
   Future<PostListResult> getPagePosts(int pageId, {int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final posts = await GraphqlPageService.getPagePosts(
+        pageId,
+        page: page,
+        perPage: perPage,
+      );
+      return PostListResult(success: true, posts: posts);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pages/$pageId/posts?page=$page&per_page=$perPage'),
       );
 
@@ -292,8 +394,23 @@ class PageService {
 
   /// Get page reviews
   Future<ReviewListResult> getReviews(int pageId, {int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlPageService.getReviews(
+        pageId,
+        page: page,
+        perPage: perPage,
+      );
+      if (result != null) {
+        return ReviewListResult(
+          success: true,
+          reviews: result.reviews,
+          averageRating: result.averageRating,
+        );
+      }
+      return ReviewListResult(success: false, message: 'Failed to load reviews');
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pages/$pageId/reviews?page=$page&per_page=$perPage'),
       );
 
@@ -318,6 +435,13 @@ class PageService {
 
   /// Add a review
   Future<ReviewResult> addReview(int pageId, int userId, int rating, {String? content}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final review = await GraphqlPageService.addReview(pageId, rating, content: content);
+      if (review != null) {
+        return ReviewResult(success: true, review: review);
+      }
+      return ReviewResult(success: false, message: 'Failed to add review');
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/pages/$pageId/reviews'),
@@ -345,8 +469,12 @@ class PageService {
 
   /// Search pages
   Future<PageListResult> searchPages(String query) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final pages = await GraphqlPageService.searchPages(query);
+      return PageListResult(success: true, pages: pages);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pages/search?q=$query'),
       );
 

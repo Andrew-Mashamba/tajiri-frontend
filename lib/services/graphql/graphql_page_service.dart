@@ -1,4 +1,6 @@
 import '../../models/page_models.dart';
+import '../../models/post_models.dart';
+import 'graphql_post_mapper.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL creator/business pages marketplace (Phase 43).
@@ -399,6 +401,68 @@ class GraphqlPageService {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  static const _postFields = r'''
+    id
+    caption
+    publishedAt
+    author {
+      id
+      username
+      displayName
+      avatarUrl
+    }
+    media {
+      type
+      url
+      thumbnailUrl
+      blurhash
+      width
+      height
+    }
+    counts {
+      likes
+      comments
+      saves
+      views
+    }
+    viewerState {
+      liked
+      saved
+      subscribed
+    }
+  ''';
+
+  static Future<List<Post>> getPagePosts(
+    int pageId, {
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query PagePosts(\$pageId: ID!, \$page: Int, \$perPage: Int) {
+          pagePosts(pageId: \$pageId, page: \$page, perPage: \$perPage) {
+            $_postFields
+          }
+        }
+        ''',
+        variables: {
+          'pageId': pageId.toString(),
+          'page': page,
+          'perPage': perPage,
+        },
+        auth: false,
+      );
+      final rows = data['pagePosts'] as List<dynamic>? ?? [];
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(GraphqlPostMapper.fromGraphql)
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 
