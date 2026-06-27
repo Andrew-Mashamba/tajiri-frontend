@@ -1,8 +1,10 @@
 // lib/car_insurance/services/car_insurance_service.dart
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
 import '../../services/expenditure_service.dart';
+import '../../services/graphql/graphql_car_insurance_service.dart';
 import '../../services/local_storage_service.dart';
 import '../models/car_insurance_models.dart';
 
@@ -13,6 +15,9 @@ class CarInsuranceService {
 
   static Future<PaginatedResult<InsurancePolicy>> getMyPolicies(
       {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.getMyPolicies(page: page);
+    }
     try {
       final r =
           await _dio.get('/car-insurance/policies', queryParameters: {'page': page});
@@ -36,6 +41,9 @@ class CarInsuranceService {
 
   static Future<SingleResult<InsurancePolicy>> getPolicyDetail(
       int policyId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.getPolicyDetail(policyId);
+    }
     try {
       final r = await _dio.get('/car-insurance/policies/$policyId');
       final data = r.data;
@@ -58,6 +66,15 @@ class CarInsuranceService {
     required String coverageType,
     double? vehicleValue,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.getQuotes(
+        make: make,
+        model: model,
+        year: year,
+        coverageType: coverageType,
+        vehicleValue: vehicleValue,
+      );
+    }
     try {
       final r = await _dio.post('/car-insurance/quotes', data: {
         'make': make,
@@ -81,13 +98,34 @@ class CarInsuranceService {
 
   static Future<SingleResult<InsurancePolicy>> purchasePolicy(
       int quoteId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCarInsuranceService.purchasePolicy(quoteId, body);
+      if (result.success && result.data != null) {
+        final policy = result.data!;
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: policy.premium,
+              category: 'bima',
+              description: 'Bima ya Gari: ${policy.providerName}',
+              referenceId: 'car_insurance_${policy.id}',
+              sourceModule: 'car_insurance',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) {
+          debugPrint('[CarInsuranceService] expenditure tracking skipped');
+        });
+      }
+      return result;
+    }
     try {
       final r =
           await _dio.post('/car-insurance/quotes/$quoteId/purchase', data: body);
       final data = r.data;
       if (data['success'] == true) {
         final policy = InsurancePolicy.fromJson(data['data']);
-        // Fire-and-forget: record expenditure for budget tracking
         LocalStorageService.getInstance().then((storage) {
           final token = storage.getAuthToken();
           if (token != null) {
@@ -115,6 +153,9 @@ class CarInsuranceService {
 
   static Future<PaginatedResult<InsuranceClaim>> getMyClaims(
       {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.getMyClaims(page: page);
+    }
     try {
       final r =
           await _dio.get('/car-insurance/claims', queryParameters: {'page': page});
@@ -138,6 +179,9 @@ class CarInsuranceService {
 
   static Future<SingleResult<InsuranceClaim>> fileClaim(
       Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.fileClaim(body);
+    }
     try {
       final r = await _dio.post('/car-insurance/claims', data: body);
       final data = r.data;
@@ -154,6 +198,9 @@ class CarInsuranceService {
   // ─── Providers ───────────────────────────────────────────────
 
   static Future<PaginatedResult<InsuranceProvider>> getProviders() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCarInsuranceService.getProviders();
+    }
     try {
       final r = await _dio.get('/car-insurance/providers');
       final data = r.data;
