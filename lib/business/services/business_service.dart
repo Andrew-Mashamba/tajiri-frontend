@@ -862,6 +862,17 @@ class BusinessService {
 
   static Future<BusinessResult<Quote>> createQuote(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createQuote(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create quote');
+      }
+      return BusinessResult(
+        success: true,
+        data: Quote.fromJson(data),
+        message: 'Quote created',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/quotes';
       _log('POST $url');
@@ -883,6 +894,11 @@ class BusinessService {
 
   static Future<BusinessListResult<Quote>> getQuotes(
       String token, int businessId, {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getQuotes(businessId, status: status);
+      final list = rows.map((e) => Quote.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/quotes';
       if (status != null && status.isNotEmpty) url += '?status=$status';
@@ -903,6 +919,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> sendQuote(
       String token, int quoteId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.sendQuote(quoteId);
+      return BusinessResult(success: ok, message: ok ? 'Quote sent' : 'Failed to send quote');
+    }
     try {
       final url = '$_baseUrl/business/quotes/$quoteId/send';
       final res = await http.post(Uri.parse(url),
@@ -916,6 +936,17 @@ class BusinessService {
 
   static Future<BusinessResult<Invoice>> convertQuoteToInvoice(
       String token, int quoteId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.convertQuoteToInvoice(quoteId);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to convert quote');
+      }
+      return BusinessResult(
+        success: true,
+        data: Invoice.fromJson(data),
+        message: 'Kadirio limebadilishwa kuwa ankara',
+      );
+    }
     try {
       final url = '$_baseUrl/business/quotes/$quoteId/convert';
       _log('POST $url');
@@ -936,6 +967,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> updateQuoteStatus(
       String token, int quoteId, String status) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.updateQuoteStatus(quoteId, status);
+      return BusinessResult(success: ok);
+    }
     try {
       final url = '$_baseUrl/business/quotes/$quoteId';
       final res = await http.patch(Uri.parse(url),
@@ -1373,6 +1408,11 @@ class BusinessService {
 
   static Future<BusinessListResult<Supplier>> getSuppliers(
       String token, int businessId, {String? search}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getSuppliers(businessId, search: search);
+      final list = rows.map((e) => Supplier.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/suppliers';
       if (search != null && search.isNotEmpty) url += '?search=$search';
@@ -1393,6 +1433,17 @@ class BusinessService {
 
   static Future<BusinessResult<Supplier>> addSupplier(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createSupplier(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to add supplier');
+      }
+      return BusinessResult(
+        success: true,
+        data: Supplier.fromJson(data),
+        message: 'Msambazaji ameongezwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/suppliers';
       final res = await http.post(Uri.parse(url),
@@ -1412,6 +1463,13 @@ class BusinessService {
 
   static Future<BusinessResult<Supplier>> updateSupplier(
       String token, int supplierId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateSupplier(supplierId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to update supplier');
+      }
+      return BusinessResult(success: true, data: Supplier.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/suppliers/$supplierId';
       final res = await http.put(Uri.parse(url),
@@ -1429,6 +1487,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> deleteSupplier(
       String token, int supplierId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.deleteSupplier(supplierId);
+      return BusinessResult(success: ok);
+    }
     try {
       final url = '$_baseUrl/business/suppliers/$supplierId';
       final res = await http.delete(Uri.parse(url),
@@ -1560,6 +1622,15 @@ class BusinessService {
 
   static Future<BusinessListResult<BusinessAppointment>> getAppointments(
       String token, int businessId, {String? date, String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getAppointments(
+        businessId,
+        date: date,
+        status: status,
+      );
+      final list = rows.map((e) => BusinessAppointment.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/appointments';
       final params = <String>[];
@@ -1583,6 +1654,17 @@ class BusinessService {
 
   static Future<BusinessResult<BusinessAppointment>> createAppointment(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createAppointment(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create appointment');
+      }
+      return BusinessResult(
+        success: true,
+        data: BusinessAppointment.fromJson(data),
+        message: 'Appointment created',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/appointments';
       final res = await http.post(Uri.parse(url),
@@ -1602,6 +1684,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> updateAppointmentStatus(
       String token, int appointmentId, String status) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.updateAppointmentStatus(
+        appointmentId,
+        status,
+      );
+      return BusinessResult(success: ok);
+    }
     try {
       final url = '$_baseUrl/business/appointments/$appointmentId';
       final res = await http.patch(Uri.parse(url),
@@ -1615,6 +1704,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> cancelAppointment(
       String token, int appointmentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.cancelAppointment(appointmentId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? 'Appointment cancelled' : 'Failed to cancel appointment',
+      );
+    }
     try {
       final url = '$_baseUrl/business/appointments/$appointmentId/cancel';
       final res = await http.post(Uri.parse(url),
