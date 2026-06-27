@@ -1,6 +1,8 @@
 // lib/library/services/library_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_library_service.dart';
 import '../models/library_models.dart';
 
 class LibraryService {
@@ -11,6 +13,13 @@ class LibraryService {
     String? category,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.searchBooks(
+        query: query,
+        category: category,
+        page: page,
+      );
+    }
     try {
       final params = <String, dynamic>{'page': page};
       if (query != null && query.isNotEmpty) params['search'] = query;
@@ -30,6 +39,9 @@ class LibraryService {
   }
 
   Future<LibraryResult<LibraryBook>> getBook(int bookId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.getBook(bookId);
+    }
     try {
       final res = await _dio.get('/education/library/books/$bookId');
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -45,6 +57,9 @@ class LibraryService {
   }
 
   Future<LibraryResult<void>> borrowBook(int bookId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.borrowBook(bookId);
+    }
     try {
       final res =
           await _dio.post('/education/library/books/$bookId/borrow');
@@ -55,6 +70,9 @@ class LibraryService {
   }
 
   Future<LibraryResult<void>> bookmarkBook(int bookId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.bookmarkBook(bookId);
+    }
     try {
       final res =
           await _dio.post('/education/library/books/$bookId/bookmark');
@@ -65,6 +83,9 @@ class LibraryService {
   }
 
   Future<LibraryListResult<LibraryBook>> getMyBookshelf() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.getMyBookshelf();
+    }
     try {
       final res = await _dio.get('/education/library/bookshelf');
       if (res.statusCode == 200 && res.data['success'] == true) {
