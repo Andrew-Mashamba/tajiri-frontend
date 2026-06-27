@@ -685,6 +685,7 @@ class Invoice {
   final double vatAmount;
   final double vatRate;
   final double totalAmount;
+  final double amountPaid;
   final InvoiceStatus status;
   final DateTime? dueDate;
   final String? notes;
@@ -702,6 +703,7 @@ class Invoice {
     this.vatAmount = 0,
     this.vatRate = 18.0,
     this.totalAmount = 0,
+    this.amountPaid = 0,
     this.status = InvoiceStatus.draft,
     this.dueDate,
     this.notes,
@@ -727,6 +729,7 @@ class Invoice {
       vatAmount: _parseDouble(json['vat_amount']),
       vatRate: _parseDouble(json['vat_rate'], 18.0),
       totalAmount: _parseDouble(json['total_amount']),
+      amountPaid: _parseDouble(json['amount_paid']),
       status: _parseInvoiceStatus(json['status']),
       dueDate: _parseDate(json['due_date']),
       notes: json['notes']?.toString(),
@@ -2391,8 +2394,7 @@ class RecurringPurchaseOrder {
 // ---------------------------------------------------------------------------
 
 extension InvoiceCompat on Invoice {
-  double get amountPaid => 0;
-  double get balanceRemaining => totalAmount;
+  double get balanceRemaining => totalAmount - amountPaid;
   String? get customerPhone => null;
   String? get customerEmail => null;
   String? get customerTin => null;

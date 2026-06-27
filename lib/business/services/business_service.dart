@@ -1838,19 +1838,149 @@ class BusinessService {
       BusinessListResult<T>(success: true, data: const [], message: 'stub');
 
   // ---- Invoices ----
-  static Future<BusinessResult<Invoice>> getInvoice(String token, int id) async => _ok<Invoice>();
-  static Future<BusinessListResult<InvoicePayment>> getInvoicePayments(String token, int invoiceId) async => _okList<InvoicePayment>();
-  static Future<BusinessListResult<InvoiceDelivery>> getInvoiceDeliveries(String token, int invoiceId) async => _okList<InvoiceDelivery>();
-  static Future<BusinessListResult<CreditNote>> getInvoiceCreditNotes(String token, int invoiceId) async => _okList<CreditNote>();
-  static Future<BusinessResult<Invoice>> updateInvoice(String token, int id, Map<String, dynamic> body) async => _ok<Invoice>();
-  static Future<BusinessResult<void>> voidInvoice(String token, int id) async => _ok<void>();
-  static Future<BusinessResult<InvoicePayment>> recordInvoicePayment(String token, int invoiceId, Map<String, dynamic> body) async => _ok<InvoicePayment>();
-  static Future<BusinessResult<void>> sendInvoiceMultiChannel(String token, int id, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessResult<void>> sendInvoiceReminder(String token, int id, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessResult<InvoiceSettings>> getInvoiceSettings(String token, int businessId) async => _ok<InvoiceSettings>(InvoiceSettings());
-  static Future<BusinessResult<void>> updateInvoiceSettings(String token, int businessId, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessListResult<Invoice>> getReceivedInvoices(String token, int userId) async => _okList<Invoice>();
-  static Future<BusinessResult<CreditNote>> createCreditNote(String token, int invoiceId, Map<String, dynamic> body) async => _ok<CreditNote>();
+  static Future<BusinessResult<Invoice>> getInvoice(String token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getInvoice(id);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Invoice not found');
+      }
+      return BusinessResult(success: true, data: Invoice.fromJson(data));
+    }
+    return _ok<Invoice>();
+  }
+
+  static Future<BusinessListResult<InvoicePayment>> getInvoicePayments(
+      String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getInvoicePayments(invoiceId);
+      final list = rows.map((e) => InvoicePayment.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<InvoicePayment>();
+  }
+
+  static Future<BusinessListResult<InvoiceDelivery>> getInvoiceDeliveries(
+      String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getInvoiceDeliveries(invoiceId);
+      final list = rows.map((e) => InvoiceDelivery.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<InvoiceDelivery>();
+  }
+
+  static Future<BusinessListResult<CreditNote>> getInvoiceCreditNotes(
+      String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getInvoiceCreditNotes(invoiceId);
+      final list = rows.map((e) => CreditNote.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<CreditNote>();
+  }
+
+  static Future<BusinessResult<Invoice>> updateInvoice(
+      String token, int id, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateInvoice(id, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to update invoice');
+      }
+      return BusinessResult(success: true, data: Invoice.fromJson(data));
+    }
+    return _ok<Invoice>();
+  }
+
+  static Future<BusinessResult<void>> voidInvoice(String token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.voidInvoice(id);
+      return BusinessResult(
+        success: ok,
+        message: ok ? null : 'Failed to void invoice',
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<InvoicePayment>> recordInvoicePayment(
+      String token, int invoiceId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.recordInvoicePayment(invoiceId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to record payment');
+      }
+      return BusinessResult(success: true, data: InvoicePayment.fromJson(data));
+    }
+    return _ok<InvoicePayment>();
+  }
+
+  static Future<BusinessResult<void>> sendInvoiceMultiChannel(
+      String token, int id, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final channels = (body['channels'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [];
+      final ok = await GraphqlBusinessService.sendInvoiceMultiChannel(id, channels);
+      return BusinessResult(success: ok, message: ok ? null : 'Failed to send');
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<void>> sendInvoiceReminder(
+      String token, int id, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.sendInvoiceReminder(id, body);
+      return BusinessResult(success: ok, message: ok ? null : 'Failed to send reminder');
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<InvoiceSettings>> getInvoiceSettings(
+      String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.getInvoiceSettings(businessId);
+      if (data == null) {
+        return BusinessResult(success: true, data: InvoiceSettings());
+      }
+      return BusinessResult(success: true, data: InvoiceSettings.fromJson(data));
+    }
+    return _ok<InvoiceSettings>(InvoiceSettings());
+  }
+
+  static Future<BusinessResult<void>> updateInvoiceSettings(
+      String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateInvoiceSettings(businessId, body);
+      return BusinessResult(
+        success: data != null,
+        message: data == null ? 'Failed to save settings' : null,
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessListResult<Invoice>> getReceivedInvoices(
+      String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getReceivedInvoices();
+      final list = rows.map((e) => Invoice.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<Invoice>();
+  }
+
+  static Future<BusinessResult<CreditNote>> createCreditNote(
+      String token, int invoiceId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createCreditNote(invoiceId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create credit note');
+      }
+      return BusinessResult(success: true, data: CreditNote.fromJson(data));
+    }
+    return _ok<CreditNote>();
+  }
 
   // ---- VFD / Fiscal ----
   static Future<BusinessResult<void>> generateVfdReceipt(String token, int invoiceId) async {

@@ -13,6 +13,25 @@ class GraphqlBusinessService {
     dueDate notes createdAt paidAt
   ''';
 
+  static const _invoicePaymentFields = r'''
+    id invoiceId amount method reference notes paidAt createdAt
+  ''';
+
+  static const _invoiceDeliveryFields = r'''
+    id invoiceId deliveryType status recipient sentAt createdAt
+  ''';
+
+  static const _creditNoteFields = r'''
+    id invoiceId businessId creditNoteNumber reason reasonText items
+    subtotal vatAmount totalAmount status applicationMethod issuedAt createdAt
+  ''';
+
+  static const _invoiceSettingsFields = r'''
+    numberPrefix nextSequence defaultPaymentTerms defaultIncludeVat
+    defaultPaymentInstructions defaultNotes autoReminderEnabled
+    reminderDaysAfterDue reminderChannels logoUrl
+  ''';
+
   static const _expenseFields = r'''
     id businessId category description amount expenseDate
     vendorName paymentMethod notes isRecurring createdAt
@@ -115,6 +134,51 @@ class GraphqlBusinessService {
         'notes': row['notes'],
         'created_at': row['createdAt'],
         'paid_at': row['paidAt'],
+      };
+
+  static Map<String, dynamic> _invoicePaymentFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'invoice_id': row['invoiceId'],
+        'amount': row['amount'],
+        'method': row['method'],
+        'reference': row['reference'],
+        'notes': row['notes'],
+        'paid_at': row['paidAt'],
+        'created_at': row['createdAt'],
+      };
+
+  static Map<String, dynamic> _invoiceDeliveryFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'invoice_id': row['invoiceId'],
+        'delivery_type': row['deliveryType'],
+        'status': row['status'],
+        'recipient': row['recipient'],
+        'sent_at': row['sentAt'],
+        'created_at': row['createdAt'],
+      };
+
+  static Map<String, dynamic> _creditNoteFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'invoice_id': row['invoiceId'],
+        'credit_note_number': row['creditNoteNumber'],
+        'reason': row['reason'],
+        'total_amount': row['totalAmount'],
+        'status': row['status'],
+        'issued_at': row['issuedAt'],
+        'created_at': row['createdAt'],
+        'items': row['items'] ?? [],
+      };
+
+  static Map<String, dynamic> _invoiceSettingsFromGql(Map<String, dynamic> row) => {
+        'number_prefix': row['numberPrefix'],
+        'next_sequence': row['nextSequence'],
+        'default_payment_terms': row['defaultPaymentTerms'],
+        'default_include_vat': row['defaultIncludeVat'],
+        'default_payment_instructions': row['defaultPaymentInstructions'],
+        'default_notes': row['defaultNotes'],
+        'auto_reminder_enabled': row['autoReminderEnabled'],
+        'reminder_days_after_due': row['reminderDaysAfterDue'] ?? [],
+        'logo_url': row['logoUrl'],
       };
 
   static Map<String, dynamic> _expenseFromGql(Map<String, dynamic> row) => {
@@ -289,6 +353,337 @@ class GraphqlBusinessService {
         auth: true,
       );
       return data['businessInvoicePdfUrl']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getInvoice(int invoiceId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessInvoice(\$invoiceId: ID!) {
+          businessInvoice(invoiceId: \$invoiceId) { $_invoiceFields }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      final row = data['businessInvoice'];
+      if (row is Map<String, dynamic>) return _invoiceFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getInvoicePayments(int invoiceId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessInvoicePayments(\$invoiceId: ID!) {
+          businessInvoicePayments(invoiceId: \$invoiceId) { $_invoicePaymentFields }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      final rows = data['businessInvoicePayments'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_invoicePaymentFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getInvoiceDeliveries(int invoiceId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessInvoiceDeliveries(\$invoiceId: ID!) {
+          businessInvoiceDeliveries(invoiceId: \$invoiceId) { $_invoiceDeliveryFields }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      final rows = data['businessInvoiceDeliveries'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_invoiceDeliveryFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getInvoiceCreditNotes(int invoiceId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessInvoiceCreditNotes(\$invoiceId: ID!) {
+          businessInvoiceCreditNotes(invoiceId: \$invoiceId) { $_creditNoteFields }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      final rows = data['businessInvoiceCreditNotes'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_creditNoteFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateInvoice(
+    int invoiceId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessInvoice(\$invoiceId: ID!, \$input: UpdateBusinessInvoiceInput!) {
+          updateBusinessInvoice(invoiceId: \$invoiceId, input: \$input) { $_invoiceFields }
+        }
+        ''',
+        variables: {
+          'invoiceId': invoiceId.toString(),
+          'input': {
+            if (body['customer_id'] != null)
+              'customerId': body['customer_id'].toString(),
+            if (body['customer_name'] != null) 'customerName': body['customer_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['vat_rate'] != null) 'vatRate': body['vat_rate'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['due_date'] != null) 'dueDate': body['due_date'],
+            if (body['notes'] != null) 'notes': body['notes'],
+            if (body['status'] != null) 'status': body['status'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessInvoice'];
+      if (row is Map<String, dynamic>) return _invoiceFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> voidInvoice(int invoiceId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation VoidBusinessInvoice(\$invoiceId: ID!) {
+          voidBusinessInvoice(invoiceId: \$invoiceId) { id }
+        }
+        ''',
+        variables: {'invoiceId': invoiceId.toString()},
+        auth: true,
+      );
+      return result['voidBusinessInvoice'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> recordInvoicePayment(
+    int invoiceId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RecordBusinessInvoicePayment(\$invoiceId: ID!, \$input: RecordBusinessInvoicePaymentInput!) {
+          recordBusinessInvoicePayment(invoiceId: \$invoiceId, input: \$input) { $_invoicePaymentFields }
+        }
+        ''',
+        variables: {
+          'invoiceId': invoiceId.toString(),
+          'input': {
+            'amount': body['amount'],
+            'method': body['method'] ?? 'cash',
+            if (body['reference'] != null) 'reference': body['reference'],
+            if (body['notes'] != null) 'notes': body['notes'],
+            if (body['paid_at'] != null) 'paidAt': body['paid_at'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['recordBusinessInvoicePayment'];
+      if (row is Map<String, dynamic>) return _invoicePaymentFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> sendInvoiceMultiChannel(
+    int invoiceId,
+    List<String> channels,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SendBusinessInvoiceMultiChannel(\$invoiceId: ID!, \$input: SendBusinessInvoiceMultiChannelInput!) {
+          sendBusinessInvoiceMultiChannel(invoiceId: \$invoiceId, input: \$input) { id }
+        }
+        ''',
+        variables: {
+          'invoiceId': invoiceId.toString(),
+          'input': {'channels': channels},
+        },
+        auth: true,
+      );
+      return result['sendBusinessInvoiceMultiChannel'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> sendInvoiceReminder(
+    int invoiceId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SendBusinessInvoiceReminder(\$invoiceId: ID!, \$input: SendBusinessInvoiceReminderInput!) {
+          sendBusinessInvoiceReminder(invoiceId: \$invoiceId, input: \$input) { id }
+        }
+        ''',
+        variables: {
+          'invoiceId': invoiceId.toString(),
+          'input': {
+            'channel': body['channel'] ?? 'whatsapp',
+            if (body['message'] != null) 'message': body['message'],
+          },
+        },
+        auth: true,
+      );
+      return result['sendBusinessInvoiceReminder'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getInvoiceSettings(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessInvoiceSettings(\$businessId: ID!) {
+          businessInvoiceSettings(businessId: \$businessId) { $_invoiceSettingsFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final row = data['businessInvoiceSettings'];
+      if (row is Map<String, dynamic>) return _invoiceSettingsFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateInvoiceSettings(
+    int businessId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessInvoiceSettings(\$businessId: ID!, \$settings: JSON!) {
+          updateBusinessInvoiceSettings(businessId: \$businessId, settings: \$settings) { $_invoiceSettingsFields }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'settings': {
+            if (body['number_prefix'] != null) 'number_prefix': body['number_prefix'],
+            if (body['next_sequence'] != null) 'next_sequence': body['next_sequence'],
+            if (body['default_payment_terms'] != null)
+              'default_payment_terms': body['default_payment_terms'],
+            if (body.containsKey('default_include_vat'))
+              'default_include_vat': body['default_include_vat'],
+            if (body.containsKey('default_payment_instructions'))
+              'default_payment_instructions': body['default_payment_instructions'],
+            if (body.containsKey('default_notes')) 'default_notes': body['default_notes'],
+            if (body.containsKey('auto_reminder_enabled'))
+              'auto_reminder_enabled': body['auto_reminder_enabled'],
+            if (body['reminder_days_after_due'] != null)
+              'reminder_days_after_due': body['reminder_days_after_due'],
+            if (body['reminder_channels'] != null)
+              'reminder_channels': body['reminder_channels'],
+            if (body.containsKey('logo_url')) 'logo_url': body['logo_url'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessInvoiceSettings'];
+      if (row is Map<String, dynamic>) return _invoiceSettingsFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getReceivedInvoices() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessReceivedInvoices {
+          businessReceivedInvoices { $_invoiceFields }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['businessReceivedInvoices'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_invoiceFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createCreditNote(
+    int invoiceId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessCreditNote(\$invoiceId: ID!, \$input: CreateBusinessCreditNoteInput!) {
+          createBusinessCreditNote(invoiceId: \$invoiceId, input: \$input) { $_creditNoteFields }
+        }
+        ''',
+        variables: {
+          'invoiceId': invoiceId.toString(),
+          'input': {
+            if (body['items'] != null) 'items': body['items'],
+            if (body['reason'] != null) 'reason': body['reason'],
+            if (body['reason_text'] != null) 'reasonText': body['reason_text'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['application_method'] != null)
+              'applicationMethod': body['application_method'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessCreditNote'];
+      if (row is Map<String, dynamic>) return _creditNoteFromGql(row);
+      return null;
     } catch (_) {
       return null;
     }
