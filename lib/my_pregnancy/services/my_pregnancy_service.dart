@@ -2,7 +2,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_my_pregnancy_service.dart';
 import '../models/my_pregnancy_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -23,6 +25,14 @@ class MyPregnancyService {
     double? prePregnancyWeightKg,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.createPregnancy(
+        lastPeriodDate: lastPeriodDate,
+        babyName: babyName,
+        babyGender: babyGender,
+        prePregnancyWeightKg: prePregnancyWeightKg,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/pregnancy'),
@@ -51,8 +61,11 @@ class MyPregnancyService {
 
   Future<MyPregnancyResult<Pregnancy>> getMyPregnancy(int userId,
       {String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.getMyPregnancy();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/pregnancy?user_id=$userId'),
         headers: _headers(token),
       );
@@ -79,6 +92,17 @@ class MyPregnancyService {
     int? babyWeightGrams,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.updatePregnancy(
+        pregnancyId: pregnancyId,
+        babyName: babyName,
+        babyGender: babyGender,
+        status: status,
+        deliveryType: deliveryType,
+        deliveryDate: deliveryDate,
+        babyWeightGrams: babyWeightGrams,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-baby/pregnancy/$pregnancyId'),
@@ -111,7 +135,7 @@ class MyPregnancyService {
   Future<MyPregnancyResult<WeekInfo>> getWeekInfo(int weekNumber,
       {String? token}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/week-info/$weekNumber'),
         headers: _headers(token),
       );
@@ -133,8 +157,11 @@ class MyPregnancyService {
 
   Future<MyPregnancyListResult<AncVisit>> getAncSchedule(int pregnancyId,
       {String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.getAncSchedule(pregnancyId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/anc-visits?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
       );
@@ -156,6 +183,13 @@ class MyPregnancyService {
 
   Future<MyPregnancyResult<AncVisit>> markAncVisitDone(int visitId,
       {String? notes, String? facility, String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.markAncVisitDone(
+        visitId,
+        notes: notes,
+        facility: facility,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/anc-visits/$visitId/complete'),
@@ -188,6 +222,14 @@ class MyPregnancyService {
     required DateTime startTime,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.saveKickCount(
+        pregnancyId: pregnancyId,
+        count: count,
+        durationMinutes: durationMinutes,
+        startTime: startTime,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/kick-counts'),
@@ -214,8 +256,11 @@ class MyPregnancyService {
 
   Future<MyPregnancyListResult<KickCount>> getKickHistory(int pregnancyId,
       {String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyPregnancyService.getKickHistory(pregnancyId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '$_baseUrl/my-baby/kick-counts?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
@@ -278,7 +323,7 @@ class MyPregnancyService {
     try {
       var url = '$_baseUrl/my-baby/symptoms?pregnancy_id=$pregnancyId';
       if (weekNumber != null) url += '&week_number=$weekNumber';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: _headers(token),
       );
@@ -343,7 +388,7 @@ class MyPregnancyService {
       String url =
           '$_baseUrl/my-baby/contractions?pregnancy_id=$pregnancyId';
       if (sessionId != null) url += '&session_id=$sessionId';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: _headers(token),
       );
@@ -404,7 +449,7 @@ class MyPregnancyService {
     String? token,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/weights?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
       );
@@ -451,7 +496,7 @@ class MyPregnancyService {
       int pregnancyId,
       {String? token}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/birth-plan?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
       );
@@ -505,7 +550,7 @@ class MyPregnancyService {
       int pregnancyId,
       {String? token}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/moods?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
       );
@@ -625,7 +670,7 @@ class MyPregnancyService {
     String? token,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/journal?pregnancy_id=$pregnancyId'),
         headers: _headers(token),
       );
@@ -669,7 +714,7 @@ class MyPregnancyService {
       var url = '$_baseUrl/my-baby/nutrition-guide?';
       if (trimester != null) url += 'trimester=$trimester&';
       if (category != null) url += 'category=$category&';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: _headers(token),
       );
