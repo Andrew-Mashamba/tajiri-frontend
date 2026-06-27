@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../models/friend_models.dart';
 import '../../models/post_models.dart';
@@ -866,6 +869,39 @@ class GraphqlSocialService {
         'inactive_60d': row['inactive60d'],
         'mutual_gap': row['mutualGap'],
       });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> exportFollowListCsv(
+    String listType, {
+    String? q,
+    String? filter,
+    String? sort,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query FollowListExportCsv($listType: String!, $q: String, $filter: String, $sort: String) {
+          followListExportCsv(listType: $listType, q: $q, filter: $filter, sort: $sort)
+        }
+        ''',
+        variables: {
+          'listType': listType,
+          if (q != null) 'q': q,
+          if (filter != null) 'filter': filter,
+          if (sort != null) 'sort': sort,
+        },
+        auth: true,
+      );
+      final csv = data['followListExportCsv'] as String?;
+      if (csv == null || csv.isEmpty) return null;
+      final dir = await getTemporaryDirectory();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final path = '${dir.path}${Platform.pathSeparator}$listType-$today.csv';
+      await File(path).writeAsString(csv);
+      return path;
     } catch (_) {
       return null;
     }

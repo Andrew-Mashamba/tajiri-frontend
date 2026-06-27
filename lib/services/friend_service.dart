@@ -831,6 +831,9 @@ class FriendService {
   }
 
   Future<String?> exportFriendsCsv() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.exportFollowListCsv('friends');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final dir = await getTemporaryDirectory();
@@ -973,6 +976,9 @@ class FriendService {
   }
 
   Future<String?> exportFollowingCsv({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.exportFollowListCsv('following');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final dir = await getTemporaryDirectory();
@@ -1194,6 +1200,9 @@ class FriendService {
   /// Downloads followers CSV to a temp file via Dio. Returns the local
   /// path on success, null on failure.
   Future<String?> exportFollowersCsv({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.exportFollowListCsv('followers');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final dir = await getTemporaryDirectory();
