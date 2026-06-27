@@ -132,6 +132,19 @@ class GraphqlSocialService {
   static String? _friendsCursor;
   static String? _mutualFriendsCursor;
   static String? _searchUsersCursor;
+  static String? _managedFriendsCursor;
+  static String? _managedFriendsKey;
+  static String? _managedFollowersCursor;
+  static String? _managedFollowersKey;
+  static String? _managedFollowingCursor;
+  static String? _managedFollowingKey;
+
+  static String _managedQueryKey({
+    String? q,
+    String? filter,
+    String? sort,
+  }) =>
+      '${q ?? ''}|${filter ?? ''}|${sort ?? ''}';
 
   static Map<String, dynamic> _userProfileFromFollowRow(Map<String, dynamic> row) {
     final legacy = _followUserToLegacy(row);
@@ -571,6 +584,210 @@ class GraphqlSocialService {
       'is_followed_by': row['isFollowedBy'] == true,
       'followed_at': row['followedAt'],
     };
+  }
+
+  static Map<String, dynamic> _managedFollowUserToLegacy(Map<String, dynamic> row) {
+    final legacy = _followUserToLegacy(row);
+    legacy['is_mutual'] =
+        legacy['is_following'] == true && legacy['is_followed_by'] == true;
+    return legacy;
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> _queryManagedList({
+    required String fieldName,
+    required int page,
+    required int perPage,
+    required String? q,
+    required String? filter,
+    required String? sort,
+    required String? Function() getCursor,
+    required void Function(String?) setCursor,
+    required String? Function() getKey,
+    required void Function(String?) setKey,
+  }) async {
+    try {
+      final queryKey = _managedQueryKey(q: q, filter: filter, sort: sort);
+      if (page == 1 || getKey() != queryKey) {
+        setCursor(null);
+        setKey(queryKey);
+      }
+      final cursor = page > 1 ? getCursor() : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          users: <FollowUser>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query ManagedList(
+          \$q: String
+          \$filter: String
+          \$sort: String
+          \$cursor: String
+          \$limit: Int!
+        ) {
+          $fieldName(q: \$q, filter: \$filter, sort: \$sort, cursor: \$cursor, limit: \$limit) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'limit': perPage,
+          if (q != null && q.isNotEmpty) 'q': q,
+          if (filter != null) 'filter': filter,
+          if (sort != null) 'sort': sort,
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data[fieldName] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final users = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => FollowUser.fromJson(_managedFollowUserToLegacy(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) setCursor(nextCursor);
+      return (
+        success: true,
+        users: users,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        users: <FollowUser>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getManagedFriends({
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) =>
+      _queryManagedList(
+        fieldName: 'managedFriends',
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+        getCursor: () => _managedFriendsCursor,
+        setCursor: (v) => _managedFriendsCursor = v,
+        getKey: () => _managedFriendsKey,
+        setKey: (v) => _managedFriendsKey = v,
+      );
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getManagedFollowers({
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) =>
+      _queryManagedList(
+        fieldName: 'managedFollowers',
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+        getCursor: () => _managedFollowersCursor,
+        setCursor: (v) => _managedFollowersCursor = v,
+        getKey: () => _managedFollowersKey,
+        setKey: (v) => _managedFollowersKey = v,
+      );
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getManagedFollowing({
+    int page = 1,
+    int perPage = 30,
+    String? q,
+    String? filter,
+    String? sort,
+  }) =>
+      _queryManagedList(
+        fieldName: 'managedFollowing',
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+        getCursor: () => _managedFollowingCursor,
+        setCursor: (v) => _managedFollowingCursor = v,
+        getKey: () => _managedFollowingKey,
+        setKey: (v) => _managedFollowingKey = v,
+      );
+
+  static Future<FollowerInsights?> getFollowListInsights(String listType) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        r'''
+        query FollowListInsights($listType: String!) {
+          followListInsights(listType: $listType) {
+            total
+            newThisWeek
+            inactive60d
+            mutualGap
+          }
+        }
+        ''',
+        variables: {'listType': listType},
+        auth: true,
+      );
+      final row = data['followListInsights'] as Map<String, dynamic>?;
+      if (row == null) return null;
+      return FollowerInsights.fromJson({
+        'total': row['total'],
+        'new_this_week': row['newThisWeek'],
+        'inactive_60d': row['inactive60d'],
+        'mutual_gap': row['mutualGap'],
+      });
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<

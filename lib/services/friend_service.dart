@@ -734,6 +734,25 @@ class FriendService {
     String? filter,
     String? sort,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getManagedFriends(
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final params = <String, String>{
         'user_id': '$userId',
@@ -768,6 +787,9 @@ class FriendService {
   }
 
   Future<FollowerInsights?> getFriendsInsights() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.getFollowListInsights('friends');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await httpGetWithRetry(
@@ -835,6 +857,25 @@ class FriendService {
     String? filter,
     String? sort,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getManagedFollowing(
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final params = <String, String>{
         'page': '$page',
@@ -868,6 +909,9 @@ class FriendService {
   }
 
   Future<FollowerInsights?> getFollowingInsights({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.getFollowListInsights('following');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await httpGetWithRetry(
@@ -952,6 +996,25 @@ class FriendService {
     String? filter,
     String? sort,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getManagedFollowers(
+        page: page,
+        perPage: perPage,
+        q: q,
+        filter: filter,
+        sort: sort,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final params = <String, String>{
         'page': '$page',
@@ -985,6 +1048,9 @@ class FriendService {
   }
 
   Future<FollowerInsights?> getFollowerInsights({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.getFollowListInsights('followers');
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await httpGetWithRetry(
