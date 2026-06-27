@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/people_search_models.dart';
 import '../config/api_config.dart';
 import 'etag_cache_service.dart';
+import 'graphql/graphql_people_search_service.dart';
 import 'perf_logger.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -37,6 +38,51 @@ class PeopleSearchResult {
 /// - GET ?q=... → text search.
 /// - GET ?gender=... (or other filters) → filtered browse.
 class PeopleSearchService {
+  static bool _canUseGraphql({
+    String sort = 'relevance',
+    String? gender,
+    String? relationshipStatus,
+    bool? online,
+    String? location,
+    String? employer,
+    String? school,
+    String? sector,
+    bool? hasPhoto,
+    int? ageMin,
+    int? ageMax,
+    bool? hasBusiness,
+    bool? student,
+    bool? hasInterests,
+    bool? profileComplete,
+    bool? verified,
+    bool? possibleBusinessConnection,
+    bool? possibleEmployer,
+    List<String>? sortValues,
+    bool? shuffle,
+  }) {
+    if (!ApiConfig.useGraphqlBackend) return false;
+    if (sort != 'relevance') return false;
+    if (sortValues != null && sortValues.isNotEmpty) return false;
+    if (shuffle == true) return false;
+    return gender == null &&
+        relationshipStatus == null &&
+        online != true &&
+        location == null &&
+        employer == null &&
+        school == null &&
+        sector == null &&
+        hasPhoto != true &&
+        ageMin == null &&
+        ageMax == null &&
+        hasBusiness != true &&
+        student != true &&
+        hasInterests != true &&
+        profileComplete != true &&
+        verified != true &&
+        possibleBusinessConnection != true &&
+        possibleEmployer != true;
+  }
+
   /// Search people. Empty q with no filters returns discovery feed; with q (2+ chars) or filters, returns filtered results.
   /// Sort: relevance | newest | last_seen | most_active | friends_count | least_connected |
   ///       least_male_friends | least_female_friends | most_mutual_friends | similar_to_me |
@@ -68,6 +114,35 @@ class PeopleSearchService {
     List<String>? sortValues,
     bool? shuffle,
   }) async {
+    if (_canUseGraphql(
+      sort: sort,
+      gender: gender,
+      relationshipStatus: relationshipStatus,
+      online: online,
+      location: location,
+      employer: employer,
+      school: school,
+      sector: sector,
+      hasPhoto: hasPhoto,
+      ageMin: ageMin,
+      ageMax: ageMax,
+      hasBusiness: hasBusiness,
+      student: student,
+      hasInterests: hasInterests,
+      profileComplete: profileComplete,
+      verified: verified,
+      possibleBusinessConnection: possibleBusinessConnection,
+      possibleEmployer: possibleEmployer,
+      sortValues: sortValues,
+      shuffle: shuffle,
+    )) {
+      return GraphqlPeopleSearchService.search(
+        query: query,
+        page: page,
+        perPage: perPage,
+        friendsOfFriendsOnly: friendsOfFriendsOnly == true,
+      );
+    }
     try {
       // Multiple sort/relevance: send comma-separated (e.g. sort=single_first,same_area_first)
       final effectiveSort = (sortValues != null && sortValues.isNotEmpty)
@@ -112,7 +187,7 @@ class PeopleSearchService {
         if (cachedEtag != null) headers['If-None-Match'] = cachedEtag;
       } catch (_) {}
 
-      final response = await http.get(uri, headers: headers.isNotEmpty ? headers : null)
+      final response = await httpGetWithRetry(uri, headers: headers.isNotEmpty ? headers : null)
           .timeout(const Duration(seconds: 10));
 
       // 304 Not Modified — use cached body
