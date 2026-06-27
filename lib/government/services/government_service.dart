@@ -1,7 +1,9 @@
 // lib/government/services/government_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_government_service.dart';
 import '../models/government_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -13,12 +15,15 @@ class GovernmentService {
     String? category,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.getServices(category: category);
+    }
     try {
       final params = <String, String>{'page': '$page'};
       if (category != null) params['category'] = category;
 
       final uri = Uri.parse('$_baseUrl/government/services').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -42,7 +47,7 @@ class GovernmentService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/government/queries?user_id=$userId&page=$page'),
       );
       if (response.statusCode == 200) {

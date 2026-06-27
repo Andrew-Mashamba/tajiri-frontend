@@ -1,0 +1,275 @@
+import '../../events/models/event.dart';
+import '../../events/models/event_enums.dart';
+import '../../events/models/event_rsvp.dart';
+import 'tajiri_graphql_client.dart';
+
+/// GraphQL events feed and RSVP (Phase 92). Filtered browse stays REST-only.
+class GraphqlEventsService {
+  static String? _feedCursor;
+  static int _feedLastPage = 1;
+
+  static const _eventFields = r'''
+    id
+    creatorId
+    title
+    description
+    locationName
+    latitude
+    longitude
+    startsAt
+    endsAt
+    coverUrl
+    status
+    goingCount
+    interestedCount
+    viewerRsvpStatus
+    createdAt
+  ''';
+
+  static Map<String, dynamic> _eventToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'name': row['title'],
+      'title': row['title'],
+      'description': row['description'],
+      'start_date': row['startsAt'],
+      'end_date': row['endsAt'],
+      'location_name': row['locationName'],
+      'latitude': row['latitude'],
+      'longitude': row['longitude'],
+      'cover_photo_url': row['coverUrl'],
+      'creator_id': int.tryParse(row['creatorId']?.toString() ?? '') ?? 0,
+      'going_count': row['goingCount'] ?? 0,
+      'interested_count': row['interestedCount'] ?? 0,
+      'user_response': row['viewerRsvpStatus'],
+      'status': row['status'],
+      'created_at': row['createdAt'],
+    };
+  }
+
+  static Event _parseEvent(Map<String, dynamic> row) {
+    return Event.fromJson(_eventToLegacy(row));
+  }
+
+  static Future<PaginatedResult<Event>> getEventsFeed({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      if (page == 1) {
+        _feedCursor = null;
+        _feedLastPage = 1;
+      } else if (page > _feedLastPage + 1) {
+        return PaginatedResult(success: false, message: 'Invalid page');
+      } else if (page > 1 && _feedCursor == null) {
+        return PaginatedResult(
+          success: true,
+          items: const [],
+          currentPage: page,
+          lastPage: page,
+          total: 0,
+          perPage: perPage,
+        );
+      }
+
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query EventsFeed(\$cursor: String) {
+          eventsFeed(cursor: \$cursor) {
+            items { $_eventFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          if (_feedCursor != null) 'cursor': _feedCursor,
+        },
+        auth: true,
+      );
+      final conn = data['eventsFeed'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final items = rows.whereType<Map<String, dynamic>>().map(_parseEvent).toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) {
+        _feedCursor = nextCursor;
+        _feedLastPage = page + 1;
+      } else {
+        _feedLastPage = page;
+      }
+
+      return PaginatedResult(
+        success: true,
+        items: items,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        total: items.length,
+        perPage: perPage,
+      );
+    } catch (e) {
+      return PaginatedResult(
+        success: false,
+        message: 'Imeshindwa kupakia matukio: $e',
+      );
+    }
+  }
+
+  static Future<SingleResult<Event>> getEvent({required int eventId}) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query EventDetail(\$eventId: ID!) {
+          eventDetail(eventId: \$eventId) {
+            $_eventFields
+          }
+        }
+        ''',
+        variables: {'eventId': eventId.toString()},
+        auth: true,
+      );
+      final row = data['eventDetail'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(success: false, message: 'Event not found');
+      }
+      return SingleResult(success: true, data: _parseEvent(row));
+    } catch (e) {
+      return SingleResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<SingleResult<Event>> createEvent({
+    required String name,
+    required String description,
+    required EventCategory category,
+    required EventType type,
+    required String startDate,
+    String? endDate,
+    String? startTime,
+    String? endTime,
+    String timezone = 'Africa/Dar_es_Salaam',
+    bool isAllDay = false,
+    EventPrivacy privacy = EventPrivacy.public,
+    String? locationName,
+    String? locationAddress,
+    double? latitude,
+    double? longitude,
+    int? regionId,
+    int? districtId,
+    bool isOnline = false,
+    String? onlineLink,
+    String? onlinePlatform,
+    bool isFree = true,
+    String ticketCurrency = 'TZS',
+    bool hasWaitlist = false,
+    String? refundPolicy,
+    int? groupId,
+    List<int>? coHostIds,
+    List<String>? tags,
+    String? coverPhotoPath,
+    List<String>? galleryPaths,
+  }) async {
+    try {
+      String startsAt = startDate;
+      if (startTime != null && startTime.isNotEmpty) {
+        final base = DateTime.tryParse(startDate);
+        if (base != null) {
+          final parts = startTime.split(':');
+          if (parts.length >= 2) {
+            startsAt = DateTime(
+              base.year,
+              base.month,
+              base.day,
+              int.tryParse(parts[0]) ?? 0,
+              int.tryParse(parts[1]) ?? 0,
+            ).toIso8601String();
+          }
+        }
+      }
+
+      String? coverUrl;
+      if (coverPhotoPath != null &&
+          (coverPhotoPath.startsWith('http://') ||
+              coverPhotoPath.startsWith('https://'))) {
+        coverUrl = coverPhotoPath;
+      }
+
+      final data = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateEvent(\$input: CreateEventInput!) {
+          createEvent(input: \$input) {
+            $_eventFields
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'title': name,
+            'description': description,
+            'startsAt': startsAt,
+            if (endDate != null) 'endsAt': endDate,
+            if (locationName != null) 'locationName': locationName,
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
+            if (coverUrl != null) 'coverUrl': coverUrl,
+            'isPublic': privacy == EventPrivacy.public,
+            'status': 'published',
+          },
+        },
+        auth: true,
+      );
+      final row = data['createEvent'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(
+          success: false,
+          message: 'Imeshindwa kuunda tukio',
+        );
+      }
+      return SingleResult(success: true, data: _parseEvent(row));
+    } catch (e) {
+      return SingleResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<SingleResult<EventRSVP>> respondToEvent({
+    required int eventId,
+    required RSVPStatus status,
+    int guestCount = 0,
+    List<String>? guestNames,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RsvpEvent(\$eventId: ID!, \$status: String!) {
+          rsvpEvent(eventId: \$eventId, status: \$status) {
+            $_eventFields
+          }
+        }
+        ''',
+        variables: {
+          'eventId': eventId.toString(),
+          'status': status.apiValue,
+        },
+        auth: true,
+      );
+      final row = data['rsvpEvent'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(success: false, message: 'RSVP failed');
+      }
+      return SingleResult(
+        success: true,
+        data: EventRSVP(
+          id: 0,
+          eventId: eventId,
+          userId: 0,
+          status: status,
+          guestCount: guestCount,
+          guestNames: guestNames ?? const [],
+          respondedAt: DateTime.now(),
+        ),
+      );
+    } catch (e) {
+      return SingleResult(success: false, message: '$e');
+    }
+  }
+}

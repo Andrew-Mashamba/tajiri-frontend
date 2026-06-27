@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_service.dart';
 import '../../services/income_service.dart';
 import '../models/tajirika_models.dart';
 
@@ -28,6 +30,9 @@ class TajirikaService {
     int userId,
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.registerPartner(data);
+    }
     try {
       data['user_id'] = userId;
       final response = await http.post(
@@ -54,8 +59,11 @@ class TajirikaService {
   }
 
   static Future<PartnerResult> getMyPartnerProfile(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getMyPartnerProfile();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -85,7 +93,7 @@ class TajirikaService {
     int partnerId,
   ) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -112,6 +120,9 @@ class TajirikaService {
     int userId,
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updatePartnerProfile(data);
+    }
     try {
       data['user_id'] = userId;
       final response = await http.put(
@@ -339,7 +350,7 @@ class TajirikaService {
 
   static Future<VerificationStatus> getVerificationStatus(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/verifications?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -446,7 +457,7 @@ class TajirikaService {
 
   static Future<TierProgress> getTierProgress(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/tier-progress?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -464,7 +475,7 @@ class TajirikaService {
 
   static Future<BadgeListResult> getBadges(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/badges?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -490,7 +501,7 @@ class TajirikaService {
     int partnerId,
   ) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId/portfolio'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -589,7 +600,7 @@ class TajirikaService {
 
       final uri = Uri.parse('$_baseUrl/tajirika/training')
           .replace(queryParameters: params);
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200 && body['success'] == true) {
@@ -634,7 +645,7 @@ class TajirikaService {
     int userId,
   ) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/mentorship?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -660,7 +671,7 @@ class TajirikaService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/referrals?user_id=$userId&page=$page'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -681,7 +692,7 @@ class TajirikaService {
 
   static Future<ReferralStats> getReferralStats(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/referrals/stats?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -705,7 +716,7 @@ class TajirikaService {
     String period = 'monthly',
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/earnings?user_id=$userId&period=$period'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -723,7 +734,7 @@ class TajirikaService {
 
   static Future<Map<String, double>> getEarningsByModule(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/earnings/by-module?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -785,7 +796,7 @@ class TajirikaService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/payouts?user_id=$userId&page=$page'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -806,7 +817,7 @@ class TajirikaService {
 
   static Future<PartnerStats> getPartnerStats(String token, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/stats?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -834,6 +845,17 @@ class TajirikaService {
     Object? dropOffMode,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend &&
+        regionId == null &&
+        tier == null &&
+        minRating == null &&
+        available == null &&
+        dropOffMode == null &&
+        page == 1) {
+      return GraphqlTajirikaService.searchPartners(
+        skill: skills != null && skills.isNotEmpty ? skills.first : null,
+      );
+    }
     try {
       final params = <String, String>{'page': page.toString()};
       if (skills != null && skills.isNotEmpty) params['skills'] = skills.join(',');
@@ -844,7 +866,7 @@ class TajirikaService {
 
       final uri = Uri.parse('$_baseUrl/tajirika/partners')
           .replace(queryParameters: params);
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
 
       final body = jsonDecode(response.body);
       if (response.statusCode == 200 && body['success'] == true) {

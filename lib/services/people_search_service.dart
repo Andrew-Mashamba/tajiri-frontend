@@ -72,15 +72,7 @@ class PeopleSearchService {
     if (!_graphqlSorts.contains(sort)) return false;
     if (sortValues != null && sortValues.isNotEmpty) return false;
     if (shuffle == true) return false;
-    return gender == null &&
-        relationshipStatus == null &&
-        location == null &&
-        employer == null &&
-        school == null &&
-        sector == null &&
-        ageMin == null &&
-        ageMax == null &&
-        hasBusiness != true &&
+    return hasBusiness != true &&
         student != true &&
         hasInterests != true &&
         profileComplete != true &&
@@ -150,6 +142,14 @@ class PeopleSearchService {
         sort: sort,
         hasPhoto: hasPhoto,
         online: online,
+        gender: gender,
+        location: location,
+        employer: employer,
+        school: school,
+        sector: sector,
+        relationshipStatus: relationshipStatus,
+        ageMin: ageMin,
+        ageMax: ageMax,
       );
     }
     try {

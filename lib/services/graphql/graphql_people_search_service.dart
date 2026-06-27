@@ -1,8 +1,9 @@
 import '../../models/people_search_models.dart';
+import '../people_search_service.dart';
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL people search / discovery (Phase 78, extended Phase 88).
-/// Gender/location/employer/school filters, multi-sort, shuffle, and ETag remain REST-only.
+/// GraphQL people search / discovery (Phase 78, extended Phase 88–90).
+/// Multi-sort, shuffle, and advanced filters remain REST-only.
 class GraphqlPeopleSearchService {
   static String? _cursor;
   static int _lastPage = 1;
@@ -49,10 +50,18 @@ class GraphqlPeopleSearchService {
     String sort = 'relevance',
     bool? hasPhoto,
     bool? online,
+    String? gender,
+    String? location,
+    String? employer,
+    String? school,
+    String? sector,
+    String? relationshipStatus,
+    int? ageMin,
+    int? ageMax,
   }) async {
     try {
       final key =
-          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}';
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
@@ -100,10 +109,28 @@ class GraphqlPeopleSearchService {
           if (_cursor != null) 'cursor': _cursor,
           'friendsOfFriendsOnly': friendsOfFriendsOnly,
           'sort': graphqlSort,
-          if (hasPhoto == true || online == true)
+          if (hasPhoto == true ||
+              online == true ||
+              gender != null ||
+              location != null ||
+              employer != null ||
+              school != null ||
+              sector != null ||
+              relationshipStatus != null ||
+              ageMin != null ||
+              ageMax != null)
             'filter': {
               if (hasPhoto == true) 'hasPhoto': true,
               if (online == true) 'online': true,
+              if (gender != null && gender.isNotEmpty) 'gender': gender,
+              if (location != null && location.isNotEmpty) 'location': location,
+              if (employer != null && employer.isNotEmpty) 'employer': employer,
+              if (school != null && school.isNotEmpty) 'school': school,
+              if (sector != null && sector.isNotEmpty) 'sector': sector,
+              if (relationshipStatus != null && relationshipStatus.isNotEmpty)
+                'relationshipStatus': relationshipStatus,
+              if (ageMin != null) 'ageMin': ageMin,
+              if (ageMax != null) 'ageMax': ageMax,
             },
         },
         auth: true,

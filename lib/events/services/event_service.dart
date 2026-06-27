@@ -4,6 +4,8 @@ import '../models/event.dart';
 import '../models/event_enums.dart';
 import '../models/event_rsvp.dart';
 import '../../services/authenticated_dio.dart';
+import '../../config/api_config.dart';
+import '../../services/graphql/graphql_events_service.dart';
 
 class EventService {
   Dio get _dio => AuthenticatedDio.instance;
@@ -11,6 +13,9 @@ class EventService {
   // ── Discovery & Feed ──
 
   Future<PaginatedResult<Event>> getEventsFeed({int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getEventsFeed(page: page, perPage: perPage);
+    }
     try {
       final response = await _dio.get('/events/feed', queryParameters: {
         'page': page,
@@ -166,6 +171,9 @@ class EventService {
   // ── CRUD ──
 
   Future<SingleResult<Event>> getEvent({required int eventId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getEvent(eventId: eventId);
+    }
     try {
       final response = await _dio.get('/events/$eventId');
       if (response.data['success'] == true) {
@@ -208,6 +216,39 @@ class EventService {
     String? coverPhotoPath,
     List<String>? galleryPaths,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.createEvent(
+        name: name,
+        description: description,
+        category: category,
+        type: type,
+        startDate: startDate,
+        endDate: endDate,
+        startTime: startTime,
+        endTime: endTime,
+        timezone: timezone,
+        isAllDay: isAllDay,
+        privacy: privacy,
+        locationName: locationName,
+        locationAddress: locationAddress,
+        latitude: latitude,
+        longitude: longitude,
+        regionId: regionId,
+        districtId: districtId,
+        isOnline: isOnline,
+        onlineLink: onlineLink,
+        onlinePlatform: onlinePlatform,
+        isFree: isFree,
+        ticketCurrency: ticketCurrency,
+        hasWaitlist: hasWaitlist,
+        refundPolicy: refundPolicy,
+        groupId: groupId,
+        coHostIds: coHostIds,
+        tags: tags,
+        coverPhotoPath: coverPhotoPath,
+        galleryPaths: galleryPaths,
+      );
+    }
     try {
       final formData = FormData.fromMap({
         'name': name,
@@ -339,6 +380,14 @@ class EventService {
     int guestCount = 0,
     List<String>? guestNames,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.respondToEvent(
+        eventId: eventId,
+        status: status,
+        guestCount: guestCount,
+        guestNames: guestNames,
+      );
+    }
     try {
       final response = await _dio.post('/events/$eventId/rsvp', data: {
         'status': status.apiValue,

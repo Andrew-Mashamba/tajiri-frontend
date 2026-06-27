@@ -1,7 +1,9 @@
 // lib/my_parents/services/my_parents_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_my_parents_service.dart';
 import '../models/my_parents_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -28,6 +30,26 @@ class MyParentsService {
     String? nhifNumber,
     List<Map<String, String>>? emergencyContacts,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.registerParent(
+        userId: userId,
+        name: name,
+        dateOfBirth: dateOfBirth,
+        relationship: relationship,
+        gender: gender,
+        phone: phone,
+        whatsappAvailable: whatsappAvailable,
+        locationName: locationName,
+        livingSituation: livingSituation,
+        bloodType: bloodType,
+        mobilityStatus: mobilityStatus,
+        cognitiveStatus: cognitiveStatus,
+        chronicConditions: chronicConditions,
+        allergies: allergies,
+        nhifNumber: nhifNumber,
+        emergencyContacts: emergencyContacts,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/parents'),
@@ -67,8 +89,11 @@ class MyParentsService {
 
   Future<ParentListResult<Parent>> getMyParents(
       String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getMyParents();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-parents/parents?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -106,6 +131,26 @@ class MyParentsService {
     String? nhifStatus,
     List<Map<String, String>>? emergencyContacts,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.updateParent(
+        parentId: parentId,
+        name: name,
+        gender: gender,
+        phone: phone,
+        whatsappAvailable: whatsappAvailable,
+        photoUrl: photoUrl,
+        locationName: locationName,
+        livingSituation: livingSituation,
+        bloodType: bloodType,
+        mobilityStatus: mobilityStatus,
+        cognitiveStatus: cognitiveStatus,
+        chronicConditions: chronicConditions,
+        allergies: allergies,
+        nhifNumber: nhifNumber,
+        nhifStatus: nhifStatus,
+        emergencyContacts: emergencyContacts,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-parents/parents/$parentId'),
@@ -145,6 +190,9 @@ class MyParentsService {
     required String token,
     required int parentId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.deleteParent(parentId: parentId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/parents/$parentId'),
@@ -177,6 +225,21 @@ class MyParentsService {
     int? pillsPerDose,
     int? refillThreshold,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.addMedication(
+        parentId: parentId,
+        name: name,
+        dosage: dosage,
+        frequency: frequency,
+        timeSlots: timeSlots,
+        startDate: startDate,
+        endDate: endDate,
+        prescribingDoctor: prescribingDoctor,
+        pillsRemaining: pillsRemaining,
+        pillsPerDose: pillsPerDose,
+        refillThreshold: refillThreshold,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/medications'),
@@ -211,8 +274,11 @@ class MyParentsService {
 
   Future<ParentListResult<ParentMedication>> getMedications(
       String token, int parentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getMedications(parentId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-parents/medications?parent_id=$parentId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -246,6 +312,21 @@ class MyParentsService {
     int? refillThreshold,
     bool? isActive,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.updateMedication(
+        medicationId: medicationId,
+        name: name,
+        dosage: dosage,
+        frequency: frequency,
+        timeSlots: timeSlots,
+        endDate: endDate,
+        prescribingDoctor: prescribingDoctor,
+        pillsRemaining: pillsRemaining,
+        pillsPerDose: pillsPerDose,
+        refillThreshold: refillThreshold,
+        isActive: isActive,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-parents/medications/$medicationId'),
@@ -281,6 +362,9 @@ class MyParentsService {
     required String token,
     required int medicationId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.deleteMedication(medicationId: medicationId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/medications/$medicationId'),
@@ -310,6 +394,17 @@ class MyParentsService {
     String? notes,
     DateTime? measuredAt,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.logHealthReading(
+        parentId: parentId,
+        type: type,
+        value: value,
+        value2: value2,
+        unit: unit,
+        notes: notes,
+        measuredAt: measuredAt,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/readings'),
@@ -341,11 +436,14 @@ class MyParentsService {
   Future<ParentListResult<ParentHealthReading>> getHealthReadings(
       String token, int parentId,
       {String? type}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getHealthReadings(parentId, type: type);
+    }
     try {
       String url =
           '$_baseUrl/my-parents/readings?parent_id=$parentId';
       if (type != null) url += '&type=$type';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -369,6 +467,9 @@ class MyParentsService {
     required String token,
     required int readingId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.deleteHealthReading(readingId: readingId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/readings/$readingId'),
@@ -398,6 +499,17 @@ class MyParentsService {
     String? time,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.addAppointment(
+        parentId: parentId,
+        doctorName: doctorName,
+        facility: facility,
+        reason: reason,
+        date: date,
+        time: time,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/appointments'),
@@ -428,11 +540,14 @@ class MyParentsService {
   Future<ParentListResult<ParentAppointment>> getAppointments(
       String token, int parentId,
       {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getAppointments(parentId, status: status);
+    }
     try {
       String url =
           '$_baseUrl/my-parents/appointments?parent_id=$parentId';
       if (status != null) url += '&status=$status';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -467,6 +582,18 @@ class MyParentsService {
     String? notes,
     String? status,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.updateAppointment(
+        appointmentId: appointmentId,
+        doctorName: doctorName,
+        facility: facility,
+        reason: reason,
+        date: date,
+        time: time,
+        notes: notes,
+        status: status,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-parents/appointments/$appointmentId'),
@@ -503,6 +630,11 @@ class MyParentsService {
     required String token,
     required int appointmentId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.deleteAppointment(
+        appointmentId: appointmentId,
+      );
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/appointments/$appointmentId'),
@@ -560,7 +692,7 @@ class MyParentsService {
   Future<ParentListResult<FinancialSupport>> getSupportHistory(
       String token, int parentId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-parents/support?parent_id=$parentId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -647,6 +779,17 @@ class MyParentsService {
     bool socialized = false,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.saveWellnessCheckIn(
+        parentId: parentId,
+        mood: mood,
+        ateMeals: ateMeals,
+        tookMedication: tookMedication,
+        exercised: exercised,
+        socialized: socialized,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/wellness'),
@@ -677,8 +820,11 @@ class MyParentsService {
 
   Future<ParentListResult<WellnessCheckIn>> getWellnessHistory(
       String token, int parentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getWellnessHistory(parentId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-parents/wellness?parent_id=$parentId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -709,6 +855,16 @@ class MyParentsService {
     DateTime? dueDate,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.addCareTask(
+        parentId: parentId,
+        title: title,
+        description: description,
+        assignedTo: assignedTo,
+        dueDate: dueDate,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/tasks'),
@@ -738,11 +894,14 @@ class MyParentsService {
   Future<ParentListResult<CareTask>> getCareTasks(
       String token, int parentId,
       {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getCareTasks(parentId, status: status);
+    }
     try {
       String url =
           '$_baseUrl/my-parents/tasks?parent_id=$parentId';
       if (status != null) url += '&status=$status';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -772,6 +931,14 @@ class MyParentsService {
     String? status,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.updateCareTask(
+        taskId: taskId,
+        title: title,
+        dueDate: dueDate,
+        status: status,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-parents/tasks/$taskId'),
@@ -802,6 +969,9 @@ class MyParentsService {
     required String token,
     required int taskId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.deleteCareTask(taskId: taskId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/tasks/$taskId'),
@@ -826,6 +996,12 @@ class MyParentsService {
     required int parentId,
     required String role,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.inviteCaregiver(
+        parentId: parentId,
+        role: role,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/caregivers/invite'),
@@ -851,8 +1027,11 @@ class MyParentsService {
 
   Future<ParentListResult<ParentCaregiverShare>> listCaregivers(
       String token, int parentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.listCaregivers(parentId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-parents/caregivers?parent_id=$parentId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -876,6 +1055,9 @@ class MyParentsService {
     required String token,
     required int shareId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.revokeCaregiver(shareId: shareId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/my-parents/caregivers/$shareId'),
@@ -897,6 +1079,9 @@ class MyParentsService {
     required String token,
     required String inviteCode,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.acceptInvite(inviteCode: inviteCode);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-parents/caregivers/accept'),
@@ -921,8 +1106,11 @@ class MyParentsService {
 
   Future<ParentResult<Map<String, dynamic>>> getEmergencyCard(
       String token, int parentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.getEmergencyCard(parentId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '$_baseUrl/my-parents/emergency-card?parent_id=$parentId'),
         headers: ApiConfig.authHeaders(token),
@@ -947,6 +1135,12 @@ class MyParentsService {
     required int parentId,
     required Map<String, dynamic> cardData,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyParentsService.saveEmergencyCard(
+        parentId: parentId,
+        cardData: cardData,
+      );
+    }
     try {
       final body = Map<String, dynamic>.from(cardData);
       body['parent_id'] = parentId;
