@@ -1,6 +1,8 @@
 // lib/fuel_delivery/services/fuel_delivery_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_fuel_delivery_service.dart';
 import '../models/fuel_delivery_models.dart';
 
 Dio get _dio => AuthenticatedDio.instance;
@@ -10,6 +12,9 @@ class FuelDeliveryService {
 
   static Future<PaginatedResult<FuelPrice>> getFuelPrices(
       {String? region}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.getFuelPrices(region: region);
+    }
     try {
       final r = await _dio.get('/fuel-delivery/prices',
           queryParameters: {if (region != null) 'region': region});
@@ -30,6 +35,9 @@ class FuelDeliveryService {
 
   static Future<SingleResult<FuelOrder>> placeOrder(
       Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.placeOrder(body);
+    }
     try {
       final r = await _dio.post('/fuel-delivery/orders', data: body);
       final data = r.data;
@@ -45,6 +53,9 @@ class FuelDeliveryService {
 
   static Future<PaginatedResult<FuelOrder>> getMyOrders(
       {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.getMyOrders(page: page);
+    }
     try {
       final r = await _dio.get('/fuel-delivery/orders',
           queryParameters: {'page': page});
@@ -67,6 +78,9 @@ class FuelDeliveryService {
   }
 
   static Future<SingleResult<FuelOrder>> getOrderDetail(int orderId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.getOrderDetail(orderId);
+    }
     try {
       final r = await _dio.get('/fuel-delivery/orders/$orderId');
       final data = r.data;
@@ -81,6 +95,9 @@ class FuelDeliveryService {
   }
 
   static Future<SingleResult<void>> cancelOrder(int orderId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.cancelOrder(orderId);
+    }
     try {
       final r = await _dio.post('/fuel-delivery/orders/$orderId/cancel');
       return SingleResult(success: r.data['success'] == true);
@@ -96,6 +113,13 @@ class FuelDeliveryService {
     required double longitude,
     required double liters,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFuelDeliveryService.estimateDeliveryFee(
+        latitude: latitude,
+        longitude: longitude,
+        liters: liters,
+      );
+    }
     try {
       final r = await _dio.post('/fuel-delivery/estimate-fee', data: {
         'latitude': latitude,
