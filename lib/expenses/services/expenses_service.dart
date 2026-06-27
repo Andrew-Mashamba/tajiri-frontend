@@ -13,10 +13,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:http_parser/http_parser.dart';
 
 import '../../business/models/business_models.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_business_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../transactions/services/central_transaction_service.dart';
 
@@ -68,6 +70,16 @@ class ExpensesService {
     String? category,
     int? userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getExpenses(
+        businessId,
+        category: category,
+        month: month,
+        year: year,
+      );
+      final list = rows.map((e) => Expense.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     final uid = await _resolveUserId(userId);
     if (uid == null) {
       return BusinessListResult(success: false, message: 'Not logged in');
@@ -82,7 +94,7 @@ class ExpensesService {
     url += '?${params.join('&')}';
     _log('getExpenses → GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       _log('getExpenses ← HTTP ${res.statusCode} ${_previewBody(res.body)}');
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -118,7 +130,7 @@ class ExpensesService {
     url += '?${params.join('&')}';
     _log('getExpenseSummary → GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       _log('getExpenseSummary ← HTTP ${res.statusCode} ${_previewBody(res.body)}');
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -141,6 +153,17 @@ class ExpensesService {
     Map<String, dynamic> body, {
     int? userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createExpense(businessId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to add expense');
+      }
+      return BusinessResult(
+        success: true,
+        data: Expense.fromJson(data),
+        message: 'Matumizi yameongezwa',
+      );
+    }
     final uid = await _resolveUserId(userId);
     if (uid == null) {
       return BusinessResult(success: false, message: 'Not logged in');
@@ -271,6 +294,13 @@ class ExpensesService {
     int expenseId, {
     int? userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.deleteExpense(expenseId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? 'Expense deleted' : 'Failed to delete expense',
+      );
+    }
     final uid = await _resolveUserId(userId);
     if (uid == null) {
       return BusinessResult(success: false, message: 'Not logged in');

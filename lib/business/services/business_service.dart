@@ -6,8 +6,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_business_service.dart';
 import '../models/business_models.dart';
 import '../../tra/models/tra_models.dart' show TaxDeadline;
 import '../../reminders/models/reminder_models.dart' show ReminderItem;
@@ -25,11 +27,16 @@ class BusinessService {
   /// Get all businesses for a user.
   static Future<BusinessListResult<Business>> getMyBusinesses(
       String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getMyBusinesses();
+      final list = rows.map((e) => Business.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list, total: list.length);
+    }
     try {
       final url = '$_baseUrl/business?user_id=$userId';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -49,6 +56,17 @@ class BusinessService {
   /// Create a new business.
   static Future<BusinessResult<Business>> createBusiness(
       String token, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createBusiness(body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create business');
+      }
+      return BusinessResult(
+        success: true,
+        data: Business.fromJson(data),
+        message: 'Business created',
+      );
+    }
     try {
       final url = '$_baseUrl/business';
       _log('POST $url');
@@ -116,7 +134,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/documents';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -183,7 +201,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/customers';
       if (search != null && search.isNotEmpty) url += '?search=$search';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -255,7 +273,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/debts';
       if (status != null && status.isNotEmpty) url += '?status=$status';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -313,7 +331,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/debts/summary';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -332,11 +350,16 @@ class BusinessService {
 
   static Future<BusinessListResult<Invoice>> getInvoices(
       String token, int businessId, {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getInvoices(businessId, status: status);
+      final list = rows.map((e) => Invoice.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       var url = '$_baseUrl/business/$businessId/invoices';
       if (status != null && status.isNotEmpty) url += '?status=$status';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -352,6 +375,17 @@ class BusinessService {
 
   static Future<BusinessResult<Invoice>> createInvoice(
       String token, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createInvoice(body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create invoice');
+      }
+      return BusinessResult(
+        success: true,
+        data: Invoice.fromJson(data),
+        message: 'Invoice created',
+      );
+    }
     try {
       final url = '$_baseUrl/business/invoices';
       final res = await http.post(Uri.parse(url),
@@ -371,6 +405,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> sendInvoice(
       String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.sendInvoice(invoiceId);
+      return BusinessResult(success: ok, message: ok ? 'Invoice sent' : 'Failed to send');
+    }
     try {
       final url = '$_baseUrl/business/invoices/$invoiceId/send';
       final res = await http.post(Uri.parse(url),
@@ -384,6 +422,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> markInvoicePaid(
       String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.markInvoicePaid(invoiceId);
+      return BusinessResult(success: ok, message: ok ? 'Invoice paid' : 'Failed to mark paid');
+    }
     try {
       final url = '$_baseUrl/business/invoices/$invoiceId/paid';
       final res = await http.post(Uri.parse(url),
@@ -397,10 +439,17 @@ class BusinessService {
 
   static Future<BusinessResult<String>> getInvoicePdf(
       String token, int invoiceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final url = await GraphqlBusinessService.getInvoicePdfUrl(invoiceId);
+      if (url == null || url.isEmpty) {
+        return BusinessResult(success: false, message: 'PDF not available');
+      }
+      return BusinessResult(success: true, data: url);
+    }
     try {
       final url = '$_baseUrl/business/invoices/$invoiceId/pdf';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -421,7 +470,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/employees';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -524,7 +573,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/payroll';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -575,7 +624,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/registration-guide';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -658,7 +707,7 @@ class BusinessService {
     int businessId,
   ) async {
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/business/$businessId/email/accounts'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -727,7 +776,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/quotes';
       if (status != null && status.isNotEmpty) url += '?status=$status';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -802,7 +851,7 @@ class BusinessService {
       if (category != null && category.isNotEmpty) params.add('category=$category');
       if (params.isNotEmpty) url += '?${params.join('&')}';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -884,7 +933,7 @@ class BusinessService {
       if (year != null) params.add('year=$year');
       if (params.isNotEmpty) url += '?${params.join('&')}';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -906,7 +955,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/vfd';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -964,7 +1013,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/fiscal-receipts';
       if (page != null) url += '?page=$page';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -1006,7 +1055,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/recurring-invoices';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -1060,7 +1109,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/credit-report';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -1078,7 +1127,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/credit-score';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -1120,7 +1169,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/card';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -1140,7 +1189,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/card/share';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -1161,7 +1210,7 @@ class BusinessService {
     try {
       final url = '$_baseUrl/business/$businessId/reminders';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return BusinessResult(
@@ -1217,7 +1266,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/suppliers';
       if (search != null && search.isNotEmpty) url += '?search=$search';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -1310,7 +1359,7 @@ class BusinessService {
       var url = '$_baseUrl/business/$businessId/purchase-orders';
       if (status != null && status.isNotEmpty) url += '?status=$status';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -1370,7 +1419,7 @@ class BusinessService {
       if (status != null && status.isNotEmpty) params.add('status=$status');
       if (params.isNotEmpty) url += '?${params.join('&')}';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
