@@ -78,6 +78,12 @@ class GraphqlBusinessService {
     notes createdAt
   ''';
 
+  static const _recurringInvoiceFields = r'''
+    id businessId customerId customerName items subtotal vatAmount vatRate
+    totalAmount frequency customIntervalDays nextIssueDate startDate endDate
+    maxInvoices totalIssued isActive autoSend autoSendChannels createdAt
+  ''';
+
   static Map<String, dynamic> _businessFromGql(Map<String, dynamic> row) => {
         'id': row['id'],
         'user_id': row['userId'],
@@ -1701,5 +1707,192 @@ class GraphqlBusinessService {
     } catch (_) {
       return false;
     }
+  }
+
+  static Map<String, dynamic> _recurringInvoiceFromGql(Map<String, dynamic> row) =>
+      {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'customer_id': row['customerId'],
+        'customer_name': row['customerName'],
+        'items': row['items'] ?? [],
+        'subtotal': row['subtotal'],
+        'vat_amount': row['vatAmount'],
+        'vat_rate': row['vatRate'],
+        'total_amount': row['totalAmount'],
+        'frequency': row['frequency'],
+        'custom_interval_days': row['customIntervalDays'],
+        'next_issue_date': row['nextIssueDate'],
+        'start_date': row['startDate'],
+        'end_date': row['endDate'],
+        'max_invoices': row['maxInvoices'],
+        'total_issued': row['totalIssued'],
+        'is_active': row['isActive'],
+        'auto_send': row['autoSend'],
+        'auto_send_channels': row['autoSendChannels'] ?? [],
+        'created_at': row['createdAt'],
+      };
+
+  static Future<List<Map<String, dynamic>>> getRecurringInvoices(
+    int businessId, {
+    bool activeOnly = false,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessRecurringInvoices(\$businessId: ID!, \$activeOnly: Boolean) {
+          businessRecurringInvoices(
+            businessId: \$businessId
+            activeOnly: \$activeOnly
+          ) {
+            $_recurringInvoiceFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'activeOnly': activeOnly,
+        },
+        auth: true,
+      );
+      final rows = data['businessRecurringInvoices'];
+      if (rows is List) {
+        return rows
+            .whereType<Map<String, dynamic>>()
+            .map(_recurringInvoiceFromGql)
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createRecurringInvoice(
+    int businessId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessRecurringInvoice(
+          \$input: CreateBusinessRecurringInvoiceInput!
+        ) {
+          createBusinessRecurringInvoice(input: \$input) {
+            $_recurringInvoiceFields
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': businessId.toString(),
+            if (body['customer_id'] != null)
+              'customerId': body['customer_id'].toString(),
+            if (body['customer_name'] != null) 'customerName': body['customer_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['vat_rate'] != null) 'vatRate': body['vat_rate'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['frequency'] != null) 'frequency': body['frequency'],
+            if (body['custom_interval_days'] != null)
+              'customIntervalDays': body['custom_interval_days'],
+            if (body['next_issue_date'] != null)
+              'nextIssueDate': _dateOnly(body['next_issue_date']),
+            if (body['start_date'] != null)
+              'startDate': _dateOnly(body['start_date']),
+            if (body['end_date'] != null) 'endDate': _dateOnly(body['end_date']),
+            if (body['max_invoices'] != null) 'maxInvoices': body['max_invoices'],
+            if (body['auto_send'] == true) 'autoSend': true,
+            if (body['auto_send_channels'] is List)
+              'autoSendChannels': body['auto_send_channels'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessRecurringInvoice'];
+      if (row is Map<String, dynamic>) return _recurringInvoiceFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateRecurringInvoice(
+    int recurringId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessRecurringInvoice(
+          \$recurringId: ID!
+          \$input: UpdateBusinessRecurringInvoiceInput!
+        ) {
+          updateBusinessRecurringInvoice(recurringId: \$recurringId, input: \$input) {
+            $_recurringInvoiceFields
+          }
+        }
+        ''',
+        variables: {
+          'recurringId': recurringId.toString(),
+          'input': {
+            if (body['customer_id'] != null)
+              'customerId': body['customer_id'].toString(),
+            if (body['customer_name'] != null) 'customerName': body['customer_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['subtotal'] != null) 'subtotal': body['subtotal'],
+            if (body['vat_amount'] != null) 'vatAmount': body['vat_amount'],
+            if (body['vat_rate'] != null) 'vatRate': body['vat_rate'],
+            if (body['total_amount'] != null) 'totalAmount': body['total_amount'],
+            if (body['frequency'] != null) 'frequency': body['frequency'],
+            if (body['custom_interval_days'] != null)
+              'customIntervalDays': body['custom_interval_days'],
+            if (body['next_issue_date'] != null)
+              'nextIssueDate': _dateOnly(body['next_issue_date']),
+            if (body['start_date'] != null)
+              'startDate': _dateOnly(body['start_date']),
+            if (body['end_date'] != null) 'endDate': _dateOnly(body['end_date']),
+            if (body['max_invoices'] != null) 'maxInvoices': body['max_invoices'],
+            if (body.containsKey('is_active')) 'isActive': body['is_active'] == true,
+            if (body['auto_send'] != null) 'autoSend': body['auto_send'] == true,
+            if (body['auto_send_channels'] is List)
+              'autoSendChannels': body['auto_send_channels'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessRecurringInvoice'];
+      if (row is Map<String, dynamic>) return _recurringInvoiceFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> cancelRecurringInvoice(int recurringId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CancelBusinessRecurringInvoice(\$recurringId: ID!) {
+          cancelBusinessRecurringInvoice(recurringId: \$recurringId) {
+            id isActive
+          }
+        }
+        ''',
+        variables: {'recurringId': recurringId.toString()},
+        auth: true,
+      );
+      final row = result['cancelBusinessRecurringInvoice'];
+      return row is Map<String, dynamic> && row['isActive'] == false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String? _dateOnly(dynamic value) {
+    if (value == null) return null;
+    final s = value.toString();
+    return s.length >= 10 ? s.substring(0, 10) : s;
   }
 }

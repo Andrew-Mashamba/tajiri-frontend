@@ -1179,6 +1179,19 @@ class BusinessService {
 
   static Future<BusinessResult<RecurringInvoice>> createRecurringInvoice(
       String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data =
+          await GraphqlBusinessService.createRecurringInvoice(businessId, body);
+      if (data == null) {
+        return BusinessResult(
+            success: false, message: 'Failed to create recurring invoice');
+      }
+      return BusinessResult(
+        success: true,
+        data: RecurringInvoice.fromJson(data),
+        message: 'Recurring invoice created',
+      );
+    }
     try {
       final url = '$_baseUrl/business/$businessId/recurring-invoices';
       final res = await http.post(Uri.parse(url),
@@ -1198,6 +1211,11 @@ class BusinessService {
 
   static Future<BusinessListResult<RecurringInvoice>> getRecurringInvoices(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getRecurringInvoices(businessId);
+      final list = rows.map((e) => RecurringInvoice.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       final url = '$_baseUrl/business/$businessId/recurring-invoices';
       final res =
@@ -1217,6 +1235,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> cancelRecurringInvoice(
       String token, int recurringId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.cancelRecurringInvoice(recurringId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? 'Recurring invoice paused' : 'Failed to cancel',
+      );
+    }
     try {
       final url = '$_baseUrl/business/recurring-invoices/$recurringId/cancel';
       final res = await http.post(Uri.parse(url),
@@ -1230,6 +1255,16 @@ class BusinessService {
 
   static Future<BusinessResult<RecurringInvoice>> updateRecurringInvoice(
       String token, int recurringId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data =
+          await GraphqlBusinessService.updateRecurringInvoice(recurringId, body);
+      if (data == null) {
+        return BusinessResult(
+            success: false, message: 'Failed to update recurring invoice');
+      }
+      return BusinessResult(
+          success: true, data: RecurringInvoice.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/recurring-invoices/$recurringId';
       final res = await http.put(Uri.parse(url),
