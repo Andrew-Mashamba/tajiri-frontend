@@ -2329,6 +2329,7 @@ class SupplierPayable {
 
 class RecurringPurchaseOrder {
   final int? id;
+  final int? supplierId;
   final String? supplierName;
   final RecurringFrequency frequency;
   final DateTime? nextRunDate;
@@ -2337,10 +2338,14 @@ class RecurringPurchaseOrder {
   final int totalGenerated;
   final int? maxOrders;
   final bool autoSend;
+  final bool isActive;
+  final int? deliveryOffsetDays;
+  final String? notes;
   final List<dynamic> items;
 
   RecurringPurchaseOrder({
     this.id,
+    this.supplierId,
     this.supplierName,
     this.frequency = RecurringFrequency.monthly,
     this.nextRunDate,
@@ -2349,6 +2354,9 @@ class RecurringPurchaseOrder {
     this.totalGenerated = 0,
     this.maxOrders,
     this.autoSend = false,
+    this.isActive = true,
+    this.deliveryOffsetDays,
+    this.notes,
     this.items = const [],
   });
 
@@ -2356,6 +2364,7 @@ class RecurringPurchaseOrder {
     final freqStr = json['frequency']?.toString() ?? 'monthly';
     return RecurringPurchaseOrder(
       id: _parseInt(json['id']),
+      supplierId: _parseInt(json['supplier_id']),
       supplierName: json['supplier_name']?.toString(),
       frequency: RecurringFrequency.values.firstWhere(
         (f) => f.name == freqStr,
@@ -2367,6 +2376,9 @@ class RecurringPurchaseOrder {
       totalGenerated: _parseInt(json['total_generated']) ?? 0,
       maxOrders: _parseInt(json['max_orders']),
       autoSend: _parseBool(json['auto_send']),
+      isActive: json['is_active'] != false,
+      deliveryOffsetDays: _parseInt(json['delivery_offset_days']),
+      notes: json['notes']?.toString(),
       items: (json['items'] as List?) ?? const [],
     );
   }
@@ -2507,10 +2519,7 @@ extension InvoiceDeliveryCompat on InvoiceDelivery {
 }
 
 extension RecurringPurchaseOrderCompat on RecurringPurchaseOrder {
-  int? get supplierId => null;
-  bool get isActive => true;
-  String? get notes => null;
-  int? get deliveryOffsetDays => null;
+  // Fields now parsed from backend; extension kept for any legacy callers.
 }
 
 // Helper functions for invoice overdue logic. Used across invoice pages and

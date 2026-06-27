@@ -1807,15 +1807,130 @@ class BusinessService {
   static Future<List<ReminderItem>> getTaxDeadlinesForReminders(String token, int userId, {bool strict = false}) async => const [];
 
   // ---- Suppliers / Payables / POs ----
-  static Future<BusinessListResult<SupplierPayable>> getPayables(String token, int businessId, {String? status}) async => _okList<SupplierPayable>();
-  static Future<BusinessResult<SupplierPayable>> createPayable(String token, int poId, Map<String, dynamic> body) async => _ok<SupplierPayable>();
-  static Future<BusinessResult<void>> deletePayable(String token, int payableId) async => _ok<void>();
-  static Future<BusinessResult<void>> recordPayablePayment(String token, int payableId, Map<String, dynamic> body) async => _ok<void>();
-  static Future<BusinessListResult<RecurringPurchaseOrder>> getRecurringPurchaseOrders(String token, int businessId) async => _okList<RecurringPurchaseOrder>();
-  static Future<BusinessResult<RecurringPurchaseOrder>> createRecurringPurchaseOrder(String token, int businessId, Map<String, dynamic> body) async => _ok<RecurringPurchaseOrder>();
-  static Future<BusinessResult<RecurringPurchaseOrder>> updateRecurringPurchaseOrder(String token, int recurringId, Map<String, dynamic> body) async => _ok<RecurringPurchaseOrder>();
-  static Future<BusinessResult<void>> cancelRecurringPurchaseOrder(String token, int recurringId) async => _ok<void>();
-  static Future<BusinessResult<void>> runRecurringPurchaseOrderNow(String token, int recurringId) async => _ok<void>();
+  static Future<BusinessListResult<SupplierPayable>> getPayables(
+      String token, int businessId,
+      {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows =
+          await GraphqlBusinessService.getPayables(businessId, status: status);
+      final list = rows.map((e) => SupplierPayable.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<SupplierPayable>();
+  }
+
+  static Future<BusinessResult<SupplierPayable>> createPayable(
+      String token, int poId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createPayable(poId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to create payable');
+      }
+      return BusinessResult(success: true, data: SupplierPayable.fromJson(data));
+    }
+    return _ok<SupplierPayable>();
+  }
+
+  static Future<BusinessResult<void>> deletePayable(
+      String token, int payableId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.deletePayable(payableId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? null : 'Failed to delete payable',
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<void>> recordPayablePayment(
+      String token, int payableId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data =
+          await GraphqlBusinessService.recordPayablePayment(payableId, body);
+      return BusinessResult(
+        success: data != null,
+        message: data == null ? 'Failed to record payment' : null,
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessListResult<RecurringPurchaseOrder>>
+      getRecurringPurchaseOrders(String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getRecurringPurchaseOrders(
+        businessId,
+        activeOnly: false,
+      );
+      final list =
+          rows.map((e) => RecurringPurchaseOrder.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
+    return _okList<RecurringPurchaseOrder>();
+  }
+
+  static Future<BusinessResult<RecurringPurchaseOrder>>
+      createRecurringPurchaseOrder(
+          String token, int businessId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createRecurringPurchaseOrder(
+          businessId, body);
+      if (data == null) {
+        return BusinessResult(
+            success: false, message: 'Failed to create recurring order');
+      }
+      return BusinessResult(
+        success: true,
+        data: RecurringPurchaseOrder.fromJson(data),
+      );
+    }
+    return _ok<RecurringPurchaseOrder>();
+  }
+
+  static Future<BusinessResult<RecurringPurchaseOrder>>
+      updateRecurringPurchaseOrder(
+          String token, int recurringId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateRecurringPurchaseOrder(
+          recurringId, body);
+      if (data == null) {
+        return BusinessResult(
+            success: false, message: 'Failed to update recurring order');
+      }
+      return BusinessResult(
+        success: true,
+        data: RecurringPurchaseOrder.fromJson(data),
+      );
+    }
+    return _ok<RecurringPurchaseOrder>();
+  }
+
+  static Future<BusinessResult<void>> cancelRecurringPurchaseOrder(
+      String token, int recurringId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok =
+          await GraphqlBusinessService.cancelRecurringPurchaseOrder(recurringId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? null : 'Failed to cancel recurring order',
+      );
+    }
+    return _ok<void>();
+  }
+
+  static Future<BusinessResult<void>> runRecurringPurchaseOrderNow(
+      String token, int recurringId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok =
+          await GraphqlBusinessService.runRecurringPurchaseOrderNow(recurringId);
+      return BusinessResult(
+        success: ok,
+        message: ok ? null : 'Failed to run recurring order',
+      );
+    }
+    return _ok<void>();
+  }
   static Future<BusinessResult<void>> markPOSent(String token, int poId) async => _ok<void>();
   static Future<BusinessResult<void>> updatePurchaseOrder(String token, int poId, Map<String, dynamic> body) async => _ok<void>();
   static Future<BusinessListResult<SupplierCatalogItem>> getSupplierCatalog(String token, int supplierId) async => _okList<SupplierCatalogItem>();

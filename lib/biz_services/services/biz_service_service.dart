@@ -1,15 +1,21 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_biz_service_service.dart';
 import '../models/biz_service_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class BizServiceService {
   static Future<List<BusinessService>> getServices(String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBizServiceService.getServices(businessId);
+      return rows.map((j) => BusinessService.fromJson(j)).toList();
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/business/$businessId/services'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -27,12 +33,36 @@ class BizServiceService {
     }
   }
 
+  static Map<String, dynamic> _serviceBody(BusinessService service) => {
+        'name': service.name,
+        if (service.description != null) 'description': service.description,
+        'pricing_type': service.pricingType.value,
+        if (service.price != null) 'price': service.price,
+        'currency': service.currency,
+        if (service.durationMinutes != null)
+          'duration_minutes': service.durationMinutes,
+        'availability': service.availability.value,
+        if (service.shopCategoryId != null)
+          'shop_category_id': service.shopCategoryId,
+        if (service.category != null) 'category': service.category,
+        'is_active': service.isActive,
+      };
+
   static Future<({bool success, String? error})> createService(
     String token,
     int businessId,
     BusinessService service,
     XFile? photo,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final body = _serviceBody(service);
+      if (service.photoUrl != null && service.photoUrl!.isNotEmpty) {
+        body['photo_url'] = service.photoUrl;
+      }
+      final row = await GraphqlBizServiceService.createService(businessId, body);
+      if (row != null) return (success: true, error: null);
+      return (success: false, error: 'Failed');
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -61,6 +91,15 @@ class BizServiceService {
     BusinessService service,
     XFile? newPhoto,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final body = _serviceBody(service);
+      if (service.photoUrl != null && service.photoUrl!.isNotEmpty) {
+        body['photo_url'] = service.photoUrl;
+      }
+      final row = await GraphqlBizServiceService.updateService(service.id, body);
+      if (row != null) return (success: true, error: null);
+      return (success: false, error: 'Failed');
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -85,6 +124,9 @@ class BizServiceService {
   }
 
   static Future<bool> deleteService(String token, int businessId, int serviceId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBizServiceService.deleteService(serviceId);
+    }
     try {
       final res = await http.delete(
         Uri.parse('$_baseUrl/business/$businessId/services/$serviceId'),
@@ -106,6 +148,12 @@ class BizServiceService {
     int serviceId,
     ServiceAvailability availability,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBizServiceService.patchAvailability(
+        serviceId,
+        availability.value,
+      );
+    }
     try {
       final res = await http.patch(
         Uri.parse('$_baseUrl/business/$businessId/services/$serviceId'),

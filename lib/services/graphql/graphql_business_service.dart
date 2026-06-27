@@ -67,6 +67,17 @@ class GraphqlBusinessService {
     date startTime endTime durationMinutes status depositAmount notes createdAt
   ''';
 
+  static const _payableFields = r'''
+    id businessId poId supplierId supplierName poNumber
+    amount paidAmount remainingAmount dueDate status notes createdAt
+  ''';
+
+  static const _recurringPoFields = r'''
+    id businessId supplierId supplierName items frequency nextRunDate endDate
+    totalAmount totalGenerated maxOrders deliveryOffsetDays autoSend isActive
+    notes createdAt
+  ''';
+
   static Map<String, dynamic> _businessFromGql(Map<String, dynamic> row) => {
         'id': row['id'],
         'user_id': row['userId'],
@@ -1378,6 +1389,315 @@ class GraphqlBusinessService {
         auth: true,
       );
       return result['deleteBusinessExpense'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Map<String, dynamic> _payableFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'supplier_name': row['supplierName'],
+        'po_number': row['poNumber'],
+        'amount': row['amount'],
+        'paid_amount': row['paidAmount'],
+        'remaining_amount': row['remainingAmount'],
+        'due_date': row['dueDate'],
+        'status': row['status'],
+      };
+
+  static Map<String, dynamic> _recurringPoFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'supplier_id': row['supplierId'],
+        'supplier_name': row['supplierName'],
+        'items': row['items'] ?? [],
+        'frequency': row['frequency'],
+        'next_run_date': row['nextRunDate'],
+        'end_date': row['endDate'],
+        'total_amount': row['totalAmount'],
+        'total_generated': row['totalGenerated'],
+        'max_orders': row['maxOrders'],
+        'delivery_offset_days': row['deliveryOffsetDays'],
+        'auto_send': row['autoSend'],
+        'is_active': row['isActive'],
+        'notes': row['notes'],
+      };
+
+  static Future<List<Map<String, dynamic>>> getPayables(
+    int businessId, {
+    String? status,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessSupplierPayables(\$businessId: ID!, \$status: String) {
+          businessSupplierPayables(businessId: \$businessId, status: \$status) {
+            $_payableFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (status != null) 'status': status,
+        },
+        auth: true,
+      );
+      final rows = data['businessSupplierPayables'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_payableFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createPayable(
+    int poId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessSupplierPayable(
+          \$poId: ID!
+          \$input: CreateBusinessSupplierPayableInput!
+        ) {
+          createBusinessSupplierPayable(poId: \$poId, input: \$input) {
+            $_payableFields
+          }
+        }
+        ''',
+        variables: {
+          'poId': poId.toString(),
+          'input': {
+            if (body['due_date'] != null) 'dueDate': body['due_date'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessSupplierPayable'];
+      if (row is Map<String, dynamic>) return _payableFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> deletePayable(int payableId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation DeleteBusinessSupplierPayable(\$payableId: ID!) {
+          deleteBusinessSupplierPayable(payableId: \$payableId)
+        }
+        ''',
+        variables: {'payableId': payableId.toString()},
+        auth: true,
+      );
+      return result['deleteBusinessSupplierPayable'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> recordPayablePayment(
+    int payableId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RecordBusinessSupplierPayablePayment(
+          \$payableId: ID!
+          \$input: RecordBusinessSupplierPayablePaymentInput!
+        ) {
+          recordBusinessSupplierPayablePayment(payableId: \$payableId, input: \$input) {
+            $_payableFields
+          }
+        }
+        ''',
+        variables: {
+          'payableId': payableId.toString(),
+          'input': {
+            'amount': body['amount'],
+            if (body['payment_date'] != null) 'paymentDate': body['payment_date'],
+            if (body['payment_method'] != null) 'paymentMethod': body['payment_method'],
+            if (body['reference'] != null) 'reference': body['reference'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['recordBusinessSupplierPayablePayment'];
+      if (row is Map<String, dynamic>) return _payableFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRecurringPurchaseOrders(
+    int businessId, {
+    int? supplierId,
+    bool activeOnly = true,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessRecurringPurchaseOrders(
+          \$businessId: ID!
+          \$supplierId: ID
+          \$activeOnly: Boolean
+        ) {
+          businessRecurringPurchaseOrders(
+            businessId: \$businessId
+            supplierId: \$supplierId
+            activeOnly: \$activeOnly
+          ) {
+            $_recurringPoFields
+          }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          if (supplierId != null) 'supplierId': supplierId.toString(),
+          'activeOnly': activeOnly,
+        },
+        auth: true,
+      );
+      final rows = data['businessRecurringPurchaseOrders'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_recurringPoFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createRecurringPurchaseOrder(
+    int businessId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessRecurringPurchaseOrder(
+          \$input: CreateBusinessRecurringPurchaseOrderInput!
+        ) {
+          createBusinessRecurringPurchaseOrder(input: \$input) {
+            $_recurringPoFields
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': businessId.toString(),
+            if (body['supplier_id'] != null)
+              'supplierId': body['supplier_id'].toString(),
+            if (body['supplier_name'] != null) 'supplierName': body['supplier_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['frequency'] != null) 'frequency': body['frequency'],
+            if (body['next_run_date'] != null) 'nextRunDate': body['next_run_date'],
+            if (body['end_date'] != null) 'endDate': body['end_date'],
+            if (body['max_orders'] != null) 'maxOrders': body['max_orders'],
+            if (body['delivery_offset_days'] != null)
+              'deliveryOffsetDays': body['delivery_offset_days'],
+            if (body['auto_send'] != null) 'autoSend': body['auto_send'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessRecurringPurchaseOrder'];
+      if (row is Map<String, dynamic>) return _recurringPoFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateRecurringPurchaseOrder(
+    int recurringId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessRecurringPurchaseOrder(
+          \$recurringId: ID!
+          \$input: UpdateBusinessRecurringPurchaseOrderInput!
+        ) {
+          updateBusinessRecurringPurchaseOrder(
+            recurringId: \$recurringId
+            input: \$input
+          ) {
+            $_recurringPoFields
+          }
+        }
+        ''',
+        variables: {
+          'recurringId': recurringId.toString(),
+          'input': {
+            if (body['supplier_id'] != null)
+              'supplierId': body['supplier_id'].toString(),
+            if (body['supplier_name'] != null) 'supplierName': body['supplier_name'],
+            if (body['items'] != null) 'items': body['items'],
+            if (body['frequency'] != null) 'frequency': body['frequency'],
+            if (body['next_run_date'] != null) 'nextRunDate': body['next_run_date'],
+            if (body['end_date'] != null) 'endDate': body['end_date'],
+            if (body['max_orders'] != null) 'maxOrders': body['max_orders'],
+            if (body['delivery_offset_days'] != null)
+              'deliveryOffsetDays': body['delivery_offset_days'],
+            if (body['auto_send'] != null) 'autoSend': body['auto_send'],
+            if (body['notes'] != null) 'notes': body['notes'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessRecurringPurchaseOrder'];
+      if (row is Map<String, dynamic>) return _recurringPoFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> cancelRecurringPurchaseOrder(int recurringId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CancelBusinessRecurringPurchaseOrder(\$recurringId: ID!) {
+          cancelBusinessRecurringPurchaseOrder(recurringId: \$recurringId) {
+            id isActive
+          }
+        }
+        ''',
+        variables: {'recurringId': recurringId.toString()},
+        auth: true,
+      );
+      final row = result['cancelBusinessRecurringPurchaseOrder'];
+      return row is Map<String, dynamic> && row['isActive'] == false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> runRecurringPurchaseOrderNow(int recurringId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RunBusinessRecurringPurchaseOrderNow(\$recurringId: ID!) {
+          runBusinessRecurringPurchaseOrderNow(recurringId: \$recurringId) {
+            id totalGenerated
+          }
+        }
+        ''',
+        variables: {'recurringId': recurringId.toString()},
+        auth: true,
+      );
+      return result['runBusinessRecurringPurchaseOrderNow'] is Map<String, dynamic>;
     } catch (_) {
       return false;
     }
