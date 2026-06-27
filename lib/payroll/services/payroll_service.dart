@@ -2,7 +2,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_payroll_service.dart';
 import '../models/payroll_models.dart';
 
 void _log(String m) => debugPrint('[PayrollService] $m');
@@ -27,10 +29,18 @@ class PayrollService {
   // GET /business/{id}/payroll
   static Future<PayrollListResult<PayrollRun>> getHistory(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final list = await GraphqlPayrollService.getHistory(businessId);
+        return PayrollListResult(success: true, data: list);
+      } catch (e) {
+        return PayrollListResult(success: false, message: e.toString());
+      }
+    }
     final url = '${ApiConfig.baseUrl}/business/$businessId/payroll';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])
@@ -47,6 +57,17 @@ class PayrollService {
   // POST /business/{id}/payroll/calculate
   static Future<PayrollResult<PayrollRun>> calculate(
       String token, int businessId, int month, int year) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final run = await GraphqlPayrollService.calculate(businessId, month, year);
+        if (run == null) {
+          return const PayrollResult(success: false, message: 'Calculation failed');
+        }
+        return PayrollResult(success: true, data: run);
+      } catch (e) {
+        return PayrollResult(success: false, message: e.toString());
+      }
+    }
     final url = '${ApiConfig.baseUrl}/business/$businessId/payroll/calculate';
     _log('POST $url');
     try {
@@ -68,6 +89,14 @@ class PayrollService {
 
   // POST /business/payroll/{id}/approve
   static Future<PayrollResult<void>> approve(String token, int payrollId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final ok = await GraphqlPayrollService.approve(payrollId);
+        return PayrollResult(success: ok);
+      } catch (e) {
+        return PayrollResult(success: false, message: e.toString());
+      }
+    }
     final url = '${ApiConfig.baseUrl}/business/payroll/$payrollId/approve';
     _log('POST $url');
     try {
@@ -85,10 +114,18 @@ class PayrollService {
   // GET /business/{id}/payroll/statutory
   static Future<PayrollListResult<StatutoryObligation>> getStatutory(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final list = await GraphqlPayrollService.getStatutory(businessId);
+        return PayrollListResult(success: true, data: list);
+      } catch (e) {
+        return PayrollListResult(success: false, message: e.toString());
+      }
+    }
     final url = '${ApiConfig.baseUrl}/business/$businessId/payroll/statutory';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (body['data'] as List? ?? [])
@@ -106,6 +143,14 @@ class PayrollService {
   // POST /business/payroll/statutory/{id}/remit
   static Future<PayrollResult<void>> markRemitted(
       String token, int obligationId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final ok = await GraphqlPayrollService.markRemitted(obligationId);
+        return PayrollResult(success: ok);
+      } catch (e) {
+        return PayrollResult(success: false, message: e.toString());
+      }
+    }
     final url =
         '${ApiConfig.baseUrl}/business/payroll/statutory/$obligationId/remit';
     _log('POST $url');
