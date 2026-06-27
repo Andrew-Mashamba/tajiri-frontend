@@ -215,6 +215,14 @@ class FriendService {
 
   /// Get friend suggestions
   Future<FriendListResult> getFriendSuggestions(int userId, {int limit = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getFriendSuggestions(limit: limit);
+      return FriendListResult(
+        success: result.success,
+        friends: result.friends,
+        message: result.message,
+      );
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/suggestions?user_id=$userId&limit=$limit'),

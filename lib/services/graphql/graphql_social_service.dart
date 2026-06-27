@@ -514,6 +514,40 @@ class GraphqlSocialService {
     }
   }
 
+  static Future<
+      ({
+        bool success,
+        List<UserProfile> friends,
+        String? message,
+      })> getFriendSuggestions({int limit = 20}) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query FriendSuggestions(\$limit: Int!) {
+          friendSuggestions(limit: \$limit) {
+            items { $_followUserFields }
+          }
+        }
+        ''',
+        variables: {'limit': limit},
+        auth: true,
+      );
+      final conn = data['friendSuggestions'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final friends = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => UserProfile.fromJson(_userProfileFromFollowRow(row)))
+          .toList();
+      return (success: true, friends: friends, message: null);
+    } catch (e) {
+      return (
+        success: false,
+        friends: <UserProfile>[],
+        message: '$e',
+      );
+    }
+  }
+
   static const _followUserFields = r'''
     id
     username
