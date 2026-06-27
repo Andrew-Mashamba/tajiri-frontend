@@ -1,7 +1,9 @@
 // lib/my_family/services/my_family_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_my_family_service.dart';
 import '../models/my_family_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -10,8 +12,11 @@ class MyFamilyService {
   // ─── Members ──────────────────────────────────────────────────
 
   Future<FamilyListResult<FamilyMember>> getMembers(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyFamilyService.getMembers();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/members?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -44,6 +49,21 @@ class MyFamilyService {
     String? photoUrl,
     int? linkedUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend &&
+        linkedUserId == null &&
+        photoUrl == null) {
+      return GraphqlMyFamilyService.addMember(
+        name: name,
+        relationship: relationship,
+        gender: gender,
+        dateOfBirth: dateOfBirth,
+        bloodType: bloodType,
+        allergies: allergies,
+        chronicConditions: chronicConditions,
+        nhifNumber: nhifNumber,
+        emergencyPhone: emergencyPhone,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/family/members'),
@@ -81,6 +101,15 @@ class MyFamilyService {
     required int memberId,
     required Map<String, dynamic> fields,
   }) async {
+    if (ApiConfig.useGraphqlBackend &&
+        !fields.containsKey('date_of_birth') &&
+        !fields.containsKey('gender') &&
+        !fields.containsKey('linked_user_id')) {
+      return GraphqlMyFamilyService.updateMember(
+        memberId: memberId,
+        fields: fields,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/family/members/$memberId'),
@@ -101,6 +130,9 @@ class MyFamilyService {
   }
 
   Future<FamilyResult<void>> removeMember(int memberId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyFamilyService.removeMember(memberId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/family/members/$memberId'),
@@ -122,7 +154,7 @@ class MyFamilyService {
   Future<FamilyListResult<FamilyEvent>> getEvents(
       int userId, int month, int year) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '$_baseUrl/family/events?user_id=$userId&month=$month&year=$year'),
       );
@@ -204,7 +236,7 @@ class MyFamilyService {
 
   Future<FamilyListResult<SharedList>> getLists(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/lists?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -316,7 +348,7 @@ class MyFamilyService {
   Future<FamilyListResult<FamilyHealthRecord>> getHealthRecords(
       int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/health?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -392,8 +424,11 @@ class MyFamilyService {
 
   Future<FamilyListResult<EmergencyContact>> getEmergencyContacts(
       int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyFamilyService.getEmergencyContacts();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/emergency?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -420,6 +455,14 @@ class MyFamilyService {
     String? relationship,
     bool isPrimary = false,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyFamilyService.addEmergencyContact(
+        name: name,
+        phone: phone,
+        relationship: relationship,
+        isPrimary: isPrimary,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/family/emergency'),
@@ -446,6 +489,9 @@ class MyFamilyService {
   }
 
   Future<FamilyResult<void>> deleteEmergencyContact(int contactId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyFamilyService.deleteEmergencyContact(contactId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/family/emergency/$contactId'),
@@ -466,7 +512,7 @@ class MyFamilyService {
 
   Future<FamilyListResult<Chore>> getChores(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/chores?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -541,7 +587,7 @@ class MyFamilyService {
   Future<FamilyResult<Map<String, dynamic>>> searchUserByPhone(
       String phone) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/family/search-user?phone=$phone'),
       );
       if (response.statusCode == 200) {
