@@ -528,6 +528,11 @@ class BusinessService {
 
   static Future<BusinessListResult<Employee>> getEmployees(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getEmployees(businessId);
+      final list = rows.map((e) => Employee.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       final url = '$_baseUrl/business/$businessId/employees';
       final res =
@@ -547,6 +552,17 @@ class BusinessService {
 
   static Future<BusinessResult<Employee>> addEmployee(
       String token, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.createEmployee(body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to add employee');
+      }
+      return BusinessResult(
+        success: true,
+        data: Employee.fromJson(data),
+        message: 'Mfanyakazi ameongezwa',
+      );
+    }
     try {
       final url = '$_baseUrl/business/employees';
       final res = await http.post(Uri.parse(url),
@@ -566,6 +582,13 @@ class BusinessService {
 
   static Future<BusinessResult<Employee>> updateEmployee(
       String token, int employeeId, Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.updateEmployee(employeeId, body);
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to update employee');
+      }
+      return BusinessResult(success: true, data: Employee.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/employees/$employeeId';
       final res = await http.put(Uri.parse(url),
@@ -583,6 +606,10 @@ class BusinessService {
 
   static Future<BusinessResult<void>> removeEmployee(
       String token, int employeeId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlBusinessService.removeEmployee(employeeId);
+      return BusinessResult(success: ok);
+    }
     try {
       final url = '$_baseUrl/business/employees/$employeeId';
       final res = await http.delete(Uri.parse(url),
@@ -599,6 +626,17 @@ class BusinessService {
 
   static Future<BusinessResult<PayrollRun>> calculatePayroll(
       String token, int businessId, int month, int year) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.calculatePayroll(
+        businessId,
+        month,
+        year,
+      );
+      if (data == null) {
+        return BusinessResult(success: false, message: 'Failed to calculate payroll');
+      }
+      return BusinessResult(success: true, data: PayrollRun.fromJson(data));
+    }
     try {
       final url = '$_baseUrl/business/$businessId/payroll/calculate';
       final res = await http.post(Uri.parse(url),
@@ -618,6 +656,13 @@ class BusinessService {
 
   static Future<BusinessResult<void>> approvePayroll(
       String token, int payrollId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlBusinessService.approvePayroll(payrollId);
+      return BusinessResult(
+        success: data != null,
+        message: data != null ? 'Mishahara imeidhinishwa' : 'Failed to approve payroll',
+      );
+    }
     try {
       final url = '$_baseUrl/business/payroll/$payrollId/approve';
       final res = await http.post(Uri.parse(url),
@@ -631,6 +676,11 @@ class BusinessService {
 
   static Future<BusinessListResult<PayrollRun>> getPayrollHistory(
       String token, int businessId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlBusinessService.getPayrollHistory(businessId);
+      final list = rows.map((e) => PayrollRun.fromJson(e)).toList();
+      return BusinessListResult(success: true, data: list);
+    }
     try {
       final url = '$_baseUrl/business/$businessId/payroll';
       final res =

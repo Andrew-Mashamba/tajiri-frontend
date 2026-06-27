@@ -1,6 +1,6 @@
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL business module — businesses, invoices, expenses, customers, debts.
+/// GraphQL business module — businesses, invoices, expenses, customers, debts, employees, payroll.
 class GraphqlBusinessService {
   static const _businessFields = r'''
     id userId name businessType phone email address
@@ -30,6 +30,21 @@ class GraphqlBusinessService {
 
   static const _debtSummaryFields = r'''
     totalOutstanding totalOverdue overdueCount pendingCount partialCount
+  ''';
+
+  static const _employeeFields = r'''
+    id businessId name phone nidaNumber position grossSalary
+    startDate bankAccount bankName isActive createdAt
+  ''';
+
+  static const _payrollEntryFields = r'''
+    employeeId employeeName grossSalary paye nssfEmployee nssfEmployer
+    sdl wcf netSalary
+  ''';
+
+  static const _payrollRunFields = r'''
+    id businessId month year employees { $_payrollEntryFields }
+    totalGross totalNet totalPaye totalNssf totalSdl totalWcf status createdAt
   ''';
 
   static Map<String, dynamic> _businessFromGql(Map<String, dynamic> row) => {
@@ -555,6 +570,242 @@ class GraphqlBusinessService {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  static Map<String, dynamic> _employeeFromGql(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'business_id': row['businessId'],
+        'name': row['name'],
+        'phone': row['phone'],
+        'nida_number': row['nidaNumber'],
+        'position': row['position'],
+        'gross_salary': row['grossSalary'],
+        'start_date': row['startDate'],
+        'bank_account': row['bankAccount'],
+        'bank_name': row['bankName'],
+        'is_active': row['isActive'],
+        'created_at': row['createdAt'],
+      };
+
+  static Map<String, dynamic> _payrollEntryFromGql(Map<String, dynamic> row) => {
+        'employee_id': row['employeeId'],
+        'employee_name': row['employeeName'],
+        'gross_salary': row['grossSalary'],
+        'paye': row['paye'],
+        'nssf_employee': row['nssfEmployee'],
+        'nssf_employer': row['nssfEmployer'],
+        'sdl': row['sdl'],
+        'wcf': row['wcf'],
+        'net_salary': row['netSalary'],
+      };
+
+  static Map<String, dynamic> _payrollRunFromGql(Map<String, dynamic> row) {
+    final entries = row['employees'];
+    return {
+      'id': row['id'],
+      'business_id': row['businessId'],
+      'month': row['month'],
+      'year': row['year'],
+      'employees': entries is List
+          ? entries
+              .whereType<Map<String, dynamic>>()
+              .map(_payrollEntryFromGql)
+              .toList()
+          : [],
+      'total_gross': row['totalGross'],
+      'total_net': row['totalNet'],
+      'total_paye': row['totalPaye'],
+      'total_nssf': row['totalNssf'],
+      'total_sdl': row['totalSdl'],
+      'total_wcf': row['totalWcf'],
+      'status': row['status'],
+      'created_at': row['createdAt'],
+    };
+  }
+
+  static Future<List<Map<String, dynamic>>> getEmployees(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessEmployees(\$businessId: ID!) {
+          businessEmployees(businessId: \$businessId) { $_employeeFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final rows = data['businessEmployees'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_employeeFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createEmployee(Map<String, dynamic> body) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CreateBusinessEmployee(\$input: CreateBusinessEmployeeInput!) {
+          createBusinessEmployee(input: \$input) { $_employeeFields }
+        }
+        ''',
+        variables: {
+          'input': {
+            'businessId': (body['business_id'] ?? body['businessId']).toString(),
+            'name': body['name'],
+            if (body['phone'] != null) 'phone': body['phone'],
+            if (body['nida_number'] != null) 'nidaNumber': body['nida_number'],
+            if (body['position'] != null) 'position': body['position'],
+            'grossSalary': body['gross_salary'] ?? body['grossSalary'] ?? 0,
+            if (body['start_date'] != null) 'startDate': body['start_date'],
+            if (body['bank_account'] != null) 'bankAccount': body['bank_account'],
+            if (body['bank_name'] != null) 'bankName': body['bank_name'],
+            if (body['is_active'] != null) 'isActive': body['is_active'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['createBusinessEmployee'];
+      if (row is Map<String, dynamic>) return _employeeFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateEmployee(
+    int employeeId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateBusinessEmployee(
+          \$employeeId: ID!
+          \$input: UpdateBusinessEmployeeInput!
+        ) {
+          updateBusinessEmployee(employeeId: \$employeeId, input: \$input) {
+            $_employeeFields
+          }
+        }
+        ''',
+        variables: {
+          'employeeId': employeeId.toString(),
+          'input': {
+            if (body['name'] != null) 'name': body['name'],
+            if (body['phone'] != null) 'phone': body['phone'],
+            if (body['nida_number'] != null) 'nidaNumber': body['nida_number'],
+            if (body['position'] != null) 'position': body['position'],
+            if (body['gross_salary'] != null) 'grossSalary': body['gross_salary'],
+            if (body['start_date'] != null) 'startDate': body['start_date'],
+            if (body['bank_account'] != null) 'bankAccount': body['bank_account'],
+            if (body['bank_name'] != null) 'bankName': body['bank_name'],
+            if (body['is_active'] != null) 'isActive': body['is_active'],
+          },
+        },
+        auth: true,
+      );
+      final row = result['updateBusinessEmployee'];
+      if (row is Map<String, dynamic>) return _employeeFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> removeEmployee(int employeeId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RemoveBusinessEmployee(\$employeeId: ID!) {
+          removeBusinessEmployee(employeeId: \$employeeId)
+        }
+        ''',
+        variables: {'employeeId': employeeId.toString()},
+        auth: true,
+      );
+      return result['removeBusinessEmployee'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> calculatePayroll(
+    int businessId,
+    int month,
+    int year,
+  ) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CalculateBusinessPayroll(
+          \$businessId: ID!
+          \$month: Int!
+          \$year: Int!
+        ) {
+          calculateBusinessPayroll(
+            businessId: \$businessId
+            month: \$month
+            year: \$year
+          ) { $_payrollRunFields }
+        }
+        ''',
+        variables: {
+          'businessId': businessId.toString(),
+          'month': month,
+          'year': year,
+        },
+        auth: true,
+      );
+      final row = result['calculateBusinessPayroll'];
+      if (row is Map<String, dynamic>) return _payrollRunFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> approvePayroll(int payrollId) async {
+    try {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation ApproveBusinessPayroll(\$payrollId: ID!) {
+          approveBusinessPayroll(payrollId: \$payrollId) { $_payrollRunFields }
+        }
+        ''',
+        variables: {'payrollId': payrollId.toString()},
+        auth: true,
+      );
+      final row = result['approveBusinessPayroll'];
+      if (row is Map<String, dynamic>) return _payrollRunFromGql(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getPayrollHistory(int businessId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query BusinessPayrollHistory(\$businessId: ID!) {
+          businessPayrollHistory(businessId: \$businessId) { $_payrollRunFields }
+        }
+        ''',
+        variables: {'businessId': businessId.toString()},
+        auth: true,
+      );
+      final rows = data['businessPayrollHistory'];
+      if (rows is List) {
+        return rows.whereType<Map<String, dynamic>>().map(_payrollRunFromGql).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
     }
   }
 
