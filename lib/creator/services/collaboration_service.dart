@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_creator_metrics_service.dart';
 import '../models/collaboration_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -11,10 +13,14 @@ class CollaborationService {
     String? token,
     required int creatorId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final rows = await GraphqlCreatorMetricsService.getCollaborations(creatorId);
+      return rows.map((e) => CollaborationSuggestion.fromJson(e)).toList();
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/collaborations');
     if (kDebugMode) debugPrint('[CollaborationService] getSuggestions → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -38,6 +44,12 @@ class CollaborationService {
     required int suggestionId,
     required String action, // 'accepted' or 'dismissed'
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorMetricsService.respondToCollaboration(
+        suggestionId: suggestionId,
+        action: action,
+      );
+    }
     final url = Uri.parse('$_baseUrl/collaborations/$suggestionId/respond');
     if (kDebugMode) debugPrint('[CollaborationService] respond → $url ($action)');
     try {

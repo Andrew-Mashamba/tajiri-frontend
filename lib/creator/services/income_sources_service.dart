@@ -7,7 +7,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_income_sources_service.dart';
 import '../models/income_source.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -21,12 +23,17 @@ class IncomeSourcesService {
     IncomePeriod period = IncomePeriod.month,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlIncomeSourcesService.getSources(period: period.wire);
+      if (data == null) return null;
+      return IncomeSourcesResponse.fromJson(data);
+    }
     final url = Uri.parse(
       '$_baseUrl/creators/$creatorId/income/sources?period=${period.wire}',
     );
     if (kDebugMode) debugPrint('[IncomeSourcesService] getSources → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -61,12 +68,20 @@ class IncomeSourcesService {
     IncomePeriod period = IncomePeriod.month,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlIncomeSourcesService.getSourceDetail(
+        sourceId: sourceId,
+        period: period.wire,
+      );
+      if (data == null) return null;
+      return IncomeSource.fromJson(data);
+    }
     final url = Uri.parse(
       '$_baseUrl/creators/$creatorId/income/sources/$sourceId?period=${period.wire}',
     );
     if (kDebugMode) debugPrint('[IncomeSourcesService] getSourceDetail → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -94,6 +109,15 @@ class IncomeSourcesService {
     int limit = 20,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlIncomeSourcesService.getHistory(
+        sourceId: sourceId,
+        cursor: cursor,
+        limit: limit,
+      );
+      if (data == null) return null;
+      return HistoryPage.fromJson(data);
+    }
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
     final url = Uri.parse(
@@ -102,7 +126,7 @@ class IncomeSourcesService {
 
     if (kDebugMode) debugPrint('[IncomeSourcesService] getHistory → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -128,6 +152,9 @@ class IncomeSourcesService {
     required Map<String, dynamic> settings,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlIncomeSourcesService.updateSettings(sourceId, settings);
+    }
     final url = Uri.parse(
       '$_baseUrl/creators/$creatorId/income/sources/$sourceId/settings',
     );
@@ -156,6 +183,11 @@ class IncomeSourcesService {
     required String sourceId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlIncomeSourcesService.activateSource(sourceId);
+      if (data == null) return null;
+      return IncomeSource.fromJson(data);
+    }
     final url = Uri.parse(
       '$_baseUrl/creators/$creatorId/income/sources/$sourceId/activate',
     );
@@ -190,6 +222,9 @@ class IncomeSourcesService {
     required String sourceId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlIncomeSourcesService.notifyOnUnlock(sourceId);
+    }
     final url = Uri.parse(
       '$_baseUrl/creators/$creatorId/income/sources/$sourceId/notify-on-unlock',
     );

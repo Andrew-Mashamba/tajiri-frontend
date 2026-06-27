@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_creator_metrics_service.dart';
 import '../models/flywheel_models.dart';
 import '../../models/payment_models.dart';
 
@@ -15,10 +17,15 @@ class CreatorService {
     required int creatorId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getCreatorScore(creatorId);
+      if (data != null) return CreatorScore.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/score');
     if (kDebugMode) debugPrint('[CreatorService] getCreatorScore → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -41,10 +48,15 @@ class CreatorService {
     required int creatorId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getCreatorStreak(creatorId);
+      if (data != null) return CreatorStreak.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/streak');
     if (kDebugMode) debugPrint('[CreatorService] getCreatorStreak → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -67,10 +79,15 @@ class CreatorService {
     required int userId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getViewerStreak(userId);
+      if (data != null) return ViewerStreak.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/users/$userId/streak');
     if (kDebugMode) debugPrint('[CreatorService] getViewerStreak → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -90,10 +107,15 @@ class CreatorService {
 
   /// GET /api/creators/{id}/weekly-report
   Future<WeeklyReport?> getWeeklyReport(int creatorId, [String? token]) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getWeeklyReport(creatorId);
+      if (data != null) return WeeklyReport.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/weekly-report');
     if (kDebugMode) debugPrint('[CreatorService] getWeeklyReport → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -115,10 +137,13 @@ class CreatorService {
 
   /// GET /api/creators/{id}/viral-assists
   Future<int> getViralAssists({required int creatorId, String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorMetricsService.getViralAssists(creatorId);
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/viral-assists');
     if (kDebugMode) debugPrint('[CreatorService] getViralAssists → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -135,9 +160,14 @@ class CreatorService {
 
   /// GET /api/creators/{id}/posting-nudge
   Future<PostingNudge?> getPostingNudge({required int creatorId, String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getPostingNudge(creatorId);
+      if (data != null) return PostingNudge.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/posting-nudge');
     try {
-      final response = await http.get(url, headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers);
+      final response = await httpGetWithRetry(url, headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final nudgeData = data['data'] ?? data;
@@ -154,9 +184,14 @@ class CreatorService {
 
   /// GET /api/creators/{id}/content-calendar
   Future<ContentCalendar?> getContentCalendar({required int creatorId, String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getContentCalendar(creatorId);
+      if (data != null) return ContentCalendar.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/content-calendar');
     try {
-      final response = await http.get(url, headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers);
+      final response = await httpGetWithRetry(url, headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final calData = data['data'] ?? data;
@@ -173,10 +208,15 @@ class CreatorService {
     required int creatorId,
     String? token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlCreatorMetricsService.getFundPayoutProjection(creatorId);
+      if (data != null) return FundPayoutProjection.fromJson(data);
+      return null;
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/fund-payout');
     if (kDebugMode) debugPrint('[CreatorService] getFundPayoutProjection → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -196,6 +236,9 @@ class CreatorService {
 
   /// POST /api/users/{id}/streak/resume — resumes a frozen viewer streak
   Future<bool> resumeViewerStreak({required int userId, String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorMetricsService.resumeViewerStreak();
+    }
     final url = Uri.parse('$_baseUrl/users/$userId/streak/resume');
     if (kDebugMode) debugPrint('[CreatorService] resumeViewerStreak → $url');
     try {

@@ -5,11 +5,11 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../business/models/business_models.dart';
 import '../../business/services/business_service.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_revenue_service.dart';
 import '../models/revenue_models.dart';
 
 class RevenueService {
@@ -123,6 +123,36 @@ class RevenueService {
     bool includeLedgerHint = true,
   }) async {
     const zero = RevenueTotals(gross: 0, collected: 0, outstanding: 0);
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlRevenueService.revenueSummary(
+        period: _periodQueryParam(scope),
+        businessId: businessId,
+        includeLedgerHint: includeLedgerHint,
+      );
+      if (data == null) {
+        return const SingleBusinessRevenueLoadResult(
+          success: false,
+          totals: zero,
+          message: 'Failed to load revenue summary',
+        );
+      }
+      final totals = _totalsFromDataMap(data);
+      if (totals == null) {
+        return const SingleBusinessRevenueLoadResult(
+          success: false,
+          totals: zero,
+          message: 'Missing totals',
+        );
+      }
+      final ledgerHint = includeLedgerHint
+          ? _parseLedgerHint(data['ledger_hint'] ?? data['ledgerHint'])
+          : null;
+      return SingleBusinessRevenueLoadResult(
+        success: true,
+        totals: totals,
+        ledgerHint: ledgerHint,
+      );
+    }
     try {
       final params = <String, String>{
         'period': _periodQueryParam(scope),
@@ -133,7 +163,7 @@ class RevenueService {
         params['include_ledger_hint'] = '1';
       }
       final uri = Uri.parse('${ApiConfig.baseUrl}/revenue/summary').replace(queryParameters: params);
-      final res = await http.get(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
 
       if (res.statusCode == 404) {
         return _loadBusinessTotalsFromInvoices(token, businessId, scope);
@@ -242,6 +272,59 @@ class RevenueService {
       );
     }
 
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlRevenueService.revenueSummary(
+        period: _periodQueryParam(scope),
+        includeLedgerHint: true,
+      );
+      if (data == null) {
+        return const PortfolioRevenueLoadResult(
+          success: false,
+          rows: [],
+          totals: RevenueTotals(gross: 0, collected: 0, outstanding: 0),
+          message: 'Failed to load revenue summary',
+        );
+      }
+      final totals = _totalsFromDataMap(data);
+      if (totals == null) {
+        return const PortfolioRevenueLoadResult(
+          success: false,
+          rows: [],
+          totals: RevenueTotals(gross: 0, collected: 0, outstanding: 0),
+          message: 'Missing totals',
+        );
+      }
+      final byRaw = data['by_business'] ?? data['byBusiness'];
+      final apiRows = <int, BusinessRevenueRow>{};
+      if (byRaw is List) {
+        for (final e in byRaw) {
+          if (e is! Map) continue;
+          final rowMap = Map<String, dynamic>.from(e);
+          final id = _toInt(rowMap['business_id'] ?? rowMap['businessId']);
+          if (id == null) continue;
+          apiRows[id] = BusinessRevenueRow(
+            businessId: id,
+            businessName: (rowMap['business_name'] ?? rowMap['businessName'] ?? '').toString(),
+            gross: _toDouble(rowMap['gross_billed'] ?? rowMap['grossBilled']),
+            collected: _toDouble(rowMap['collected']),
+            outstanding: _toDouble(rowMap['outstanding']),
+          );
+        }
+      }
+      final merged = _mergeApiRowsWithBusinessList(businesses, apiRows);
+      merged.sort((a, b) {
+        if (a.loadFailed != b.loadFailed) return a.loadFailed ? 1 : -1;
+        return b.gross.compareTo(a.gross);
+      });
+      final ledgerHint = _parseLedgerHint(data['ledger_hint'] ?? data['ledgerHint']);
+      return PortfolioRevenueLoadResult(
+        success: true,
+        rows: merged,
+        totals: totals,
+        ledgerHint: ledgerHint,
+      );
+    }
+
     try {
       final params = <String, String>{
         'period': _periodQueryParam(scope),
@@ -249,7 +332,7 @@ class RevenueService {
         'include_ledger_hint': '1',
       };
       final uri = Uri.parse('${ApiConfig.baseUrl}/revenue/summary').replace(queryParameters: params);
-      final res = await http.get(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
 
       if (res.statusCode == 404) {
         return _loadPortfolioFromInvoices(token, businesses, scope);

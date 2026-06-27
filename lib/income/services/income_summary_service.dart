@@ -6,12 +6,12 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../business/models/business_models.dart';
 import '../../business/services/business_service.dart';
 import '../../expenses/services/expenses_service.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_revenue_service.dart';
 import '../../revenue/services/revenue_service.dart';
 import '../models/income_models.dart';
 
@@ -120,13 +120,35 @@ class IncomeSummaryService {
     RevenuePeriodScope scope,
   ) async {
     const zero = IncomeTotals(collectedRevenue: 0, totalExpenses: 0, netIncome: 0);
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlRevenueService.businessIncomeSummary(
+        period: _periodQueryParam(scope),
+        businessId: businessId,
+      );
+      if (data == null) {
+        return const SingleBusinessIncomeLoadResult(
+          success: false,
+          totals: zero,
+          message: 'Failed to load income summary',
+        );
+      }
+      final totals = _totalsFromDataMap(data);
+      if (totals == null) {
+        return const SingleBusinessIncomeLoadResult(
+          success: false,
+          totals: zero,
+          message: 'Missing totals',
+        );
+      }
+      return SingleBusinessIncomeLoadResult(success: true, totals: totals);
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/business/income-summary').replace(queryParameters: {
         'period': _periodQueryParam(scope),
         'basis': 'invoice_expense',
         'business_id': '$businessId',
       });
-      final res = await http.get(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
 
       if (res.statusCode == 404) {
         return _loadBusinessTotalsLegacy(token, businessId, scope);
@@ -215,12 +237,58 @@ class IncomeSummaryService {
       );
     }
 
+    if (ApiConfig.useGraphqlBackend) {
+      final data = await GraphqlRevenueService.businessIncomeSummary(
+        period: _periodQueryParam(scope),
+      );
+      if (data == null) {
+        return const PortfolioIncomeLoadResult(
+          success: false,
+          rows: [],
+          totals: IncomeTotals(collectedRevenue: 0, totalExpenses: 0, netIncome: 0),
+          message: 'Failed to load income summary',
+        );
+      }
+      final totals = _totalsFromDataMap(data);
+      if (totals == null) {
+        return const PortfolioIncomeLoadResult(
+          success: false,
+          rows: [],
+          totals: IncomeTotals(collectedRevenue: 0, totalExpenses: 0, netIncome: 0),
+          message: 'Missing totals',
+        );
+      }
+      final byRaw = data['by_business'] ?? data['byBusiness'];
+      final apiRows = <int, BusinessIncomeRow>{};
+      if (byRaw is List) {
+        for (final e in byRaw) {
+          if (e is! Map) continue;
+          final rowMap = Map<String, dynamic>.from(e);
+          final id = _toInt(rowMap['business_id'] ?? rowMap['businessId']);
+          if (id == null) continue;
+          apiRows[id] = BusinessIncomeRow(
+            businessId: id,
+            businessName: (rowMap['business_name'] ?? rowMap['businessName'] ?? '').toString(),
+            collectedRevenue: _toDouble(rowMap['collected_revenue'] ?? rowMap['collectedRevenue']),
+            totalExpenses: _toDouble(rowMap['total_expenses'] ?? rowMap['totalExpenses']),
+            netIncome: _toDouble(rowMap['net_income'] ?? rowMap['netIncome']),
+          );
+        }
+      }
+      final merged = _mergeRowsWithBusinessList(businesses, apiRows);
+      merged.sort((a, b) {
+        if (a.loadFailed != b.loadFailed) return a.loadFailed ? 1 : -1;
+        return b.netIncome.compareTo(a.netIncome);
+      });
+      return PortfolioIncomeLoadResult(success: true, rows: merged, totals: totals);
+    }
+
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/business/income-summary').replace(queryParameters: {
         'period': _periodQueryParam(scope),
         'basis': 'invoice_expense',
       });
-      final res = await http.get(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeadersWithoutTrace(token));
 
       if (res.statusCode == 404) {
         return _loadPortfolioLegacy(token, businesses, scope);

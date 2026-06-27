@@ -7,7 +7,10 @@ import 'dart:convert';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_creator_fund_service.dart';
+import '../../services/graphql/tajiri_graphql_client.dart';
 import '../models/creator_earnings_models.dart';
 
 class CreatorEarningsService {
@@ -22,8 +25,13 @@ class CreatorEarningsService {
     required int userId,
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final dashboard = await GraphqlCreatorFundService.getDashboard();
+      await _cacheDashboard(userId, dashboard);
+      return dashboard;
+    }
     final uri = Uri.parse('$_base/users/me/earnings?user_id=$userId');
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       final dashboard =
@@ -86,6 +94,14 @@ class CreatorEarningsService {
     String? stream,
     String? status,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getEvents(
+        page: page,
+        perPage: perPage,
+        stream: stream,
+        status: status,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'page': '$page',
@@ -94,7 +110,7 @@ class CreatorEarningsService {
       if (status != null) 'status': status,
     };
     final uri = Uri.parse('$_base/users/me/earnings/events').replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       final items = (body['data'] as List)
@@ -109,9 +125,12 @@ class CreatorEarningsService {
   // ── Per-post earnings ──────────────────────────────────────────────
 
   Future<PostEarningsV2> getPostEarnings(int postId, {String? token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getPostEarnings(postId);
+    }
     final uri = Uri.parse('$_base/posts/$postId/earnings');
     final headers = token != null ? ApiConfig.authHeaders(token) : <String, String>{};
-    final resp = await http.get(uri, headers: headers);
+    final resp = await httpGetWithRetry(uri, headers: headers);
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return PostEarningsV2.fromJson(body['data'] as Map<String, dynamic>);
@@ -125,8 +144,15 @@ class CreatorEarningsService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getPostEarningEvents(
+        postId: postId,
+        page: page,
+        perPage: perPage,
+      );
+    }
     final uri = Uri.parse('$_base/posts/$postId/earnings/events?page=$page&per_page=$perPage');
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       final items = (body['data'] as List)
@@ -141,8 +167,11 @@ class CreatorEarningsService {
   // ── Rate card / discovery / disputes ───────────────────────────────
 
   Future<Map<String, dynamic>> getRateCard() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getRateCard();
+    }
     final uri = Uri.parse('$_base/creators/rate-card');
-    final resp = await http.get(uri);
+    final resp = await httpGetWithRetry(uri);
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return body['data'] as Map<String, dynamic>;
@@ -155,6 +184,21 @@ class CreatorEarningsService {
     required int userId,
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation EnablePostDiscoveryMode(\$postId: ID!) {
+          enablePostDiscoveryMode(postId: \$postId)
+        }
+        ''',
+        variables: {'postId': postId.toString()},
+        auth: true,
+      );
+      if (result['enablePostDiscoveryMode'] != true) {
+        throw Exception('Failed to enable Discovery Mode');
+      }
+      return;
+    }
     final uri = Uri.parse('$_base/posts/$postId/discovery-mode');
     final resp = await http.post(
       uri,
@@ -173,6 +217,23 @@ class CreatorEarningsService {
     required String reason,
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation FileCreatorFundDispute(\$eventId: ID!, \$reason: String!) {
+          fileCreatorFundDispute(eventId: \$eventId, reason: \$reason)
+        }
+        ''',
+        variables: {
+          'eventId': eventId.toString(),
+          'reason': reason,
+        },
+        auth: true,
+      );
+      final id = result['fileCreatorFundDispute'];
+      if (id == null) throw Exception('Failed to file dispute');
+      return int.parse(id.toString());
+    }
     final uri = Uri.parse('$_base/users/me/earnings/disputes');
     final resp = await http.post(
       uri,
@@ -194,6 +255,12 @@ class CreatorEarningsService {
     String period = 'month',
     String? postType,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getByDerivativeKind(
+        period: period,
+        postType: postType,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'period': period,
@@ -201,7 +268,7 @@ class CreatorEarningsService {
     };
     final uri = Uri.parse('$_base/users/me/earnings/by-derivative-kind')
         .replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return DerivativeKindResponse.fromJson(
@@ -218,6 +285,12 @@ class CreatorEarningsService {
     String period = 'month',
     String? postType,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getByMultiplier(
+        period: period,
+        postType: postType,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'period': period,
@@ -225,7 +298,7 @@ class CreatorEarningsService {
     };
     final uri = Uri.parse('$_base/users/me/earnings/by-multiplier')
         .replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return MultiplierContributionResponse.fromJson(
@@ -243,6 +316,12 @@ class CreatorEarningsService {
     String period = 'month',
     int limit = 10,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getDownstreamCreators(
+        period: period,
+        limit: limit,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'period': period,
@@ -250,7 +329,7 @@ class CreatorEarningsService {
     };
     final uri = Uri.parse('$_base/users/me/downstream-creators')
         .replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       final data = body['data'] as Map<String, dynamic>;
@@ -271,6 +350,13 @@ class CreatorEarningsService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getMyPostsEarnings(
+        period: period,
+        page: page,
+        perPage: perPage,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'period': period,
@@ -279,7 +365,7 @@ class CreatorEarningsService {
     };
     final uri = Uri.parse('$_base/users/me/posts/earnings')
         .replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return PostEarningsListResponse.fromJson(body);
@@ -296,6 +382,13 @@ class CreatorEarningsService {
     String? stream,
     String? postType,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getByMetric(
+        period: period,
+        postType: postType,
+        stream: stream,
+      );
+    }
     final params = <String, String>{
       'user_id': '$userId',
       'period': period,
@@ -304,7 +397,7 @@ class CreatorEarningsService {
     };
     final uri = Uri.parse('$_base/users/me/earnings/by-metric')
         .replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return MetricBreakdownResponse.fromJson(body['data'] as Map<String, dynamic>);
@@ -319,12 +412,15 @@ class CreatorEarningsService {
     required String token,
     int? year,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCreatorFundService.getTaxSummary(year: year);
+    }
     final params = <String, String>{
       'user_id': '$userId',
       if (year != null) 'year': '$year',
     };
     final uri = Uri.parse('$_base/users/me/earnings/tax').replace(queryParameters: params);
-    final resp = await http.get(uri, headers: ApiConfig.authHeaders(token));
+    final resp = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode == 200 && body['success'] == true) {
       return body['data'] as Map<String, dynamic>;
