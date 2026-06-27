@@ -1,8 +1,9 @@
 // lib/accounting/services/accounting_service.dart
 // Static API methods for all accounting endpoints.
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_accounting_service.dart';
 import '../models/accounting_models.dart';
 
 class AccountingService {
@@ -29,10 +30,18 @@ class AccountingService {
     String? dateFrom,
     String? dateTo,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getBookSummary(
+        token: token,
+        userId: userId,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/book-summary').replace(
           queryParameters: _qp(userId: userId, dateFrom: dateFrom, dateTo: dateTo));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body);
       final data = body['data'] ?? body;
@@ -50,6 +59,16 @@ class AccountingService {
     String? sourceType,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getJournalLedger(
+        token: token,
+        userId: userId,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+        sourceType: sourceType,
+        perPage: perPage,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/journal-ledger').replace(
           queryParameters: _qp(
@@ -58,7 +77,7 @@ class AccountingService {
               dateTo: dateTo,
               sourceType: sourceType,
               perPage: perPage));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return [];
       final body = json.decode(res.body);
       final dataSection = body['data'];
@@ -77,10 +96,17 @@ class AccountingService {
     required int userId,
     required int entryId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getJournalEntry(
+        token: token,
+        userId: userId,
+        entryId: entryId,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/journal-entry/$entryId')
           .replace(queryParameters: _qp(userId: userId));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body);
       final data = body['data'] ?? body;
@@ -96,10 +122,18 @@ class AccountingService {
     String? dateFrom,
     String? dateTo,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getTrialBalance(
+        token: token,
+        userId: userId,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/trial-balance').replace(
           queryParameters: _qp(userId: userId, dateFrom: dateFrom, dateTo: dateTo));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body);
       final data = body['data'] ?? body;
@@ -115,10 +149,18 @@ class AccountingService {
     required String dateFrom,
     required String dateTo,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getProfitAndLoss(
+        token: token,
+        userId: userId,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/profit-and-loss').replace(
           queryParameters: _qp(userId: userId, dateFrom: dateFrom, dateTo: dateTo));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body);
       final data = body['data'] ?? body;
@@ -132,10 +174,16 @@ class AccountingService {
     required String token,
     required int userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAccountingService.getBalanceSheet(
+        token: token,
+        userId: userId,
+      );
+    }
     try {
       final uri = Uri.parse('$_base/balance-sheet')
           .replace(queryParameters: _qp(userId: userId));
-      final res = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final res = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body);
       final data = body['data'] ?? body;
