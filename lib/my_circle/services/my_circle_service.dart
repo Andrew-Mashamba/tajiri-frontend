@@ -1,7 +1,9 @@
 // lib/my_circle/services/my_circle_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_my_circle_service.dart';
 import '../models/my_circle_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -29,6 +31,17 @@ class MyCircleService {
     Mood? mood,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlMyCircleService.logCycleDay(
+        date: date,
+        flowIntensity: flowIntensity,
+        symptoms: symptoms,
+        mood: mood,
+        notes: notes,
+      );
+      if (result.success) getPredictions(userId);
+      return result;
+    }
     try {
       final body = CycleDay(
         userId: userId,
@@ -65,6 +78,9 @@ class MyCircleService {
     required int month,
     required int year,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyCircleService.getCycleDays(month: month, year: year);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/my-circle/cycle-days').replace(
         queryParameters: {
@@ -73,7 +89,7 @@ class MyCircleService {
           'year': '$year',
         },
       );
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -92,8 +108,11 @@ class MyCircleService {
   // ─── Get Predictions ──────────────────────────────────────────
 
   Future<CircleResult<CyclePrediction>> getPredictions(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyCircleService.getPredictions();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/predictions?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/predictions?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -109,8 +128,11 @@ class MyCircleService {
   // ─── Get Stats ────────────────────────────────────────────────
 
   Future<CircleResult<CycleStats>> getStats(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyCircleService.getStats();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/stats?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/stats?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -131,6 +153,13 @@ class MyCircleService {
     required DateTime startDate,
     required int intervalDays,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyCircleService.setContraceptionReminder(
+        type: type,
+        startDate: startDate,
+        intervalDays: intervalDays,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-circle/contraception-reminders'),
@@ -156,7 +185,7 @@ class MyCircleService {
 
   Future<CircleResult<Map<String, dynamic>>> getSettings(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/settings?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/settings?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -236,7 +265,7 @@ class MyCircleService {
 
   Future<CircleResult<Map<String, dynamic>>> viewPartnerCycle(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/partner/view?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/partner/view?user_id=$userId'));
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         return CircleResult(success: true, data: Map<String, dynamic>.from(data['data']));
@@ -279,7 +308,7 @@ class MyCircleService {
 
   Future<CircleResult<Map<String, dynamic>?>> getPartnerStatus(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/partner/status?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/partner/status?user_id=$userId'));
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         return CircleResult(success: true, data: data['data'] != null ? Map<String, dynamic>.from(data['data']) : null);
@@ -400,7 +429,7 @@ class MyCircleService {
   /// Get the user's women's health group (regional or national fallback)
   Future<Map<String, dynamic>?> getWomensHealthGroup(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/groups/womens-health?user_id=$userId'),
       );
       final data = jsonDecode(response.body);
@@ -416,8 +445,11 @@ class MyCircleService {
   // ─── Get Contraception Reminders ──────────────────────────────
 
   Future<CircleListResult<ContraceptionReminder>> getContraceptionReminders(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyCircleService.getContraceptionReminders();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/my-circle/contraception-reminders?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/my-circle/contraception-reminders?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
