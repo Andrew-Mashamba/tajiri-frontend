@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/friend_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_social_service.dart';
 import 'local_storage_service.dart';
 import 'post_service.dart';
 
@@ -18,7 +20,7 @@ class FriendService {
     int perPage = 20,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends?user_id=$userId&page=$page&per_page=$perPage'),
       );
 
@@ -127,7 +129,7 @@ class FriendService {
   /// Get pending friend requests
   Future<FriendRequestsResult> getFriendRequests(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/requests?user_id=$userId'),
       );
 
@@ -177,7 +179,7 @@ class FriendService {
   /// Get friend suggestions
   Future<FriendListResult> getFriendSuggestions(int userId, {int limit = 20}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/suggestions?user_id=$userId&limit=$limit'),
       );
 
@@ -199,7 +201,7 @@ class FriendService {
   /// Get mutual friends
   Future<FriendListResult> getMutualFriends(int userId, int otherUserId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/mutual/$otherUserId?user_id=$userId'),
       );
 
@@ -221,7 +223,7 @@ class FriendService {
   /// Check friendship status with another user
   Future<FriendshipStatusResult> checkFriendshipStatus(int userId, int otherUserId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/status/$otherUserId?user_id=$userId'),
       );
 
@@ -240,7 +242,7 @@ class FriendService {
   /// Search users
   Future<FriendListResult> searchUsers(String query, {int page = 1, int perPage = 20}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/search?q=${Uri.encodeComponent(query)}&page=$page&per_page=$perPage'),
       );
 
@@ -270,13 +272,29 @@ class FriendService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getFollowers(
+        userId: userId,
+        page: page,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/follows/$userId/followers?page=$page&per_page=$perPage';
       if (currentUserId != null) {
         url += '&current_user_id=$currentUserId';
       }
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(Uri.parse(url),
+      final response = await httpGetWithRetry(Uri.parse(url),
           headers: token != null ? ApiConfig.authHeaders(token) : null);
 
       if (response.statusCode == 200) {
@@ -305,13 +323,29 @@ class FriendService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getFollowing(
+        userId: userId,
+        page: page,
+      );
+      return FollowListResult(
+        success: result.success,
+        users: result.users,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+        ),
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/follows/$userId/following?page=$page&per_page=$perPage';
       if (currentUserId != null) {
         url += '&current_user_id=$currentUserId';
       }
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(Uri.parse(url),
+      final response = await httpGetWithRetry(Uri.parse(url),
           headers: token != null ? ApiConfig.authHeaders(token) : null);
 
       if (response.statusCode == 200) {
@@ -345,7 +379,7 @@ class FriendService {
       if (currentUserId != null) {
         url += '&current_user_id=$currentUserId';
       }
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -367,32 +401,91 @@ class FriendService {
   }
 
   /// Follow a user
-  Future<bool> followUser(int userId, int targetUserId) async {
+  /// Follow a user.
+  ///
+  /// UN-004: hits the attribution-aware `/follows/` endpoint and forwards
+  /// origin context so the backend can fire the right §III row:
+  /// - origin_post_id → follow_from_post·author (row 8)
+  /// - origin_clip_id → clip_conversion·clipper (row 50)
+  /// - origin_collection_id → collection_conversion·curator (row 62)
+  /// - origin_translation_id → translated_conversion·translator (row 56)
+  /// - share_uid → follow_from_share·sharer (row 29)
+  Future<bool> followUser(
+    int userId,
+    int targetUserId, {
+    int? originPostId,
+    int? originClipId,
+    int? originCollectionId,
+    int? originTranslationId,
+    int? originStreamId,
+    String? shareUid,
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.followUser(targetUserId);
+    }
     try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'follow_id': targetUserId,
+      };
+      if (originPostId != null) body['origin_post_id'] = originPostId;
+      if (originClipId != null) body['origin_clip_id'] = originClipId;
+      if (originCollectionId != null) body['origin_collection_id'] = originCollectionId;
+      if (originTranslationId != null) body['origin_translation_id'] = originTranslationId;
+      if (originStreamId != null) body['origin_stream_id'] = originStreamId;
+      if (shareUid != null && shareUid.isNotEmpty) body['share_uid'] = shareUid;
+
       final response = await http.post(
+        Uri.parse('$_baseUrl/follows/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true;
+      }
+      // Legacy fallback for backwards-compat with older deployments.
+      final legacy = await http.post(
         Uri.parse('$_baseUrl/users/$targetUserId/follow'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': userId}),
       );
-
-      final data = jsonDecode(response.body);
-      return response.statusCode == 200 && data['success'] == true;
+      final data = jsonDecode(legacy.body);
+      return legacy.statusCode == 200 && data['success'] == true;
     } catch (e) {
       return false;
     }
   }
 
-  /// Unfollow a user
+  /// Unfollow a user. Canonical: DELETE /api/follows with {user_id, follow_id}
+  /// — mirrors followUser. Falls back to the legacy POST /users/{id}/unfollow
+  /// route for older deployments.
   Future<bool> unfollowUser(int userId, int targetUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.unfollowUser(targetUserId);
+    }
     try {
-      final response = await http.post(
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/follows'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'follow_id': targetUserId,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) return true;
+      }
+      // Legacy fallback for backwards-compat.
+      final legacy = await http.post(
         Uri.parse('$_baseUrl/users/$targetUserId/unfollow'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': userId}),
       );
-
-      final data = jsonDecode(response.body);
-      return response.statusCode == 200 && data['success'] == true;
+      if (legacy.statusCode != 200) return false;
+      final data = jsonDecode(legacy.body);
+      return data['success'] == true;
     } catch (e) {
       return false;
     }
@@ -400,6 +493,9 @@ class FriendService {
 
   /// Block a user. POST /api/users/block
   Future<bool> blockUser(int userId, int blockedUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.blockUser(blockedUserId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/users/block'),
@@ -457,7 +553,7 @@ class FriendService {
       final uri = Uri.parse('$_baseUrl/subscriptions/creator/$creatorId/subscribers')
           .replace(queryParameters: params);
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(uri,
+      final response = await httpGetWithRetry(uri,
           headers: token != null ? ApiConfig.authHeaders(token) : null);
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
@@ -481,7 +577,7 @@ class FriendService {
   Future<SubscriberInsights?> getSubscriberInsights({required int creatorId}) async {
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '$_baseUrl/subscriptions/creator/$creatorId/subscribers/insights'),
         headers: token != null ? ApiConfig.authHeaders(token) : null,
@@ -581,7 +677,7 @@ class FriendService {
       final uri =
           Uri.parse('$_baseUrl/friends').replace(queryParameters: params);
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(uri,
+      final response = await httpGetWithRetry(uri,
           headers: token != null ? ApiConfig.authHeaders(token) : null);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -605,7 +701,7 @@ class FriendService {
   Future<FollowerInsights?> getFriendsInsights() async {
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends/insights'),
         headers: token != null ? ApiConfig.authHeaders(token) : null,
       );
@@ -681,7 +777,7 @@ class FriendService {
       final uri = Uri.parse('$_baseUrl/follows/$userId/following')
           .replace(queryParameters: params);
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(uri,
+      final response = await httpGetWithRetry(uri,
           headers: token != null ? ApiConfig.authHeaders(token) : null);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -705,7 +801,7 @@ class FriendService {
   Future<FollowerInsights?> getFollowingInsights({required int userId}) async {
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/follows/$userId/following/insights'),
         headers: token != null ? ApiConfig.authHeaders(token) : null,
       );
@@ -798,7 +894,7 @@ class FriendService {
       final uri = Uri.parse('$_baseUrl/follows/$userId/followers')
           .replace(queryParameters: params);
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(uri,
+      final response = await httpGetWithRetry(uri,
           headers: token != null ? ApiConfig.authHeaders(token) : null);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -822,7 +918,7 @@ class FriendService {
   Future<FollowerInsights?> getFollowerInsights({required int userId}) async {
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/follows/$userId/followers/insights'),
         headers: token != null ? ApiConfig.authHeaders(token) : null,
       );

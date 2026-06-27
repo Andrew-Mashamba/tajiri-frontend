@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../models/friend_models.dart';
 import '../../models/post_models.dart';
 import 'graphql_post_mapper.dart';
 import 'tajiri_graphql_client.dart';
@@ -126,6 +127,165 @@ class GraphqlSocialService {
   ''';
 
   static final Map<String, String?> _savedCursors = {};
+  static final Map<int, String?> _followerCursors = {};
+  static final Map<int, String?> _followingCursors = {};
+
+  static const _followUserFields = r'''
+    id
+    username
+    displayName
+    avatarUrl
+    isFollowing
+    isFollowedBy
+    followedAt
+  ''';
+
+  static Map<String, dynamic> _followUserToLegacy(Map<String, dynamic> row) {
+    final displayName = row['displayName']?.toString() ?? '';
+    final parts = displayName.split(' ');
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'first_name': parts.isNotEmpty ? parts.first : displayName,
+      'last_name': parts.length > 1 ? parts.sublist(1).join(' ') : '',
+      'username': row['username'],
+      'profile_photo_url': row['avatarUrl'],
+      'is_following': row['isFollowing'] == true,
+      'is_followed_by': row['isFollowedBy'] == true,
+      'followed_at': row['followedAt'],
+    };
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getFollowers({
+    required int userId,
+    int page = 1,
+  }) async {
+    try {
+      if (page == 1) _followerCursors.remove(userId);
+      final cursor = page > 1 ? _followerCursors[userId] : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          users: <FollowUser>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query UserFollowers(\$userId: ID!, \$cursor: String) {
+          userFollowers(userId: \$userId, cursor: \$cursor) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'userId': userId.toString(),
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data['userFollowers'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final users = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => FollowUser.fromJson(_followUserToLegacy(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) _followerCursors[userId] = nextCursor;
+      return (
+        success: true,
+        users: users,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        users: <FollowUser>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
+
+  static Future<
+      ({
+        bool success,
+        List<FollowUser> users,
+        int currentPage,
+        int lastPage,
+        String? message,
+      })> getFollowing({
+    required int userId,
+    int page = 1,
+  }) async {
+    try {
+      if (page == 1) _followingCursors.remove(userId);
+      final cursor = page > 1 ? _followingCursors[userId] : null;
+      if (page > 1 && cursor == null) {
+        return (
+          success: true,
+          users: <FollowUser>[],
+          currentPage: page,
+          lastPage: page,
+          message: null,
+        );
+      }
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query UserFollowing(\$userId: ID!, \$cursor: String) {
+          userFollowing(userId: \$userId, cursor: \$cursor) {
+            items { $_followUserFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'userId': userId.toString(),
+          if (cursor != null) 'cursor': cursor,
+        },
+        auth: true,
+      );
+      final conn = data['userFollowing'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final users = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => FollowUser.fromJson(_followUserToLegacy(row)))
+          .toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) _followingCursors[userId] = nextCursor;
+      return (
+        success: true,
+        users: users,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        message: null,
+      );
+    } catch (e) {
+      return (
+        success: false,
+        users: <FollowUser>[],
+        currentPage: page,
+        lastPage: page,
+        message: '$e',
+      );
+    }
+  }
 
   static Future<({bool success, int? likesCount})> likePost(int postId) async {
     try {
