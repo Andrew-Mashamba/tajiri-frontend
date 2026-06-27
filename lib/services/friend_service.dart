@@ -807,6 +807,9 @@ class FriendService {
   }
 
   Future<int> bulkUnfriend({required List<int> ids}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.bulkRemoveFriends(ids);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -929,6 +932,9 @@ class FriendService {
   }
 
   Future<bool> unfollow({required int userId, required int targetId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.unfollowUser(targetId);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.delete(
@@ -943,6 +949,9 @@ class FriendService {
   }
 
   Future<int> bulkUnfollow({required int userId, required List<int> ids}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.bulkUnfollow(ids);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(
@@ -1068,6 +1077,9 @@ class FriendService {
   }
 
   Future<bool> removeFollower({required int userId, required int followerId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.removeFollower(followerId);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.delete(
@@ -1082,6 +1094,9 @@ class FriendService {
   }
 
   Future<int> bulkRemoveFollowers({required int userId, required List<int> ids}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.bulkRemoveFollowers(ids);
+    }
     try {
       final token = (await LocalStorageService.getInstance()).getAuthToken();
       final response = await http.post(

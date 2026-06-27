@@ -527,6 +527,87 @@ class GraphqlSocialService {
     }
   }
 
+  static Future<int> bulkRemoveFriends(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkRemoveFriends($userIds: [ID!]!) {
+          bulkRemoveFriends(userIds: $userIds)
+        }
+        ''',
+        variables: {
+          'userIds': ids.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkRemoveFriends'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] bulkRemoveFriends: $e');
+      return 0;
+    }
+  }
+
+  static Future<bool> removeFollower(int followerId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation RemoveFollower($followerId: ID!) {
+          removeFollower(followerId: $followerId)
+        }
+        ''',
+        variables: {'followerId': followerId.toString()},
+        auth: true,
+      );
+      return data['removeFollower'] == true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] removeFollower: $e');
+      return false;
+    }
+  }
+
+  static Future<int> bulkRemoveFollowers(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkRemoveFollowers($followerIds: [ID!]!) {
+          bulkRemoveFollowers(followerIds: $followerIds)
+        }
+        ''',
+        variables: {
+          'followerIds': ids.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkRemoveFollowers'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] bulkRemoveFollowers: $e');
+      return 0;
+    }
+  }
+
+  static Future<int> bulkUnfollow(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'''
+        mutation BulkUnfollow($userIds: [ID!]!) {
+          bulkUnfollow(userIds: $userIds)
+        }
+        ''',
+        variables: {
+          'userIds': ids.map((id) => id.toString()).toList(),
+        },
+        auth: true,
+      );
+      return (data['bulkUnfollow'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlSocialService] bulkUnfollow: $e');
+      return 0;
+    }
+  }
+
   static Future<
       ({
         bool success,
