@@ -2,7 +2,9 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_travel_service.dart';
 import '../models/travel_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -18,6 +20,15 @@ class TravelService {
     int passengers = 1,
     String? preferredMode,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.search(
+        origin: origin,
+        destination: destination,
+        date: date,
+        passengers: passengers,
+        preferredMode: preferredMode,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'origin': origin,
@@ -51,8 +62,11 @@ class TravelService {
   // ─── Option Detail ──────────────────────────────────────────
 
   Future<TransportResult<TransportOption>> getOption(String optionId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getOption(optionId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/transport/option/$optionId'),
       );
       if (response.statusCode == 200) {
@@ -73,13 +87,16 @@ class TravelService {
   // ─── Cities ─────────────────────────────────────────────────
 
   Future<TransportListResult<City>> getCities({String? query}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getCities(query: query);
+    }
     try {
       final params = <String, String>{};
       if (query != null && query.isNotEmpty) params['q'] = query;
 
       final uri = Uri.parse('$_baseUrl/transport/cities')
           .replace(queryParameters: params.isNotEmpty ? params : null);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -99,8 +116,11 @@ class TravelService {
   // ─── Popular Routes ─────────────────────────────────────────
 
   Future<TransportListResult<PopularRoute>> getPopularRoutes() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getPopularRoutes();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/transport/popular-routes'),
       );
       if (response.statusCode == 200) {
@@ -127,6 +147,15 @@ class TravelService {
     required PaymentMethod paymentMethod,
     String? paymentPhone,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.createBooking(
+        optionId: optionId,
+        userId: userId,
+        passengers: passengers,
+        paymentMethod: paymentMethod,
+        paymentPhone: paymentPhone,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/transport/bookings'),
@@ -166,10 +195,13 @@ class TravelService {
   // ─── My Bookings ────────────────────────────────────────────
 
   Future<TransportListResult<TransportBooking>> getBookings(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getBookings(userId);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/transport/bookings')
           .replace(queryParameters: {'user_id': '$userId'});
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -189,6 +221,9 @@ class TravelService {
   // ─── Cancel Booking ─────────────────────────────────────────
 
   Future<TransportResult<TransportBooking>> cancelBooking(int bookingId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.cancelBooking(bookingId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/transport/bookings/$bookingId/cancel'),
@@ -214,8 +249,11 @@ class TravelService {
   // ─── Ticket ─────────────────────────────────────────────────
 
   Future<TransportResult<TransportTicket>> getTicket(int bookingId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getTicket(bookingId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/transport/tickets/$bookingId'),
       );
       if (response.statusCode == 200) {
@@ -236,8 +274,11 @@ class TravelService {
   // ─── Weather ────────────────────────────────────────────────
 
   Future<TransportResult<Map<String, dynamic>>> getWeather(String cityCode) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTravelService.getWeather(cityCode);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/transport/cities/$cityCode/weather'),
       );
       if (response.statusCode == 200) {
