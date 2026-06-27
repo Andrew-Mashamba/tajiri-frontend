@@ -1,7 +1,9 @@
 // lib/my_baby/services/my_baby_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_my_baby_service.dart';
 import '../models/my_baby_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -18,6 +20,15 @@ class MyBabyService {
     int? birthWeightGrams,
     double? birthLengthCm,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.registerBaby(
+        name: name,
+        dateOfBirth: dateOfBirth,
+        gender: gender,
+        birthWeightGrams: birthWeightGrams,
+        birthLengthCm: birthLengthCm,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/babies'),
@@ -44,8 +55,11 @@ class MyBabyService {
   }
 
   Future<MyBabyListResult<Baby>> getMyBabies(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.getMyBabies();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/babies?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -72,6 +86,14 @@ class MyBabyService {
     int? birthWeightGrams,
     String? photoUrl,
   }) async {
+    if (ApiConfig.useGraphqlBackend && photoUrl == null) {
+      return GraphqlMyBabyService.updateBaby(
+        babyId: babyId,
+        name: name,
+        gender: gender,
+        birthWeightGrams: birthWeightGrams,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-baby/babies/$babyId'),
@@ -99,7 +121,7 @@ class MyBabyService {
   Future<MyBabyListResult<Vaccination>> getVaccinationSchedule(
       String token, int babyId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/vaccinations?baby_id=$babyId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -148,7 +170,7 @@ class MyBabyService {
   Future<MyBabyListResult<BabyMilestone>> getMilestones(
       String token, int babyId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/milestones?baby_id=$babyId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -223,6 +245,16 @@ class MyBabyService {
     double? amountMl,
     String? foodDescription,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.logFeeding(
+        babyId: babyId,
+        type: type,
+        side: side,
+        durationMinutes: durationMinutes,
+        amountMl: amountMl,
+        foodDescription: foodDescription,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/feedings'),
@@ -252,10 +284,13 @@ class MyBabyService {
 
   Future<MyBabyListResult<FeedingLog>> getFeedingHistory(
       String token, int babyId, DateTime date) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.getFeedingHistory(babyId, date);
+    }
     try {
       final dateStr =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '$_baseUrl/my-baby/feedings?baby_id=$babyId&date=$dateStr'),
         headers: ApiConfig.authHeaders(token),
@@ -286,6 +321,15 @@ class MyBabyService {
     String type = 'nap',
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.logSleep(
+        babyId: babyId,
+        startTime: startTime,
+        endTime: endTime,
+        type: type,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/sleep'),
@@ -317,6 +361,12 @@ class MyBabyService {
     DateTime? endTime,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend && endTime != null) {
+      return GraphqlMyBabyService.updateSleep(
+        sessionId: sessionId,
+        endTime: endTime,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/my-baby/sleep/$sessionId'),
@@ -341,6 +391,9 @@ class MyBabyService {
 
   Future<MyBabyListResult<SleepSession>> getSleepHistory(
       String token, int babyId, {DateTime? date}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.getSleepHistory(babyId, date: date);
+    }
     try {
       String url = '$_baseUrl/my-baby/sleep?baby_id=$babyId';
       if (date != null) {
@@ -348,7 +401,7 @@ class MyBabyService {
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         url += '&date=$dateStr';
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -377,6 +430,14 @@ class MyBabyService {
     String? color,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.logDiaper(
+        babyId: babyId,
+        type: type,
+        color: color,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/diapers'),
@@ -403,6 +464,9 @@ class MyBabyService {
 
   Future<MyBabyListResult<DiaperLog>> getDiaperHistory(
       String token, int babyId, {DateTime? date}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.getDiaperHistory(babyId, date: date);
+    }
     try {
       String url = '$_baseUrl/my-baby/diapers?baby_id=$babyId';
       if (date != null) {
@@ -410,7 +474,7 @@ class MyBabyService {
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         url += '&date=$dateStr';
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -441,6 +505,16 @@ class MyBabyService {
     required DateTime measuredAt,
     String? notes,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.logGrowth(
+        babyId: babyId,
+        weightKg: weightKg,
+        heightCm: heightCm,
+        headCm: headCm,
+        measuredAt: measuredAt,
+        notes: notes,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/my-baby/growth'),
@@ -469,8 +543,11 @@ class MyBabyService {
 
   Future<MyBabyListResult<GrowthMeasurement>> getGrowthHistory(
       String token, int babyId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMyBabyService.getGrowthHistory(babyId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/growth?baby_id=$babyId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -532,7 +609,7 @@ class MyBabyService {
     try {
       String url = '$_baseUrl/my-baby/health-logs?baby_id=$babyId';
       if (type != null) url += '&type=$type';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -559,7 +636,7 @@ class MyBabyService {
     try {
       String url = '$_baseUrl/my-baby/photos?baby_id=$babyId';
       if (type != null) url += '&type=$type';
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -675,7 +752,7 @@ class MyBabyService {
   Future<MyBabyListResult<CaregiverShare>> listCaregivers(
       String token, int babyId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/my-baby/caregivers?baby_id=$babyId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -740,7 +817,7 @@ class MyBabyService {
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         url += '&date=$dateStr';
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );

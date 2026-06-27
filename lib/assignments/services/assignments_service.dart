@@ -1,6 +1,8 @@
 // lib/assignments/services/assignments_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_assignments_service.dart';
 import '../models/assignments_models.dart';
 
 class AssignmentsService {
@@ -11,6 +13,13 @@ class AssignmentsService {
     String? status,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAssignmentsService.getAssignments(
+        subject: subject,
+        status: status,
+        page: page,
+      );
+    }
     try {
       final params = <String, dynamic>{'page': page};
       if (subject != null) params['subject'] = subject;
@@ -39,6 +48,18 @@ class AssignmentsService {
     required DateTime dueDate,
     double? maxGrade,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAssignmentsService.createAssignment(
+        title: title,
+        description: description,
+        subject: subject,
+        courseCode: courseCode,
+        classId: classId,
+        priority: priority,
+        dueDate: dueDate,
+        maxGrade: maxGrade,
+      );
+    }
     try {
       final res = await _dio.post('/education/assignments', data: {
         'title': title,
@@ -67,6 +88,13 @@ class AssignmentsService {
     required String status,
     double? grade,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAssignmentsService.updateStatus(
+        assignmentId: assignmentId,
+        status: status,
+        grade: grade,
+      );
+    }
     try {
       final res = await _dio.put('/education/assignments/$assignmentId', data: {
         'status': status,
@@ -85,6 +113,9 @@ class AssignmentsService {
   }
 
   Future<AssignmentResult<void>> deleteAssignment(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAssignmentsService.deleteAssignment(id);
+    }
     try {
       final res = await _dio.delete('/education/assignments/$id');
       return AssignmentResult(success: res.statusCode == 200);
@@ -94,6 +125,9 @@ class AssignmentsService {
   }
 
   Future<AssignmentListResult<GradeSummary>> getGradesSummary() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAssignmentsService.getGradesSummary();
+    }
     try {
       final res = await _dio.get('/education/assignments/grades-summary');
       if (res.statusCode == 200 && res.data['success'] == true) {

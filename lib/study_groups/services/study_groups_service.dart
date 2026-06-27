@@ -1,12 +1,17 @@
 // lib/study_groups/services/study_groups_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_study_groups_service.dart';
 import '../models/study_groups_models.dart';
 
 class StudyGroupsService {
   Dio get _dio => AuthenticatedDio.instance;
 
   Future<StudyListResult<StudyGroup>> getMyGroups() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.getMyGroups();
+    }
     try {
       final res = await _dio.get('/education/study-groups');
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -25,6 +30,12 @@ class StudyGroupsService {
     String? subject,
     String? search,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.discoverGroups(
+        subject: subject,
+        search: search,
+      );
+    }
     try {
       final params = <String, dynamic>{};
       if (subject != null) params['subject'] = subject;
@@ -51,6 +62,16 @@ class StudyGroupsService {
     int maxMembers = 8,
     bool isPublic = true,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.createGroup(
+        name: name,
+        subject: subject,
+        description: description,
+        courseCode: courseCode,
+        maxMembers: maxMembers,
+        isPublic: isPublic,
+      );
+    }
     try {
       final res = await _dio.post('/education/study-groups', data: {
         'name': name,
@@ -73,6 +94,9 @@ class StudyGroupsService {
   }
 
   Future<StudyResult<void>> joinGroup(int groupId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.joinGroup(groupId);
+    }
     try {
       final res =
           await _dio.post('/education/study-groups/$groupId/join');
@@ -83,6 +107,9 @@ class StudyGroupsService {
   }
 
   Future<StudyListResult<StudyGroupMember>> getMembers(int groupId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.getMembers(groupId);
+    }
     try {
       final res =
           await _dio.get('/education/study-groups/$groupId/members');
@@ -99,6 +126,9 @@ class StudyGroupsService {
   }
 
   Future<StudyListResult<GroupStudySession>> getSessions(int groupId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.getSessions(groupId);
+    }
     try {
       final res =
           await _dio.get('/education/study-groups/$groupId/sessions');
@@ -122,6 +152,16 @@ class StudyGroupsService {
     String? location,
     bool isVirtual = false,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.scheduleSession(
+        groupId: groupId,
+        topic: topic,
+        scheduledAt: scheduledAt,
+        durationMinutes: durationMinutes,
+        location: location,
+        isVirtual: isVirtual,
+      );
+    }
     try {
       final res = await _dio.post(
         '/education/study-groups/$groupId/sessions',
@@ -146,6 +186,9 @@ class StudyGroupsService {
   }
 
   Future<StudyResult<void>> checkIn(int sessionId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlStudyGroupsService.checkIn(sessionId);
+    }
     try {
       final res = await _dio
           .post('/education/study-sessions/$sessionId/check-in');

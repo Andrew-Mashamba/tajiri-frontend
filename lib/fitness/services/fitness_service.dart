@@ -1,7 +1,9 @@
 // lib/fitness/services/fitness_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_fitness_service.dart';
 import '../models/fitness_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -26,7 +28,7 @@ class FitnessService {
       if (longitude != null) params['longitude'] = '$longitude';
 
       final uri = Uri.parse('$_baseUrl/fitness/gyms').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -41,7 +43,7 @@ class FitnessService {
 
   Future<FitnessResult<Gym>> getGymDetail(int gymId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/fitness/gyms/$gymId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/fitness/gyms/$gymId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) return FitnessResult(success: true, data: Gym.fromJson(data['data']));
@@ -82,7 +84,7 @@ class FitnessService {
 
   Future<FitnessListResult<GymMembership>> getMyMemberships(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/fitness/memberships?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/fitness/memberships?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -123,7 +125,7 @@ class FitnessService {
       if (recordedOnly == true) params['recorded'] = '1';
 
       final uri = Uri.parse('$_baseUrl/fitness/classes').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -138,7 +140,7 @@ class FitnessService {
 
   Future<FitnessListResult<FitnessClass>> getUpcomingClasses(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/fitness/classes/upcoming?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/fitness/classes/upcoming?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -162,6 +164,16 @@ class FitnessService {
     int? gymId,
     int? classId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFitnessService.logWorkout(
+        type: type,
+        durationMinutes: durationMinutes,
+        caloriesBurned: caloriesBurned,
+        notes: notes,
+        gymId: gymId,
+        classId: classId,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/fitness/workouts'),
@@ -185,8 +197,11 @@ class FitnessService {
   }
 
   Future<FitnessListResult<WorkoutLog>> getWorkoutHistory(int userId, {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFitnessService.getWorkoutHistory(page: page);
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/fitness/workouts?user_id=$userId&page=$page'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/fitness/workouts?user_id=$userId&page=$page'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -200,8 +215,11 @@ class FitnessService {
   }
 
   Future<FitnessResult<FitnessStats>> getStats(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFitnessService.getStats();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/fitness/stats?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/fitness/stats?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) return FitnessResult(success: true, data: FitnessStats.fromJson(data['data']));
