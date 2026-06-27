@@ -1,18 +1,25 @@
 // lib/sala/services/sala_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_sala_service.dart';
 import '../models/sala_models.dart';
 
 Dio get _dio => AuthenticatedDio.instance;
 
 class SalaService {
-  // ─── Prayer Requests ────────────────────────────────────────
-
   static Future<PaginatedResult<PrayerRequest>> getRequests({
     String? status,
     String? category,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.getRequests(
+        status: status,
+        category: category,
+        page: page,
+      );
+    }
     try {
       final params = <String, dynamic>{'page': page};
       if (status != null) params['status'] = status;
@@ -38,6 +45,9 @@ class SalaService {
 
   static Future<SingleResult<PrayerRequest>> createRequest(
       Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.createRequest(body);
+    }
     try {
       final r = await _dio.post('/sala/requests', data: body);
       final data = r.data;
@@ -53,6 +63,9 @@ class SalaService {
 
   static Future<SingleResult<void>> markAnswered(
       int id, String testimony) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.markAnswered(id, testimony);
+    }
     try {
       final r = await _dio
           .put('/sala/requests/$id/answer', data: {'testimony': testimony});
@@ -63,6 +76,9 @@ class SalaService {
   }
 
   static Future<SingleResult<void>> prayForRequest(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.prayForRequest(id);
+    }
     try {
       final r = await _dio.post('/sala/requests/$id/pray');
       return SingleResult(success: r.data['success'] == true);
@@ -71,10 +87,11 @@ class SalaService {
     }
   }
 
-  // ─── Shared Feed ────────────────────────────────────────────
-
   static Future<PaginatedResult<PrayerRequest>> getSharedFeed(
       {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.getSharedFeed(page: page);
+    }
     try {
       final r =
           await _dio.get('/sala/feed', queryParameters: {'page': page});
@@ -91,10 +108,11 @@ class SalaService {
     }
   }
 
-  // ─── Journal ────────────────────────────────────────────────
-
   static Future<PaginatedResult<PrayerJournalEntry>> getJournal(
       {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.getJournal(page: page);
+    }
     try {
       final r =
           await _dio.get('/sala/journal', queryParameters: {'page': page});
@@ -113,6 +131,9 @@ class SalaService {
 
   static Future<SingleResult<PrayerJournalEntry>> addJournalEntry(
       Map<String, dynamic> body) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.addJournalEntry(body);
+    }
     try {
       final r = await _dio.post('/sala/journal', data: body);
       final data = r.data;
@@ -126,9 +147,10 @@ class SalaService {
     }
   }
 
-  // ─── Stats ──────────────────────────────────────────────────
-
   static Future<SingleResult<PrayerStats>> getStats() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSalaService.getStats();
+    }
     try {
       final r = await _dio.get('/sala/stats');
       final data = r.data;

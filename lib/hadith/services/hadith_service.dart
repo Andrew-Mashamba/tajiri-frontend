@@ -1,16 +1,20 @@
 // lib/hadith/services/hadith_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_hadith_service.dart';
 import '../models/hadith_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class HadithService {
-  // ─── Get Collections ────────────────────────────────────────
   Future<PaginatedResult<HadithCollection>> getCollections() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.getCollections();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hadith/collections'),
       );
       if (response.statusCode == 200) {
@@ -29,12 +33,14 @@ class HadithService {
     }
   }
 
-  // ─── Get Books in Collection ────────────────────────────────
   Future<PaginatedResult<HadithBook>> getBooks({
     required int collectionId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.getBooks(collectionId: collectionId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hadith/collections/$collectionId/books'),
       );
       if (response.statusCode == 200) {
@@ -53,14 +59,20 @@ class HadithService {
     }
   }
 
-  // ─── Get Hadiths in Book ────────────────────────────────────
   Future<PaginatedResult<Hadith>> getHadiths({
     required int bookId,
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.getHadiths(
+        bookId: bookId,
+        page: page,
+        perPage: perPage,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hadith/books/$bookId'
             '?page=$page&per_page=$perPage'),
       );
@@ -72,7 +84,8 @@ class HadithService {
                   .toList() ??
               [];
           return PaginatedResult(
-            success: true, items: items,
+            success: true,
+            items: items,
             currentPage: _parseInt(data['meta']?['current_page']),
             lastPage: _parseInt(data['meta']?['last_page']),
             total: _parseInt(data['meta']?['total']),
@@ -85,10 +98,12 @@ class HadithService {
     }
   }
 
-  // ─── Get Daily Hadith ──────────────────────────────────────
   Future<SingleResult<Hadith>> getDailyHadith() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.getDailyHadith();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hadith/daily'),
       );
       if (response.statusCode == 200) {
@@ -103,10 +118,12 @@ class HadithService {
     }
   }
 
-  // ─── Search Hadith ──────────────────────────────────────────
   Future<PaginatedResult<Hadith>> search({required String query}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.search(query: query);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hadith/search?q=$query'),
       );
       if (response.statusCode == 200) {
@@ -125,11 +142,13 @@ class HadithService {
     }
   }
 
-  // ─── Toggle Favorite ───────────────────────────────────────
   Future<SingleResult<bool>> toggleFavorite({
     required String token,
     required int hadithId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlHadithService.toggleFavorite(hadithId: hadithId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/hadith/$hadithId/favorite'),

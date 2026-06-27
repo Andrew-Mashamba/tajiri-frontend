@@ -1,16 +1,20 @@
 // lib/dua/services/dua_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_dua_service.dart';
 import '../models/dua_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class DuaService {
-  // ─── Get Categories ─────────────────────────────────────────
   Future<PaginatedResult<DuaCategory>> getCategories() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.getCategories();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/duas/categories'),
       );
       if (response.statusCode == 200) {
@@ -29,13 +33,18 @@ class DuaService {
     }
   }
 
-  // ─── Get Duas by Category ──────────────────────────────────
   Future<PaginatedResult<Dua>> getDuasByCategory({
     required int categoryId,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.getDuasByCategory(
+        categoryId: categoryId,
+        page: page,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/duas/category/$categoryId?page=$page'),
       );
       if (response.statusCode == 200) {
@@ -54,12 +63,14 @@ class DuaService {
     }
   }
 
-  // ─── Get Adhkar ─────────────────────────────────────────────
   Future<PaginatedResult<AdhkarItem>> getAdhkar({
-    required String type, // morning, evening
+    required String type,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.getAdhkar(type: type);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/duas/adhkar?type=$type'),
       );
       if (response.statusCode == 200) {
@@ -78,10 +89,12 @@ class DuaService {
     }
   }
 
-  // ─── Get Favorites ──────────────────────────────────────────
   Future<PaginatedResult<Dua>> getFavorites({required String token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.getFavorites();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/duas/favorites'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -101,11 +114,13 @@ class DuaService {
     }
   }
 
-  // ─── Toggle Favorite ───────────────────────────────────────
   Future<SingleResult<bool>> toggleFavorite({
     required String token,
     required int duaId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.toggleFavorite(duaId: duaId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/duas/$duaId/favorite'),
@@ -124,10 +139,12 @@ class DuaService {
     }
   }
 
-  // ─── Search Duas ────────────────────────────────────────────
   Future<PaginatedResult<Dua>> search({required String query}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlDuaService.search(query: query);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/duas/search?q=$query'),
       );
       if (response.statusCode == 200) {

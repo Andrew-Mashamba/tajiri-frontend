@@ -1,16 +1,20 @@
 // lib/quran/services/quran_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_quran_service.dart';
 import '../models/quran_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class QuranService {
-  // ─── Get All Surahs ─────────────────────────────────────────
   Future<PaginatedResult<Surah>> getSurahs() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.getSurahs();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/quran/surahs'),
       );
       if (response.statusCode == 200) {
@@ -29,14 +33,20 @@ class QuranService {
     }
   }
 
-  // ─── Get Ayahs for Surah ────────────────────────────────────
   Future<PaginatedResult<Ayah>> getAyahs({
     required int surahNumber,
     int page = 1,
     int perPage = 50,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.getAyahs(
+        surahNumber: surahNumber,
+        page: page,
+        perPage: perPage,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/quran/surahs/$surahNumber/ayahs'
             '?page=$page&per_page=$perPage'),
       );
@@ -62,10 +72,12 @@ class QuranService {
     }
   }
 
-  // ─── Get Juz List ───────────────────────────────────────────
   Future<PaginatedResult<Juz>> getJuzList() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.getJuzList();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/quran/juz'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/quran/juz'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -82,13 +94,15 @@ class QuranService {
     }
   }
 
-  // ─── Search Quran ───────────────────────────────────────────
   Future<PaginatedResult<Ayah>> search({
     required String query,
     String language = 'sw',
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.search(query: query, language: language);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/quran/search?q=$query&lang=$language'),
       );
       if (response.statusCode == 200) {
@@ -107,12 +121,14 @@ class QuranService {
     }
   }
 
-  // ─── Bookmarks ──────────────────────────────────────────────
   Future<PaginatedResult<QuranBookmark>> getBookmarks({
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.getBookmarks();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/quran/bookmarks'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -136,6 +152,9 @@ class QuranService {
     required String token,
     required QuranBookmark bookmark,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.addBookmark(bookmark);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/quran/bookmarks'),
@@ -157,10 +176,12 @@ class QuranService {
     }
   }
 
-  // ─── Reciters ───────────────────────────────────────────────
   Future<PaginatedResult<Reciter>> getReciters() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlQuranService.getReciters();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/quran/reciters'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/quran/reciters'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
