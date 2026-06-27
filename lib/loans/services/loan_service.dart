@@ -1,7 +1,9 @@
 // lib/loans/services/loan_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_loans_service.dart';
 import '../models/loan_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -10,8 +12,11 @@ class BoostLoanService {
   // ─── Credit Score ──────────────────────────────────────────────
 
   Future<LoanResult<CreatorCreditScore>> getCreditScore(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.getCreditScore();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/loans/credit-score?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -36,6 +41,9 @@ class BoostLoanService {
     required LoanTier tier,
     required double amount,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.applyForLoan(tier: tier, amount: amount);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/loans/apply'),
@@ -62,8 +70,11 @@ class BoostLoanService {
   // ─── Active Loans ──────────────────────────────────────────────
 
   Future<LoanListResult<BoostLoan>> getMyLoans(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.getMyLoans();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/loans/my-loans?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -82,8 +93,11 @@ class BoostLoanService {
   }
 
   Future<LoanResult<BoostLoan>> getLoanDetail(int loanId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.getLoanDetail(loanId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/loans/$loanId'),
       );
       if (response.statusCode == 200) {
@@ -104,8 +118,11 @@ class BoostLoanService {
   // ─── Repayment History ─────────────────────────────────────────
 
   Future<LoanListResult<LoanRepaymentEvent>> getRepaymentHistory(int loanId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.getRepaymentHistory(loanId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/loans/$loanId/repayments'),
       );
       if (response.statusCode == 200) {
@@ -126,6 +143,9 @@ class BoostLoanService {
   // ─── Loan Actions ──────────────────────────────────────────────
 
   Future<LoanResult<BoostLoan>> requestPause(int loanId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.requestPause(loanId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/loans/$loanId/pause'),
@@ -147,6 +167,14 @@ class BoostLoanService {
     required String paymentMethod,
     String? phoneNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLoansService.makeManualRepayment(
+        loanId: loanId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/loans/$loanId/repay'),
