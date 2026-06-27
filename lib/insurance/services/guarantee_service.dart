@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_guarantee_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -26,6 +28,19 @@ class GuaranteeService {
     int coverageTzs = 500000,
     int deductibleTzs = 25000,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlGuaranteeService.createPolicy(
+        skillCategory: skillCategory,
+        premiumTzsMonthly: premiumTzsMonthly,
+        coverageTzs: coverageTzs,
+        deductibleTzs: deductibleTzs,
+      );
+      return GuaranteePolicyResult(
+        success: result.success,
+        policy: result.policy,
+        message: result.message,
+      );
+    }
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/guarantee-policies'),
@@ -50,8 +65,16 @@ class GuaranteeService {
   }
 
   static Future<GuaranteePolicyResult> listPolicies({required int partnerUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlGuaranteeService.listPolicies();
+      return GuaranteePolicyResult(
+        success: result.success,
+        policy: result.policy,
+        message: result.message,
+      );
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/guarantee-policies?partner_user_id=$partnerUserId'),
         headers: const {'Accept': 'application/json'},
       );
@@ -76,6 +99,20 @@ class GuaranteeService {
     int amountClaimedTzs = 0,
     List<String> photos = const [],
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlGuaranteeService.fileClaim(
+        policyId: policyId,
+        reason: reason,
+        description: description,
+        amountClaimedTzs: amountClaimedTzs,
+        photos: photos,
+      );
+      return GuaranteeClaimResult(
+        success: result.success,
+        claim: result.claim,
+        message: result.message,
+      );
+    }
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/guarantee-claims'),

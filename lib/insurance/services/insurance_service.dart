@@ -2,7 +2,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_insurance_service.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
 import '../models/insurance_models.dart';
@@ -17,6 +19,13 @@ class InsuranceService {
     String? search,
     bool? popularOnly,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.getProducts(
+        category: category,
+        search: search,
+        popularOnly: popularOnly,
+      );
+    }
     try {
       final params = <String, String>{};
       if (category != null) params['category'] = category;
@@ -24,7 +33,7 @@ class InsuranceService {
       if (popularOnly == true) params['popular'] = '1';
 
       final uri = Uri.parse('$_baseUrl/insurance/products').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -39,8 +48,11 @@ class InsuranceService {
   }
 
   Future<InsuranceResult<InsuranceProduct>> getProductDetail(int productId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.getProductDetail(productId);
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/insurance/products/$productId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/insurance/products/$productId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -65,6 +77,36 @@ class InsuranceService {
     int? linkedModuleId,
     String? linkedModule,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlInsuranceService.purchasePolicy(
+        productId: productId,
+        premiumFrequency: premiumFrequency,
+        beneficiaryName: beneficiaryName,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+        linkedModuleId: linkedModuleId,
+        linkedModule: linkedModule,
+      );
+      if (result.success && result.data != null) {
+        final policy = result.data!;
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: policy.premiumAmount,
+              category: 'bima',
+              description: 'Bima: ${policy.productName}',
+              referenceId: 'insurance_purchase_${policy.id}',
+              sourceModule: 'insurance',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) {
+          debugPrint('[InsuranceService] expenditure tracking skipped');
+        });
+      }
+      return result;
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/insurance/purchase'),
@@ -110,8 +152,11 @@ class InsuranceService {
   // ─── My Policies ───────────────────────────────────────────────
 
   Future<InsuranceListResult<InsurancePolicy>> getMyPolicies(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.getMyPolicies();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/insurance/policies?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/insurance/policies?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -126,6 +171,9 @@ class InsuranceService {
   }
 
   Future<InsuranceResult<void>> cancelPolicy(int policyId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.cancelPolicy(policyId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/insurance/policies/$policyId/cancel'),
@@ -146,6 +194,13 @@ class InsuranceService {
     required String paymentMethod,
     String? phoneNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.renewPolicy(
+        policyId: policyId,
+        paymentMethod: paymentMethod,
+        phoneNumber: phoneNumber,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/insurance/policies/$policyId/renew'),
@@ -173,6 +228,14 @@ class InsuranceService {
     required String reason,
     String? description,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.submitClaim(
+        policyId: policyId,
+        amount: amount,
+        reason: reason,
+        description: description,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/insurance/claims'),
@@ -195,8 +258,11 @@ class InsuranceService {
   }
 
   Future<InsuranceListResult<InsuranceClaim>> getMyClaims(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.getMyClaims();
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/insurance/claims?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/insurance/claims?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -213,8 +279,11 @@ class InsuranceService {
   // ─── Recommendations (cross-module context) ────────────────────
 
   Future<InsuranceListResult<InsuranceProduct>> getRecommendations(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlInsuranceService.getRecommendations();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/insurance/recommendations?user_id=$userId'),
       );
       if (response.statusCode == 200) {
