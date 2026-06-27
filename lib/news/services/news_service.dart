@@ -1,7 +1,9 @@
 // lib/news/services/news_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_news_service.dart';
 import '../models/news_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -15,6 +17,14 @@ class NewsService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlNewsService.getArticles(
+        category: category,
+        search: search,
+        page: page,
+        perPage: perPage,
+      );
+    }
     try {
       final params = <String, String>{
         'page': '$page',
@@ -25,7 +35,7 @@ class NewsService {
 
       final uri = Uri.parse('$_baseUrl/news/articles')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -46,8 +56,11 @@ class NewsService {
   }
 
   Future<NewsResult<NewsArticle>> getArticle(int articleId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlNewsService.getArticle(articleId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/news/articles/$articleId'),
       );
       if (response.statusCode == 200) {
@@ -68,8 +81,11 @@ class NewsService {
   // ─── Top Stories ──────────────────────────────────────────────
 
   Future<NewsListResult<NewsArticle>> getTopStories() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlNewsService.getTopStories();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/news/top-stories'),
       );
       if (response.statusCode == 200) {
@@ -93,6 +109,9 @@ class NewsService {
     required int articleId,
     required int userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlNewsService.saveArticle(articleId: articleId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/news/articles/$articleId/save'),
@@ -109,8 +128,11 @@ class NewsService {
   }
 
   Future<NewsListResult<NewsArticle>> getSavedArticles(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlNewsService.getSavedArticles();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/news/saved?user_id=$userId'),
       );
       if (response.statusCode == 200) {
