@@ -92,6 +92,7 @@ class GraphqlTajirikaService {
             if (_serviceAreaFromData(data) != null)
               'serviceArea': _serviceAreaFromData(data),
             'tier': data['tier']?.toString() ?? 'standard',
+            if (data['referral_code'] != null) 'referralCode': data['referral_code'],
           },
         },
         auth: true,
@@ -855,5 +856,142 @@ class GraphqlTajirikaService {
       'status': row['status'] ?? 'active',
       'created_at': row['createdAt'] ?? DateTime.now().toIso8601String(),
     };
+  }
+
+  static Future<TajirikaResult> updatePayoutAccount({
+    required String method,
+    required String account,
+  }) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateTajirikaPayoutAccount(\$input: UpdateTajirikaPayoutAccountInput!) {
+          updateTajirikaPayoutAccount(input: \$input)
+        }
+        ''',
+        variables: {
+          'input': {
+            'method': method,
+            'account': account,
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> requestPayout({
+    required double amount,
+    required String method,
+    String? idempotencyKey,
+  }) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation RequestTajirikaPayout(\$input: RequestTajirikaPayoutInput!) {
+          requestTajirikaPayout(input: \$input) {
+            id
+            amount
+            status
+            method
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'amount': amount,
+            'method': method,
+            if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<PayoutListResult> getPayoutHistory() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaPayouts {
+          myTajirikaPayouts {
+            id
+            amount
+            status
+            method
+            paidAt
+            createdAt
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['myTajirikaPayouts'] as List<dynamic>? ?? [];
+      final payouts = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => Payout.fromJson(_payoutToLegacy(row)))
+          .toList();
+      return PayoutListResult(success: true, payouts: payouts);
+    } catch (e) {
+      return PayoutListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _payoutToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'amount': row['amount'] ?? 0,
+      'status': row['status'] ?? 'pending',
+      'method': row['method'] ?? 'mpesa',
+      if (row['paidAt'] != null) 'paid_at': row['paidAt'],
+      'created_at': row['createdAt'] ?? DateTime.now().toIso8601String(),
+    };
+  }
+
+  static Future<TajirikaResult> reportJobCompleted({
+    required int partnerId,
+    required String module,
+    required String jobId,
+    required double rating,
+    required double earnings,
+  }) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation ReportTajirikaJobCompleted(
+          \$partnerId: ID!
+          \$module: String!
+          \$jobId: String!
+          \$rating: Float!
+          \$earnings: Float!
+        ) {
+          reportTajirikaJobCompleted(
+            partnerId: \$partnerId
+            module: \$module
+            jobId: \$jobId
+            rating: \$rating
+            earnings: \$earnings
+          )
+        }
+        ''',
+        variables: {
+          'partnerId': partnerId.toString(),
+          'module': module,
+          'jobId': jobId,
+          'rating': rating,
+          'earnings': earnings,
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
   }
 }

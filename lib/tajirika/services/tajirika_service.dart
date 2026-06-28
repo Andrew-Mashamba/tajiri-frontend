@@ -218,6 +218,12 @@ class TajirikaService {
     int userId,
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updatePayoutAccount(
+        method: data['method']?.toString() ?? '',
+        account: data['account']?.toString() ?? '',
+      );
+    }
     try {
       data['user_id'] = userId;
       final response = await http.put(
@@ -821,6 +827,24 @@ class TajirikaService {
     double amount,
     String method,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlTajirikaService.requestPayout(
+        amount: amount,
+        method: method,
+        idempotencyKey: 'tajirika_payout_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (result.success) {
+        IncomeService.recordIncome(
+          token: token,
+          amount: amount,
+          source: 'tajirika_payout',
+          description: 'Tajirika payout',
+          referenceId: 'tajirika_payout_${DateTime.now().millisecondsSinceEpoch}',
+          sourceModule: 'tajirika',
+        ).catchError((_) => null);
+      }
+      return result;
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/payouts'),
@@ -856,6 +880,9 @@ class TajirikaService {
     int userId, {
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend && page == 1) {
+      return GraphqlTajirikaService.getPayoutHistory();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/payouts?user_id=$userId&page=$page'),
@@ -953,6 +980,27 @@ class TajirikaService {
     double rating,
     double earnings,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlTajirikaService.reportJobCompleted(
+        partnerId: partnerId,
+        module: module,
+        jobId: jobId,
+        rating: rating,
+        earnings: earnings,
+      );
+      if (result.success) {
+        IncomeService.recordIncome(
+          token: token,
+          amount: earnings,
+          source: 'tajirika_job',
+          description: 'Tajirika: $module job completed',
+          referenceId: 'tajirika_job_$jobId',
+          sourceModule: 'tajirika',
+          metadata: {'module': module, 'jobId': jobId},
+        ).catchError((_) => null);
+      }
+      return result;
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId/job-completed'),
