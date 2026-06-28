@@ -952,7 +952,7 @@ class TajirikaService {
     Object? dropOffMode,
     int page = 1,
   }) async {
-    if (ApiConfig.useGraphqlBackend && dropOffMode == null && page == 1) {
+    if (ApiConfig.useGraphqlBackend && page == 1) {
       return GraphqlTajirikaService.searchPartners(
         skill: skills != null && skills.isNotEmpty ? skills.first : null,
         skills: skills,
@@ -960,6 +960,7 @@ class TajirikaService {
         tier: tier,
         minRating: minRating,
         available: available,
+        dropOffMode: dropOffMode?.toString(),
       );
     }
     try {

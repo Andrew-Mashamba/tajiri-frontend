@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_partner_product_service.dart';
 import '../models/tajirika_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -21,6 +23,9 @@ class PartnerProductService {
     required int userId,
     required File file,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.uploadPhoto(userId: userId, file: file);
+    }
     final url = '$_baseUrl/tajirika/partner-products/photo';
     _log('UPLOAD $url userId=$userId path=${file.path}');
     try {
@@ -58,6 +63,20 @@ class PartnerProductService {
     int limit = 50,
     int offset = 0,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.listProducts(
+        partnerId: partnerId,
+        userId: userId,
+        mine: mine,
+        skillCategory: skillCategory,
+        domain: domain,
+        kind: kind,
+        activeOnly: activeOnly,
+        query: query,
+        limit: limit,
+        offset: offset,
+      );
+    }
     try {
       final params = <String, String>{
         'limit': '$limit',
@@ -80,7 +99,7 @@ class PartnerProductService {
         queryParameters: params,
       );
       _log('GET $uri');
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('listProducts status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -102,10 +121,13 @@ class PartnerProductService {
   }
 
   static Future<PartnerProductResult> getProduct(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.getProduct(id);
+    }
     final url = '$_baseUrl/tajirika/partner-products/$id';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       _log('getProduct status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -160,6 +182,39 @@ class PartnerProductService {
     List<String> photos = const [],
     List<PartnerProductVariant> variants = const [],
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.createProduct(
+        userId: userId,
+        skillCategory: skillCategory,
+        domain: domain,
+        kind: kind,
+        isProductized: isProductized,
+        catalogSkuCode: catalogSkuCode,
+        title: title,
+        description: description,
+        basePriceTzs: basePriceTzs,
+        leadTimeHours: leadTimeHours,
+        minQuantity: minQuantity,
+        mode: mode,
+        deliveryRadiusKm: deliveryRadiusKm,
+        deliveryFeePerKmTzs: deliveryFeePerKmTzs,
+        pickupAddress: pickupAddress,
+        pickupLat: pickupLat,
+        pickupLng: pickupLng,
+        tags: tags,
+        dietaryTags: dietaryTags,
+        hairTypes: hairTypes,
+        amcVisitCount: amcVisitCount,
+        amcValidityMonths: amcValidityMonths,
+        rebookCadenceDays: rebookCadenceDays,
+        travelSurchargeTzs: travelSurchargeTzs,
+        afterHoursSurchargeTzs: afterHoursSurchargeTzs,
+        holidayPremiumTzs: holidayPremiumTzs,
+        parkingPassThroughTzs: parkingPassThroughTzs,
+        photos: photos,
+        variants: variants,
+      );
+    }
     final url = '$_baseUrl/tajirika/partner-products';
     _log('POST $url userId=$userId skill=$skillCategory kind=${kind.apiValue}');
     try {
@@ -253,6 +308,39 @@ class PartnerProductService {
     List<String>? photos,
     List<PartnerProductVariant>? variants,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.updateProduct(
+        productId: productId,
+        userId: userId,
+        title: title,
+        description: description,
+        basePriceTzs: basePriceTzs,
+        leadTimeHours: leadTimeHours,
+        minQuantity: minQuantity,
+        mode: mode,
+        deliveryRadiusKm: deliveryRadiusKm,
+        deliveryFeePerKmTzs: deliveryFeePerKmTzs,
+        pickupAddress: pickupAddress,
+        pickupLat: pickupLat,
+        pickupLng: pickupLng,
+        kind: kind,
+        isProductized: isProductized,
+        catalogSkuCode: catalogSkuCode,
+        isActive: isActive,
+        tags: tags,
+        dietaryTags: dietaryTags,
+        hairTypes: hairTypes,
+        amcVisitCount: amcVisitCount,
+        amcValidityMonths: amcValidityMonths,
+        rebookCadenceDays: rebookCadenceDays,
+        travelSurchargeTzs: travelSurchargeTzs,
+        afterHoursSurchargeTzs: afterHoursSurchargeTzs,
+        holidayPremiumTzs: holidayPremiumTzs,
+        parkingPassThroughTzs: parkingPassThroughTzs,
+        photos: photos,
+        variants: variants,
+      );
+    }
     final url = '$_baseUrl/tajirika/partner-products/$productId';
     _log('PATCH $url userId=$userId');
     try {
@@ -326,6 +414,20 @@ class PartnerProductService {
     String? notes,
     int? variantId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.placeOrder(
+        productId: productId,
+        userId: userId,
+        quantity: quantity,
+        deliveryMode: deliveryMode,
+        deliveryAddress: deliveryAddress,
+        deliveryLat: deliveryLat,
+        deliveryLng: deliveryLng,
+        requestedFor: requestedFor,
+        notes: notes,
+        variantId: variantId,
+      );
+    }
     final url = '$_baseUrl/tajirika/partner-products/$productId/order';
     _log('POST $url userId=$userId qty=$quantity mode=$deliveryMode');
     try {
@@ -375,6 +477,12 @@ class PartnerProductService {
     required int productId,
     required int userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlPartnerProductService.deleteProduct(
+        productId: productId,
+        userId: userId,
+      );
+    }
     final url = '$_baseUrl/tajirika/partner-products/$productId';
     _log('DELETE $url userId=$userId');
     try {

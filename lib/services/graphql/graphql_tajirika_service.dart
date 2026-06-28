@@ -196,6 +196,7 @@ class GraphqlTajirikaService {
     String? tier,
     double? minRating,
     bool? available,
+    String? dropOffMode,
   }) async {
     try {
       final data = await TajiriGraphqlClient.instance.query(
@@ -208,6 +209,7 @@ class GraphqlTajirikaService {
           \$tier: String
           \$minRating: Float
           \$available: Boolean
+          \$dropOffMode: String
         ) {
           tajirikaPartners(
             query: \$query
@@ -217,6 +219,7 @@ class GraphqlTajirikaService {
             tier: \$tier
             minRating: \$minRating
             available: \$available
+            dropOffMode: \$dropOffMode
           ) {
             $_partnerFields
           }
@@ -230,6 +233,7 @@ class GraphqlTajirikaService {
           if (tier != null && tier.isNotEmpty) 'tier': tier,
           if (minRating != null) 'minRating': minRating,
           if (available != null) 'available': available,
+          if (dropOffMode != null && dropOffMode.isNotEmpty) 'dropOffMode': dropOffMode,
         },
         auth: true,
       );
