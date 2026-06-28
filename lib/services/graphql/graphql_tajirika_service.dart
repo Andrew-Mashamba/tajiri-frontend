@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import '../../tajirika/models/tajirika_models.dart';
+import 'graphql_media_service.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL Tajirika partner profile (Phase 93).
@@ -483,6 +486,199 @@ class GraphqlTajirikaService {
       'response_time_minutes': row['responseTimeMinutes'] ?? 0,
       'repeat_customer_rate': row['repeatCustomerRate'] ?? 0,
       'active_modules': row['activeModules'] ?? [],
+    };
+  }
+
+  static Future<TajirikaResult> uploadPortfolioItem(
+    File file, {
+    String? caption,
+    String? skillCategory,
+  }) async {
+    try {
+      final uploaded = await GraphqlMediaService.uploadFile(
+        file,
+        mediaType: file.path.toLowerCase().endsWith('.mp4') ? 'video' : 'image',
+      );
+      final path = uploaded?['file_path']?.toString();
+      if (path == null) {
+        return TajirikaResult(success: false, message: 'Failed to upload media');
+      }
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation AddTajirikaPortfolioItem(\$input: AddTajirikaPortfolioItemInput!) {
+          addTajirikaPortfolioItem(input: \$input) {
+            id
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'url': path,
+            'itemType': file.path.toLowerCase().endsWith('.mp4') ? 'video' : 'photo',
+            if (caption != null && caption.isNotEmpty) 'caption': caption,
+            if (skillCategory != null && skillCategory.isNotEmpty)
+              'skillCategory': skillCategory,
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> deletePortfolioItem(int itemId) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation DeleteTajirikaPortfolioItem(\$itemId: ID!) {
+          deleteTajirikaPortfolioItem(itemId: \$itemId)
+        }
+        ''',
+        variables: {'itemId': itemId.toString()},
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<ReferralStats> getReferralStats() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaReferralStats {
+          myTajirikaReferralStats {
+            referralCode
+            totalReferred
+            registered
+            verified
+            totalBonusEarned
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['myTajirikaReferralStats'] as Map<String, dynamic>?;
+      if (row == null) return ReferralStats(referralCode: '');
+      return ReferralStats.fromJson(_referralStatsToLegacy(row));
+    } catch (_) {
+      return ReferralStats(referralCode: '');
+    }
+  }
+
+  static Map<String, dynamic> _referralStatsToLegacy(Map<String, dynamic> row) {
+    return {
+      'referral_code': row['referralCode'] ?? '',
+      'total_referred': row['totalReferred'] ?? 0,
+      'registered': row['registered'] ?? 0,
+      'verified': row['verified'] ?? 0,
+      'total_bonus_earned': row['totalBonusEarned'] ?? 0,
+    };
+  }
+
+  static Future<ReferralListResult> getReferrals() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaReferrals {
+          myTajirikaReferrals {
+            id
+            referrerId
+            referredId
+            referredName
+            referredPhoto
+            referredSkills
+            status
+            bonus
+            createdAt
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['myTajirikaReferrals'] as List<dynamic>? ?? [];
+      final referrals = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => Referral.fromJson(_referralToLegacy(row)))
+          .toList();
+      return ReferralListResult(success: true, referrals: referrals);
+    } catch (e) {
+      return ReferralListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _referralToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'referrer_id': int.tryParse(row['referrerId']?.toString() ?? '') ?? 0,
+      'referred_id': int.tryParse(row['referredId']?.toString() ?? '') ?? 0,
+      'referred_name': row['referredName'] ?? '',
+      if (row['referredPhoto'] != null) 'referred_photo': row['referredPhoto'],
+      'referred_skills': row['referredSkills'] ?? [],
+      'status': row['status'] ?? 'pending',
+      'bonus': row['bonus'] ?? 0,
+      'created_at': row['createdAt'] ?? DateTime.now().toIso8601String(),
+    };
+  }
+
+  static Future<TrainingListResult> getTrainingCourses({String? category}) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query TajirikaTrainingCourses(\$category: String) {
+          tajirikaTrainingCourses(category: \$category) {
+            id
+            title
+            titleSw
+            description
+            descriptionSw
+            category
+            durationMinutes
+            videoUrl
+            thumbnailUrl
+            isRequired
+            progress
+            isCompleted
+            completedAt
+            certificateUrl
+          }
+        }
+        ''',
+        variables: {
+          if (category != null && category.isNotEmpty) 'category': category,
+        },
+        auth: true,
+      );
+      final rows = data['tajirikaTrainingCourses'] as List<dynamic>? ?? [];
+      final courses = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => TrainingCourse.fromJson(_trainingCourseToLegacy(row)))
+          .toList();
+      return TrainingListResult(success: true, courses: courses);
+    } catch (e) {
+      return TrainingListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _trainingCourseToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'title': row['title'] ?? '',
+      'title_sw': row['titleSw'] ?? '',
+      'description': row['description'] ?? '',
+      'description_sw': row['descriptionSw'] ?? '',
+      'category': row['category'],
+      'duration_minutes': row['durationMinutes'] ?? 0,
+      if (row['videoUrl'] != null) 'video_url': row['videoUrl'],
+      if (row['thumbnailUrl'] != null) 'thumbnail_url': row['thumbnailUrl'],
+      'is_required': row['isRequired'] ?? false,
+      'progress': row['progress'] ?? 0,
+      'is_completed': row['isCompleted'] ?? false,
+      if (row['completedAt'] != null) 'completed_at': row['completedAt'],
+      if (row['certificateUrl'] != null) 'certificate_url': row['certificateUrl'],
     };
   }
 }

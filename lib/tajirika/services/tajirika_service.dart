@@ -542,6 +542,13 @@ class TajirikaService {
     String? caption,
     String? skillCategory,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.uploadPortfolioItem(
+        file,
+        caption: caption,
+        skillCategory: skillCategory,
+      );
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -578,6 +585,9 @@ class TajirikaService {
     int userId,
     int itemId,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.deletePortfolioItem(itemId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/tajirika/portfolio/$itemId?user_id=$userId'),
@@ -606,6 +616,9 @@ class TajirikaService {
     String? category,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend && page == 1) {
+      return GraphqlTajirikaService.getTrainingCourses(category: category);
+    }
     try {
       final params = <String, String>{
         'page': page.toString(),
@@ -685,6 +698,9 @@ class TajirikaService {
     int userId, {
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend && page == 1) {
+      return GraphqlTajirikaService.getReferrals();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/referrals?user_id=$userId&page=$page'),
@@ -706,6 +722,9 @@ class TajirikaService {
   }
 
   static Future<ReferralStats> getReferralStats(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getReferralStats();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/referrals/stats?user_id=$userId'),
