@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_ops_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -58,6 +59,17 @@ class DeliveryFeeService {
         ),
       );
 
+      if (ApiConfig.useGraphqlBackend) {
+        return GraphqlTajirikaOpsService.calculateDeliveryFee(
+          fromLat: pos.latitude,
+          fromLng: pos.longitude,
+          toLat: partnerLat,
+          toLng: partnerLng,
+          perKmTzs: perKmTzs,
+          maxFeeTzs: maxFeeTzs,
+        );
+      }
+
       // 2. Call backend distance endpoint
       final uri = Uri.parse('$_baseUrl/delivery-fee').replace(queryParameters: {
         'from_lat': pos.latitude.toString(),
@@ -68,7 +80,7 @@ class DeliveryFeeService {
         'max_fee': maxFeeTzs.toString(),
       });
 
-      final res = await http.get(uri, headers: {'Accept': 'application/json'});
+      final res = await httpGetWithRetry(uri, headers: {'Accept': 'application/json'});
       if (res.statusCode != 200) {
         return DeliveryFeeResult(
           success: false,

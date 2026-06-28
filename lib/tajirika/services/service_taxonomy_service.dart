@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_ops_service.dart';
 
 /// Spec F1 #1 — Three-tier service taxonomy.
 class TaxonomyNode {
@@ -40,9 +40,12 @@ class TaxonomyNode {
 
 class ServiceTaxonomyService {
   static Future<List<TaxonomyNode>> categories() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.listTaxonomyCategories();
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/service-taxonomy/categories')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['categories'] is List) {
@@ -55,9 +58,12 @@ class ServiceTaxonomyService {
   }
 
   static Future<List<TaxonomyNode>> children(int parentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.listTaxonomyChildren(parentId);
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/service-taxonomy/children/$parentId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['items'] is List) {
@@ -71,10 +77,13 @@ class ServiceTaxonomyService {
 
   static Future<List<TaxonomyNode>> search(String q) async {
     if (q.trim().isEmpty) return const [];
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.searchTaxonomy(q);
+    }
     final encoded = Uri.encodeQueryComponent(q.trim());
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/service-taxonomy/search?q=$encoded')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['items'] is List) {

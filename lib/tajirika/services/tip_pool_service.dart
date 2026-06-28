@@ -1,11 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_ops_service.dart';
 
 class TipPoolService {
   static Future<List<TipPoolRule>> list({required int partnerUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.listTipPools(partnerUserId);
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/tip-pools')
             .replace(queryParameters: {'partner_user_id': '$partnerUserId'}),
       );
@@ -29,6 +34,16 @@ class TipPoolService {
     int distributionFrequencyDays = 7,
     int minTipTzs = 0,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.createTipPool(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+        tipSplitType: tipSplitType,
+        staffShares: staffShares,
+        distributionFrequencyDays: distributionFrequencyDays,
+        minTipTzs: minTipTzs,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'partner_user_id': partnerUserId,
@@ -58,6 +73,9 @@ class TipPoolService {
   }
 
   static Future<bool> update(int id, Map<String, dynamic> fields) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.updateTipPool(id, fields);
+    }
     try {
       final res = await http.patch(
         Uri.parse('${ApiConfig.baseUrl}/tip-pools/$id'),
@@ -71,6 +89,9 @@ class TipPoolService {
   }
 
   static Future<TipDistributionResult?> distribute(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.distributeTipPool(id);
+    }
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/tip-pools/$id/distribute'),
@@ -95,8 +116,11 @@ class TipPoolService {
   }
 
   static Future<List<TipDistributionResult>> distributions(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.listTipPoolDistributions(id);
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/tip-pools/$id/distributions'),
       );
       if (res.statusCode != 200) return const [];

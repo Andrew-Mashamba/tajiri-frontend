@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_ops_service.dart';
 
 class GeofenceService {
   static Future<GeofenceCheckResult> check({
@@ -10,6 +12,15 @@ class GeofenceService {
     required double lat,
     required double lng,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.checkGeofence(
+        partnerUserId: partnerUserId,
+        orderId: orderId,
+        orderSource: orderSource,
+        lat: lat,
+        lng: lng,
+      );
+    }
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/geofence/check'),
@@ -49,8 +60,16 @@ class GeofenceService {
     required double toLat,
     required double toLng,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.geofenceEta(
+        fromLat: fromLat,
+        fromLng: fromLng,
+        toLat: toLat,
+        toLng: toLng,
+      );
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/geofence/eta').replace(queryParameters: {
           'from_lat': '$fromLat',
           'from_lng': '$fromLng',
@@ -79,11 +98,18 @@ class GeofenceService {
     int? orderId,
     int limit = 50,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaOpsService.listGeofenceEvents(
+        partnerUserId: partnerUserId,
+        orderId: orderId,
+        limit: limit,
+      );
+    }
     try {
       final params = <String, String>{'limit': '$limit'};
       if (partnerUserId != null) params['partner_user_id'] = '$partnerUserId';
       if (orderId != null) params['order_id'] = '$orderId';
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/geofence/events').replace(queryParameters: params),
       );
       if (res.statusCode != 200) return const [];
