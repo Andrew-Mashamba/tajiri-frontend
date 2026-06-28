@@ -111,6 +111,9 @@ class KatibaService {
 
   // ─── Amendments ───────────────────────────────────────────────
   Future<PaginatedResult<Amendment>> getAmendments() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getAmendments();
+    }
     try {
       final r = await _dio.get('/katiba/amendments');
       final d = r.data;
@@ -129,6 +132,9 @@ class KatibaService {
 
   // ─── Quiz ─────────────────────────────────────────────────────
   Future<PaginatedResult<QuizQuestion>> getQuiz({int? chapterId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getQuiz(chapterId: chapterId);
+    }
     try {
       final r = await _dio.get('/katiba/quiz', queryParameters: {
         if (chapterId != null) 'chapter_id': chapterId,
@@ -150,6 +156,9 @@ class KatibaService {
   Future<SingleResult<QuizResult>> submitQuizScore(
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.submitQuizScore(data);
+    }
     try {
       final r = await _dio.post('/katiba/quiz/score', data: data);
       final d = r.data;
@@ -184,6 +193,9 @@ class KatibaService {
 
   // ─── Glossary ─────────────────────────────────────────────────
   Future<PaginatedResult<GlossaryTerm>> getGlossary() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getGlossary();
+    }
     try {
       final r = await _dio.get('/katiba/glossary');
       final d = r.data;

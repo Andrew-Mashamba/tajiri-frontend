@@ -209,4 +209,44 @@ class GraphqlGovernmentService {
       return GovtListResult(success: false, message: '$e');
     }
   }
+
+  static Future<GovtResult<Map<String, dynamic>>> calculateNssfContribution({
+    required double monthlySalary,
+    required int years,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query CalculateNssfContribution(\$monthlySalary: Float!, \$years: Int!) {
+          calculateNssfContribution(monthlySalary: \$monthlySalary, years: \$years) {
+            employeeContribution
+            employerContribution
+            totalMonthly
+            totalProjected
+          }
+        }
+        ''',
+        variables: {
+          'monthlySalary': monthlySalary,
+          'years': years,
+        },
+        auth: false,
+      );
+      final row = data['calculateNssfContribution'] as Map<String, dynamic>?;
+      if (row == null) {
+        return GovtResult(success: false, message: 'Imeshindwa kuhesabu');
+      }
+      return GovtResult(
+        success: true,
+        data: {
+          'employee_contribution': row['employeeContribution'],
+          'employer_contribution': row['employerContribution'],
+          'total_monthly': row['totalMonthly'],
+          'total_projected': row['totalProjected'],
+        },
+      );
+    } catch (e) {
+      return GovtResult(success: false, message: '$e');
+    }
+  }
 }

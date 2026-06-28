@@ -199,6 +199,12 @@ class GovernmentService {
     required double monthlySalary,
     required int years,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.calculateNssfContribution(
+        monthlySalary: monthlySalary,
+        years: years,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/nssf/calculate'),

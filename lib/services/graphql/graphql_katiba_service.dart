@@ -235,4 +235,171 @@ class GraphqlKatibaService {
       return SingleResult(message: '$e');
     }
   }
+
+  static Map<String, dynamic> _amendmentToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'number': int.tryParse(row['number']?.toString() ?? '') ?? 0,
+      'year': int.tryParse(row['year']?.toString() ?? '') ?? 0,
+      'description': row['description'] ?? '',
+      'changed_articles': (row['changedArticles'] as List<dynamic>? ?? [])
+          .map((e) => int.tryParse(e.toString()) ?? 0)
+          .toList(),
+    };
+  }
+
+  static Map<String, dynamic> _quizQuestionToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'question_sw': row['questionSw'] ?? '',
+      'question_en': row['questionEn'] ?? '',
+      'options': (row['options'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      'correct_index': int.tryParse(row['correctIndex']?.toString() ?? '') ?? 0,
+      'explanation': row['explanation'] ?? '',
+    };
+  }
+
+  static Map<String, dynamic> _glossaryToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'term_sw': row['termSw'] ?? '',
+      'term_en': row['termEn'] ?? '',
+      'definition_sw': row['definitionSw'] ?? '',
+      'definition_en': row['definitionEn'] ?? '',
+    };
+  }
+
+  static Future<PaginatedResult<Amendment>> getAmendments() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaAmendments {
+          katibaAmendments {
+            id
+            number
+            year
+            description
+            changedArticles
+          }
+        }
+        ''',
+        auth: false,
+      );
+      final rows = data['katibaAmendments'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => Amendment.fromJson(_amendmentToLegacy(row)))
+          .toList();
+      return PaginatedResult(success: true, items: items, total: items.length);
+    } catch (e) {
+      return PaginatedResult(message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<QuizQuestion>> getQuiz({int? chapterId}) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaQuiz(\$chapterId: ID) {
+          katibaQuiz(chapterId: \$chapterId) {
+            id
+            chapterId
+            questionSw
+            questionEn
+            options
+            correctIndex
+            explanation
+          }
+        }
+        ''',
+        variables: {
+          if (chapterId != null) 'chapterId': chapterId.toString(),
+        },
+        auth: false,
+      );
+      final rows = data['katibaQuiz'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => QuizQuestion.fromJson(_quizQuestionToLegacy(row)))
+          .toList();
+      return PaginatedResult(success: true, items: items, total: items.length);
+    } catch (e) {
+      return PaginatedResult(message: '$e');
+    }
+  }
+
+  static Future<SingleResult<QuizResult>> submitQuizScore(
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final total = int.tryParse(data['total_questions']?.toString() ?? '') ??
+          int.tryParse(data['totalQuestions']?.toString() ?? '') ??
+          0;
+      final correct = int.tryParse(data['correct_answers']?.toString() ?? '') ??
+          int.tryParse(data['correctAnswers']?.toString() ?? '') ??
+          0;
+      final result = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitKatibaQuizScore(\$totalQuestions: Int!, \$correctAnswers: Int!) {
+          submitKatibaQuizScore(
+            totalQuestions: \$totalQuestions
+            correctAnswers: \$correctAnswers
+          ) {
+            totalQuestions
+            correctAnswers
+            scorePercent
+            badge
+          }
+        }
+        ''',
+        variables: {
+          'totalQuestions': total,
+          'correctAnswers': correct,
+        },
+        auth: false,
+      );
+      final row = result['submitKatibaQuizScore'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(message: 'Failed');
+      }
+      return SingleResult(
+        success: true,
+        data: QuizResult.fromJson({
+          'total_questions': row['totalQuestions'],
+          'correct_answers': row['correctAnswers'],
+          'score_percent': row['scorePercent'],
+          'badge': row['badge'],
+        }),
+      );
+    } catch (e) {
+      return SingleResult(message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<GlossaryTerm>> getGlossary() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaGlossary {
+          katibaGlossary {
+            id
+            termSw
+            termEn
+            definitionSw
+            definitionEn
+          }
+        }
+        ''',
+        auth: false,
+      );
+      final rows = data['katibaGlossary'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => GlossaryTerm.fromJson(_glossaryToLegacy(row)))
+          .toList();
+      return PaginatedResult(success: true, items: items, total: items.length);
+    } catch (e) {
+      return PaginatedResult(message: '$e');
+    }
+  }
 }
