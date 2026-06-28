@@ -70,6 +70,89 @@ class _CompletionScreenState extends State<CompletionScreen>
     return null;
   }
 
+  /// Maps the collected education ladder into the GraphQL `EducationHistoryInput`
+  /// list (camelCase keys). Only complete entries are sent.
+  List<Map<String, dynamic>> _buildEducation() {
+    final s = widget.state;
+    final out = <Map<String, dynamic>>[];
+
+    void addBasic(String level, EducationEntry? e) {
+      if (e == null || !e.isComplete) return;
+      out.add({
+        'level': level,
+        if (e.schoolId != null) 'institutionId': e.schoolId,
+        if (e.schoolCode != null) 'institutionCode': e.schoolCode,
+        if (e.schoolName != null) 'institutionName': e.schoolName,
+        if (e.schoolType != null) 'institutionType': e.schoolType,
+        if (e.startYear != null) 'startYear': e.startYear,
+        if (e.graduationYear != null) 'graduationYear': e.graduationYear,
+        if (e.regionName != null) 'regionName': e.regionName,
+        if (e.districtName != null) 'districtName': e.districtName,
+      });
+    }
+
+    addBasic('primary', s.primarySchool);
+    addBasic('secondary', s.secondarySchool);
+
+    final a = s.alevelEducation;
+    if (a != null && a.isComplete) {
+      out.add({
+        'level': 'alevel',
+        if (a.schoolId != null) 'institutionId': a.schoolId,
+        if (a.schoolCode != null) 'institutionCode': a.schoolCode,
+        if (a.schoolName != null) 'institutionName': a.schoolName,
+        if (a.schoolType != null) 'institutionType': a.schoolType,
+        if (a.startYear != null) 'startYear': a.startYear,
+        if (a.graduationYear != null) 'graduationYear': a.graduationYear,
+        if (a.combinationCode != null) 'combinationCode': a.combinationCode,
+        if (a.combinationName != null) 'combinationName': a.combinationName,
+        if (a.subjects != null) 'subjects': a.subjects,
+        if (a.regionName != null) 'regionName': a.regionName,
+        if (a.districtName != null) 'districtName': a.districtName,
+      });
+    }
+
+    addBasic('postsecondary', s.postsecondaryEducation);
+
+    final u = s.universityEducation;
+    if (u != null && u.isComplete) {
+      out.add({
+        'level': 'university',
+        if (u.universityId != null) 'institutionId': u.universityId,
+        if (u.universityCode != null) 'institutionCode': u.universityCode,
+        if (u.universityName != null) 'institutionName': u.universityName,
+        if (u.collegeId != null) 'collegeId': u.collegeId,
+        if (u.collegeName != null) 'collegeName': u.collegeName,
+        if (u.departmentId != null) 'departmentId': u.departmentId,
+        if (u.departmentName != null) 'departmentName': u.departmentName,
+        if (u.programmeId != null) 'programmeId': u.programmeId,
+        if (u.programmeName != null) 'programmeName': u.programmeName,
+        if (u.degreeLevel != null) 'degreeLevel': u.degreeLevel,
+        if (u.startYear != null) 'startYear': u.startYear,
+        if (u.graduationYear != null) 'graduationYear': u.graduationYear,
+        'isCurrentStudent': u.isCurrentStudent,
+      });
+    }
+    return out;
+  }
+
+  /// Maps the current employer into the GraphQL `EmploymentHistoryInput` list.
+  List<Map<String, dynamic>> _buildEmployment() {
+    final e = widget.state.currentEmployer;
+    if (e == null || !e.isComplete) return const [];
+    return [
+      {
+        if (e.employerId != null) 'employerId': e.employerId,
+        if (e.employerCode != null) 'employerCode': e.employerCode,
+        if (e.employerName != null) 'employerName': e.employerName,
+        if (e.sector != null) 'sector': e.sector,
+        if (e.ownership != null) 'ownership': e.ownership,
+        'isCustomEmployer': e.isCustomEmployer,
+        'isCurrent': true,
+      }
+    ];
+  }
+
   // ---------------------------------------------------------------------------
   // Registration
   // ---------------------------------------------------------------------------
@@ -96,14 +179,22 @@ class _CompletionScreenState extends State<CompletionScreen>
   Future<void> _registerViaGraphql() async {
     final s = widget.state;
     final deviceId = await AuthService.instance.getDeviceId();
+    final education = _buildEducation();
+    final employment = _buildEmployment();
+    final dob = s.dateOfBirth?.toIso8601String().split('T').first;
+    final address =
+        s.location?.displayAddress.isNotEmpty == true ? s.location!.displayAddress : null;
     final input = <String, dynamic>{
       'signupToken': s.signupToken,
       'pin': s.pin,
       'deviceId': deviceId,
       'fullName': s.fullName,
       // Photo is uploaded after register (media upload needs the new token).
-      // TODO: granular education/employer once pickers write structured state.
-      if (s.location?.regionName != null) 'location': s.location!.regionName,
+      if (s.gender != null) 'gender': s.gender!.name,
+      if (dob != null) 'dateOfBirth': dob,
+      if (address != null) 'location': address,
+      if (education.isNotEmpty) 'education': education,
+      if (employment.isNotEmpty) 'employment': employment,
     };
 
     final res = await GraphqlOnboardingService.registerAccount(input);
