@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
+import 'graphql/graphql_onboarding_service.dart';
 import '../models/school_models.dart';
 
 class SchoolService {
@@ -10,7 +11,7 @@ class SchoolService {
 
   Future<List<SchoolRegion>> getRegions() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/schools/regions'),
       );
 
@@ -31,7 +32,7 @@ class SchoolService {
 
   Future<List<SchoolDistrict>> getDistricts(String regionCode) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/schools/regions/$regionCode/districts'),
       );
 
@@ -52,7 +53,7 @@ class SchoolService {
 
   Future<List<School>> getSchoolsInDistrict(String districtCode) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/schools/districts/$districtCode/schools'),
       );
 
@@ -77,36 +78,23 @@ class SchoolService {
     String? districtCode,
     int limit = 20,
   }) async {
-    try {
-      final params = {
-        'q': query,
-        'limit': limit.toString(),
-      };
-      if (regionCode != null) params['region_code'] = regionCode;
-      if (districtCode != null) params['district_code'] = districtCode;
-
-      final uri = Uri.parse('$baseUrl/api/schools/search')
-          .replace(queryParameters: params);
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return (data['data'] as List)
-              .map((item) => School.fromJson(item))
-              .toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error searching schools: $e');
-      return [];
-    }
+    final rows = await GraphqlOnboardingService.searchInstitutions(
+      level: 'primary', query: query, regionCode: regionCode, limit: limit);
+    return rows
+        .map((g) => School.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'type': g['type'],
+              'region': g['regionName'],
+              'district': g['districtName'],
+            }))
+        .toList();
   }
 
   Future<SchoolStats?> getStats() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/schools/stats'),
       );
 

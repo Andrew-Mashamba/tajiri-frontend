@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../config/api_config.dart';
 import '../../models/registration_models.dart';
 import '../../services/auth_service.dart';
 import '../../services/graphql/graphql_onboarding_service.dart';
-import '../../services/user_service.dart';
 import '../home/home_screen.dart';
 
 /// Final onboarding screen: celebration animation, profile preview, and
@@ -83,48 +81,7 @@ class _CompletionScreenState extends State<CompletionScreen>
     });
 
     try {
-      if (ApiConfig.useGraphqlBackend) {
-        await _registerViaGraphql();
-        return;
-      }
-      final result = await UserService().register(widget.state);
-
-      if (!mounted) return;
-
-      if (result.success) {
-        // Apply server-returned profile data to state (userId, profilePhotoUrl).
-        if (result.profileData != null) {
-          widget.state.applyServerProfile(result.profileData!);
-        }
-
-        // Persist session via AuthService (dual-token or legacy single-token).
-        final token = result.accessToken;
-        if (token != null && token.isNotEmpty) {
-          await AuthService.instance.saveSession(
-            accessToken: token,
-            refreshToken: result.refreshToken,
-            accessExpiresIn: result.accessExpiresIn ?? 86400,
-            refreshExpiresIn: result.refreshExpiresIn ?? 7776000,
-            user: widget.state,
-          );
-        }
-
-        if (!mounted) return;
-
-        final userId = result.userId ?? widget.state.userId ?? 0;
-
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => HomeScreen(currentUserId: userId),
-          ),
-          (_) => false,
-        );
-      } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = result.message ?? 'Usajili umeshindwa. Jaribu tena.';
-        });
-      }
+      await _registerViaGraphql();
     } catch (e) {
       if (!mounted) return;
       setState(() {

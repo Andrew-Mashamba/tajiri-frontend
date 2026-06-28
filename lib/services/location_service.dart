@@ -1,85 +1,50 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../models/location_models.dart';
+import 'graphql/graphql_onboarding_service.dart';
 
+/// Location lookups for onboarding — GraphQL only (ref_locations on the backend).
 class LocationService {
-  final String baseUrl;
+  final String baseUrl; // retained for call-site compatibility; unused.
 
-  LocationService({required this.baseUrl});
+  LocationService({this.baseUrl = ''});
 
   Future<List<Region>> getRegions() async {
-    final response = await http.get(Uri.parse('$baseUrl/locations/regions'));
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((json) => Region.fromJson(json))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load regions');
+    final rows = await GraphqlOnboardingService.regions();
+    return rows
+        .map((r) => Region(
+              id: int.parse('${r['id']}'),
+              name: r['name'] as String,
+              postCode: r['postCode'] as String?,
+            ))
+        .toList();
   }
 
   Future<List<District>> getDistricts(int regionId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/locations/regions/$regionId/districts'),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((json) => District.fromJson(json))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load districts');
+    final rows = await GraphqlOnboardingService.locationChildren('$regionId');
+    return rows
+        .map((r) => District(
+              id: int.parse('${r['id']}'),
+              regionId: regionId,
+              name: r['name'] as String,
+              postCode: r['postCode'] as String?,
+            ))
+        .toList();
   }
 
   Future<List<Ward>> getWards(int districtId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/locations/districts/$districtId/wards'),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((json) => Ward.fromJson(json))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load wards');
+    final rows = await GraphqlOnboardingService.locationChildren('$districtId');
+    return rows
+        .map((r) => Ward(
+              id: int.parse('${r['id']}'),
+              districtId: districtId,
+              name: r['name'] as String,
+              postCode: r['postCode'] as String?,
+            ))
+        .toList();
   }
 
   Future<List<Street>> getStreets(int wardId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/locations/wards/$wardId/streets'),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        return (data['data'] as List)
-            .map((json) => Street.fromJson(json))
-            .toList();
-      }
-    }
-    throw Exception('Failed to load streets');
-  }
-
-  Future<Map<String, dynamic>> searchLocations(String query) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/locations/search?q=${Uri.encodeComponent(query)}'),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        return data['data'];
-      }
-    }
-    throw Exception('Failed to search locations');
+    // Streets are embedded on the ward (locationChildren), not a separate query;
+    // street selection is optional during onboarding.
+    return <Street>[];
   }
 }

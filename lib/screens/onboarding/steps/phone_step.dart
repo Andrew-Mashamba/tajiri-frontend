@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../config/api_config.dart';
 import '../../../models/registration_models.dart';
 import '../../../services/graphql/graphql_onboarding_service.dart';
-import '../../../services/user_service.dart';
 import '../../login/login_screen.dart';
 
 /// Chapter 2, Screen 1: Phone number with availability check.
@@ -36,7 +34,6 @@ class _PhoneStepState extends State<PhoneStep> {
   static const Color _border = Color(0xFFE0E0E0);
 
   final _phoneController = TextEditingController();
-  final _userService = UserService();
 
   bool _isChecking = false;
   String? _phoneError;
@@ -85,10 +82,8 @@ class _PhoneStepState extends State<PhoneStep> {
       _isChecking = true;
     });
 
-    final useGql = ApiConfig.useGraphqlBackend;
-    final available = useGql
-        ? await GraphqlOnboardingService.checkMsisdnAvailable(_normalised)
-        : (await _userService.checkPhoneAvailability(_normalised)).available;
+    final available =
+        await GraphqlOnboardingService.checkMsisdnAvailable(_normalised);
 
     if (!mounted) return;
     setState(() => _isChecking = false);
@@ -143,14 +138,12 @@ class _PhoneStepState extends State<PhoneStep> {
       return;
     }
 
-    // Phone is available.
-    if (useGql) {
-      final otp = await GraphqlOnboardingService.requestOtp(_normalised);
-      if (!mounted) return;
-      final token = await _promptAndVerifyOtp(devCode: otp.devCode);
-      if (token == null) return; // cancelled or verification failed
-      widget.state.signupToken = token;
-    }
+    // Phone is available — send OTP and verify before proceeding.
+    final otp = await GraphqlOnboardingService.requestOtp(_normalised);
+    if (!mounted) return;
+    final token = await _promptAndVerifyOtp(devCode: otp.devCode);
+    if (token == null) return; // cancelled or verification failed
+    widget.state.signupToken = token;
     widget.state.phoneNumber = _normalised;
     widget.state.isPhoneVerified = true;
     widget.onNext();

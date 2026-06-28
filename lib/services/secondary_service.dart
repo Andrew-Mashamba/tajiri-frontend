@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
+import 'graphql/graphql_onboarding_service.dart';
 import '../models/secondary_models.dart';
 
 class SecondarySchoolService {
@@ -10,7 +11,7 @@ class SecondarySchoolService {
 
   Future<List<SecondaryRegion>> getRegions() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/secondary-schools/regions'),
       );
 
@@ -31,7 +32,7 @@ class SecondarySchoolService {
 
   Future<List<SecondaryDistrict>> getDistricts(String regionCode) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/secondary-schools/regions/$regionCode/districts'),
       );
 
@@ -59,7 +60,7 @@ class SecondarySchoolService {
         uri = uri.replace(queryParameters: {'region_code': regionCode});
       }
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -84,35 +85,18 @@ class SecondarySchoolService {
     String? regionCode,
     String? districtCode,
   }) async {
-    try {
-      final params = <String, String>{
-        'q': query,
-        'limit': limit.toString(),
-      };
-      if (regionCode != null && regionCode.isNotEmpty) {
-        params['region_code'] = regionCode;
-      }
-      if (districtCode != null && districtCode.isNotEmpty) {
-        params['district_code'] = districtCode;
-      }
-
-      final uri = Uri.parse('$baseUrl/api/secondary-schools/search')
-          .replace(queryParameters: params);
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return (data['data'] as List)
-              .map((item) => SecondarySchool.fromJson(item))
-              .toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error searching secondary schools: $e');
-      return [];
-    }
+    final rows = await GraphqlOnboardingService.searchInstitutions(
+      level: 'secondary', query: query, regionCode: regionCode, limit: limit);
+    return rows
+        .map((g) => SecondarySchool.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'type': g['type'],
+              'region': g['regionName'],
+              'district': g['districtName'],
+            }))
+        .toList();
   }
 }
 
@@ -123,7 +107,7 @@ class AlevelSchoolService {
 
   Future<List<SecondaryRegion>> getRegions() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/alevel-schools/regions'),
       );
 
@@ -144,7 +128,7 @@ class AlevelSchoolService {
 
   Future<List<SecondaryDistrict>> getDistricts(String regionCode) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$baseUrl/api/alevel-schools/regions/$regionCode/districts'),
       );
 
@@ -172,7 +156,7 @@ class AlevelSchoolService {
         uri = uri.replace(queryParameters: {'region_code': regionCode});
       }
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -193,70 +177,24 @@ class AlevelSchoolService {
     String query, {
     int limit = 20,
   }) async {
-    try {
-      final params = {
-        'q': query,
-        'limit': limit.toString(),
-      };
-
-      final uri = Uri.parse('$baseUrl/api/alevel-schools/search')
-          .replace(queryParameters: params);
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return (data['data'] as List)
-              .map((item) => AlevelSchool.fromJson(item))
-              .toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error searching A-Level schools: $e');
-      return [];
-    }
+    final rows = await GraphqlOnboardingService.searchInstitutions(
+      level: 'alevel', query: query, limit: limit);
+    return rows
+        .map((g) => AlevelSchool.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'type': g['type'],
+              'region': g['regionName'],
+              'district': g['districtName'],
+            }))
+        .toList();
   }
 
-  Future<List<AlevelCombination>> getCombinations() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/alevel-schools/combinations'),
-      );
+  // A-level subject combinations are not yet exposed via GraphQL (stored in
+  // ref_institutions.extras; no query). Returns empty until a backend query lands.
+  Future<List<AlevelCombination>> getCombinations() async => <AlevelCombination>[];
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return (data['data'] as List)
-              .map((item) => AlevelCombination.fromJson(item))
-              .toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching A-Level combinations: $e');
-      return [];
-    }
-  }
-
-  Future<List<AlevelCombination>> getSchoolCombinations(int schoolId) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/alevel-schools/$schoolId/combinations'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return (data['data'] as List)
-              .map((item) => AlevelCombination.fromJson(item))
-              .toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching school combinations: $e');
-      return [];
-    }
-  }
+  Future<List<AlevelCombination>> getSchoolCombinations(int schoolId) async =>
+      <AlevelCombination>[];
 }
