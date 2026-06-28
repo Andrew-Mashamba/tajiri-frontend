@@ -63,12 +63,21 @@ class EventService {
     EventSortBy? sort,
     int page = 1,
     int perPage = 20,
+    double? latitude,
+    double? longitude,
   }) async {
     if (ApiConfig.useGraphqlBackend &&
         (sort == null ||
             sort == EventSortBy.date ||
             sort == EventSortBy.popularity ||
-            sort == EventSortBy.price)) {
+            sort == EventSortBy.price ||
+            sort == EventSortBy.distance)) {
+      if (sort == EventSortBy.distance && (latitude == null || longitude == null)) {
+        return PaginatedResult(
+          success: false,
+          message: 'latitude and longitude are required for distance sort',
+        );
+      }
       final graphqlSort = sort?.apiValue;
       final categoryValue = category?.apiValue;
       final priceValue =
@@ -83,6 +92,8 @@ class EventService {
           sort: graphqlSort,
           category: categoryValue,
           price: priceValue,
+          latitude: latitude,
+          longitude: longitude,
         );
       }
       if (search == null || search.isEmpty) {
@@ -94,6 +105,8 @@ class EventService {
           sort: graphqlSort,
           category: categoryValue,
           price: priceValue,
+          latitude: latitude,
+          longitude: longitude,
         );
       }
     }

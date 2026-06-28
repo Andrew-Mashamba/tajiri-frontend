@@ -44,6 +44,8 @@ class PeopleSearchService {
     'oldest',
     'name',
     'last_seen',
+    'single_first',
+    'same_area_first',
   };
 
   static bool _canUseGraphql({
@@ -67,11 +69,12 @@ class PeopleSearchService {
     bool? possibleEmployer,
     List<String>? sortValues,
     bool? shuffle,
+    String? query,
   }) {
     if (!ApiConfig.useGraphqlBackend) return false;
     if (!_graphqlSorts.contains(sort)) return false;
     if (sortValues != null && sortValues.isNotEmpty) return false;
-    if (shuffle == true) return false;
+    if (shuffle == true && (query != null && query.trim().isNotEmpty)) return false;
     return true;
   }
 
@@ -127,6 +130,7 @@ class PeopleSearchService {
       possibleEmployer: possibleEmployer,
       sortValues: sortValues,
       shuffle: shuffle,
+      query: query,
     )) {
       return GraphqlPeopleSearchService.search(
         query: query,
@@ -134,6 +138,7 @@ class PeopleSearchService {
         perPage: perPage,
         friendsOfFriendsOnly: friendsOfFriendsOnly == true,
         sort: sort,
+        shuffle: shuffle == true,
         hasPhoto: hasPhoto,
         online: online,
         gender: gender,

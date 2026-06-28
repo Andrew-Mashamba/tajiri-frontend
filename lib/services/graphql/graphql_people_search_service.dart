@@ -2,8 +2,8 @@ import '../../models/people_search_models.dart';
 import '../people_search_service.dart';
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL people search / discovery (Phase 78, extended Phase 88–90).
-/// Multi-sort, shuffle, and advanced filters remain REST-only.
+/// GraphQL people search / discovery (Phase 78, extended Phase 88–90, 176–178).
+/// Multi-sort combos and ETag caching remain REST-only.
 class GraphqlPeopleSearchService {
   static String? _cursor;
   static int _lastPage = 1;
@@ -65,10 +65,11 @@ class GraphqlPeopleSearchService {
     bool? hasInterests,
     bool? possibleEmployer,
     bool? possibleBusinessConnection,
+    bool shuffle = false,
   }) async {
     try {
       final key =
-          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}|${hasInterests == true}|${possibleEmployer == true}|${possibleBusinessConnection == true}';
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}|${hasInterests == true}|${possibleEmployer == true}|${possibleBusinessConnection == true}|$shuffle';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
@@ -96,6 +97,7 @@ class GraphqlPeopleSearchService {
           \$cursor: String
           \$friendsOfFriendsOnly: Boolean!
           \$sort: String
+          \$shuffle: Boolean
           \$filter: PeopleSearchFilter
         ) {
           peopleSearch(
@@ -103,6 +105,7 @@ class GraphqlPeopleSearchService {
             cursor: \$cursor
             friendsOfFriendsOnly: \$friendsOfFriendsOnly
             sort: \$sort
+            shuffle: \$shuffle
             filter: \$filter
           ) {
             items { $_personFields }
@@ -116,6 +119,7 @@ class GraphqlPeopleSearchService {
           if (_cursor != null) 'cursor': _cursor,
           'friendsOfFriendsOnly': friendsOfFriendsOnly,
           'sort': graphqlSort,
+          'shuffle': shuffle,
           if (hasPhoto == true ||
               online == true ||
               gender != null ||

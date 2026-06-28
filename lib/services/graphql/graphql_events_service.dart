@@ -76,9 +76,12 @@ class GraphqlEventsService {
     String? sort,
     String? category,
     String? price,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
-      final key = '${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}';
+      final key =
+          '${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}|${latitude ?? ''}|${longitude ?? ''}';
       if (page == 1 || _feedKey != key) {
         _feedCursor = null;
         _feedLastPage = 1;
@@ -98,8 +101,8 @@ class GraphqlEventsService {
 
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String, \$sort: String, \$category: String, \$price: String) {
-          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo, sort: \$sort, category: \$category, price: \$price) {
+        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String, \$sort: String, \$category: String, \$price: String, \$latitude: Float, \$longitude: Float) {
+          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo, sort: \$sort, category: \$category, price: \$price, latitude: \$latitude, longitude: \$longitude) {
             items { $_eventFields }
             nextCursor
             hasMore
@@ -113,6 +116,8 @@ class GraphqlEventsService {
           if (sort != null && sort.isNotEmpty) 'sort': sort,
           if (category != null && category.isNotEmpty) 'category': category,
           if (price != null && price.isNotEmpty && price != 'all') 'price': price,
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
         },
         auth: true,
       );
@@ -393,6 +398,8 @@ class GraphqlEventsService {
     String? sort,
     String? category,
     String? price,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       final q = query.trim();
@@ -402,7 +409,8 @@ class GraphqlEventsService {
           message: 'Search query must be at least 2 characters',
         );
       }
-      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}';
+      final key =
+          '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}|${latitude ?? ''}|${longitude ?? ''}';
       if (page == 1 || _searchQueryKey != key) {
         _searchCursor = null;
         _searchLastPage = 1;
@@ -430,6 +438,8 @@ class GraphqlEventsService {
           \$sort: String
           \$category: String
           \$price: String
+          \$latitude: Float
+          \$longitude: Float
         ) {
           eventsSearch(
             q: \$q
@@ -439,6 +449,8 @@ class GraphqlEventsService {
             sort: \$sort
             category: \$category
             price: \$price
+            latitude: \$latitude
+            longitude: \$longitude
           ) {
             items { $_eventFields }
             nextCursor
@@ -454,6 +466,8 @@ class GraphqlEventsService {
           if (sort != null && sort.isNotEmpty) 'sort': sort,
           if (category != null && category.isNotEmpty) 'category': category,
           if (price != null && price.isNotEmpty && price != 'all') 'price': price,
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
         },
         auth: true,
       );
