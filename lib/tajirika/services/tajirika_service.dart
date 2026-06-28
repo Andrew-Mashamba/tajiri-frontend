@@ -462,6 +462,9 @@ class TajirikaService {
   }
 
   static Future<TierProgress> getTierProgress(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getTierProgress();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/tier-progress?user_id=$userId'),
@@ -480,6 +483,9 @@ class TajirikaService {
   }
 
   static Future<BadgeListResult> getBadges(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getBadges();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/badges?user_id=$userId'),
@@ -745,6 +751,9 @@ class TajirikaService {
   }
 
   static Future<Map<String, double>> getEarningsByModule(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getEarningsByModule();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/earnings/by-module?user_id=$userId'),
@@ -828,6 +837,9 @@ class TajirikaService {
   }
 
   static Future<PartnerStats> getPartnerStats(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getPartnerStats();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/me/stats?user_id=$userId'),

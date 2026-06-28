@@ -344,4 +344,145 @@ class GraphqlTajirikaService {
       'by_module': byModule,
     };
   }
+
+  static Future<Map<String, double>> getEarningsByModule() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaEarningsByModule {
+          myTajirikaEarningsByModule
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['myTajirikaEarningsByModule'];
+      if (row is! Map) return {};
+      final map = <String, double>{};
+      row.forEach((key, value) {
+        if (value is num) {
+          map[key.toString()] = value.toDouble();
+        } else if (value is String) {
+          map[key.toString()] = double.tryParse(value) ?? 0.0;
+        }
+      });
+      return map;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<TierProgress> getTierProgress() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaTierProgress {
+          myTajirikaTierProgress {
+            currentTier
+            nextTier
+            jobsCompleted
+            jobsNeeded
+            currentRating
+            ratingNeeded
+            trainingCompleted
+            trainingNeeded
+            verificationsPending
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['myTajirikaTierProgress'] as Map<String, dynamic>?;
+      if (row == null) return TierProgress(currentTier: PartnerTier.mwanafunzi);
+      return TierProgress.fromJson(_tierProgressToLegacy(row));
+    } catch (_) {
+      return TierProgress(currentTier: PartnerTier.mwanafunzi);
+    }
+  }
+
+  static Map<String, dynamic> _tierProgressToLegacy(Map<String, dynamic> row) {
+    return {
+      'current_tier': row['currentTier'],
+      'next_tier': row['nextTier'],
+      'jobs_completed': row['jobsCompleted'] ?? 0,
+      'jobs_needed': row['jobsNeeded'] ?? 0,
+      'current_rating': row['currentRating'] ?? 0,
+      'rating_needed': row['ratingNeeded'] ?? 0,
+      'training_completed': row['trainingCompleted'] ?? 0,
+      'training_needed': row['trainingNeeded'] ?? 0,
+      'verifications_pending': row['verificationsPending'] ?? [],
+    };
+  }
+
+  static Future<BadgeListResult> getBadges() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaBadges {
+          myTajirikaBadges {
+            id
+            name
+            nameSw
+            iconUrl
+            description
+            earnedAt
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['myTajirikaBadges'] as List<dynamic>? ?? [];
+      final badges = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => Badge.fromJson(_badgeToLegacy(row)))
+          .toList();
+      return BadgeListResult(success: true, badges: badges);
+    } catch (e) {
+      return BadgeListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _badgeToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'name': row['name'],
+      'name_sw': row['nameSw'],
+      if (row['iconUrl'] != null) 'icon_url': row['iconUrl'],
+      'description': row['description'] ?? '',
+      if (row['earnedAt'] != null) 'earned_at': row['earnedAt'],
+    };
+  }
+
+  static Future<PartnerStats> getPartnerStats() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaPartnerStats {
+          myTajirikaPartnerStats {
+            jobsCompleted
+            averageRating
+            responseTimeMinutes
+            repeatCustomerRate
+            activeModules
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['myTajirikaPartnerStats'] as Map<String, dynamic>?;
+      if (row == null) return PartnerStats();
+      return PartnerStats.fromJson(_partnerStatsToLegacy(row));
+    } catch (_) {
+      return PartnerStats();
+    }
+  }
+
+  static Map<String, dynamic> _partnerStatsToLegacy(Map<String, dynamic> row) {
+    return {
+      'jobs_completed': row['jobsCompleted'] ?? 0,
+      'average_rating': row['averageRating'] ?? 0,
+      'response_time_minutes': row['responseTimeMinutes'] ?? 0,
+      'repeat_customer_rate': row['repeatCustomerRate'] ?? 0,
+      'active_modules': row['activeModules'] ?? [],
+    };
+  }
 }
