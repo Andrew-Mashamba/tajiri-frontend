@@ -3,7 +3,7 @@ import '../../events/models/event_enums.dart';
 import '../../events/models/event_rsvp.dart';
 import 'tajiri_graphql_client.dart';
 
-/// GraphQL events feed and RSVP (Phase 92). Filtered browse stays REST-only.
+/// GraphQL events feed and RSVP (Phases 92 + 171–174 browse filters).
 class GraphqlEventsService {
   static String? _feedCursor;
   static int _feedLastPage = 1;
@@ -31,6 +31,9 @@ class GraphqlEventsService {
     endsAt
     coverUrl
     status
+    category
+    isFree
+    ticketPriceTzs
     goingCount
     interestedCount
     viewerRsvpStatus
@@ -54,6 +57,9 @@ class GraphqlEventsService {
       'interested_count': row['interestedCount'] ?? 0,
       'user_response': row['viewerRsvpStatus'],
       'status': row['status'],
+      'category': row['category'],
+      'is_free': row['isFree'],
+      'ticket_price': row['ticketPriceTzs'],
       'created_at': row['createdAt'],
     };
   }
@@ -68,9 +74,11 @@ class GraphqlEventsService {
     String? dateFrom,
     String? dateTo,
     String? sort,
+    String? category,
+    String? price,
   }) async {
     try {
-      final key = '${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}';
+      final key = '${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}';
       if (page == 1 || _feedKey != key) {
         _feedCursor = null;
         _feedLastPage = 1;
@@ -90,8 +98,8 @@ class GraphqlEventsService {
 
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String, \$sort: String) {
-          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo, sort: \$sort) {
+        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String, \$sort: String, \$category: String, \$price: String) {
+          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo, sort: \$sort, category: \$category, price: \$price) {
             items { $_eventFields }
             nextCursor
             hasMore
@@ -103,6 +111,8 @@ class GraphqlEventsService {
           if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
           if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
           if (sort != null && sort.isNotEmpty) 'sort': sort,
+          if (category != null && category.isNotEmpty) 'category': category,
+          if (price != null && price.isNotEmpty && price != 'all') 'price': price,
         },
         auth: true,
       );
@@ -233,6 +243,8 @@ class GraphqlEventsService {
             if (coverUrl != null) 'coverUrl': coverUrl,
             'isPublic': privacy == EventPrivacy.public,
             'status': 'published',
+            'category': category.apiValue,
+            'isFree': isFree,
           },
         },
         auth: true,
@@ -379,6 +391,8 @@ class GraphqlEventsService {
     String? dateFrom,
     String? dateTo,
     String? sort,
+    String? category,
+    String? price,
   }) async {
     try {
       final q = query.trim();
@@ -388,7 +402,7 @@ class GraphqlEventsService {
           message: 'Search query must be at least 2 characters',
         );
       }
-      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}';
+      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}|${category ?? ''}|${price ?? ''}';
       if (page == 1 || _searchQueryKey != key) {
         _searchCursor = null;
         _searchLastPage = 1;
@@ -414,6 +428,8 @@ class GraphqlEventsService {
           \$dateFrom: String
           \$dateTo: String
           \$sort: String
+          \$category: String
+          \$price: String
         ) {
           eventsSearch(
             q: \$q
@@ -421,6 +437,8 @@ class GraphqlEventsService {
             dateFrom: \$dateFrom
             dateTo: \$dateTo
             sort: \$sort
+            category: \$category
+            price: \$price
           ) {
             items { $_eventFields }
             nextCursor
@@ -434,6 +452,8 @@ class GraphqlEventsService {
           if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
           if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
           if (sort != null && sort.isNotEmpty) 'sort': sort,
+          if (category != null && category.isNotEmpty) 'category': category,
+          if (price != null && price.isNotEmpty && price != 'all') 'price': price,
         },
         auth: true,
       );
