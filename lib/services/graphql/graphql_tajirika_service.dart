@@ -191,12 +191,33 @@ class GraphqlTajirikaService {
   static Future<List<TajirikaPartner>> searchPartners({
     String? query,
     String? skill,
+    List<String>? skills,
+    int? regionId,
+    String? tier,
+    double? minRating,
+    bool? available,
   }) async {
     try {
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query TajirikaPartners(\$query: String, \$skill: String) {
-          tajirikaPartners(query: \$query, skill: \$skill) {
+        query TajirikaPartners(
+          \$query: String
+          \$skill: String
+          \$skills: [String!]
+          \$regionId: Int
+          \$tier: String
+          \$minRating: Float
+          \$available: Boolean
+        ) {
+          tajirikaPartners(
+            query: \$query
+            skill: \$skill
+            skills: \$skills
+            regionId: \$regionId
+            tier: \$tier
+            minRating: \$minRating
+            available: \$available
+          ) {
             $_partnerFields
           }
         }
@@ -204,6 +225,11 @@ class GraphqlTajirikaService {
         variables: {
           if (query != null && query.isNotEmpty) 'query': query,
           if (skill != null && skill.isNotEmpty) 'skill': skill,
+          if (skills != null && skills.isNotEmpty) 'skills': skills,
+          if (regionId != null) 'regionId': regionId,
+          if (tier != null && tier.isNotEmpty) 'tier': tier,
+          if (minRating != null) 'minRating': minRating,
+          if (available != null) 'available': available,
         },
         auth: true,
       );
@@ -986,6 +1012,127 @@ class GraphqlTajirikaService {
           'jobId': jobId,
           'rating': rating,
           'earnings': earnings,
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> updateServiceArea({
+    required List<int> regionIds,
+    required List<int> districtIds,
+    required List<int> wardIds,
+  }) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateTajirikaServiceArea(\$input: UpdateTajirikaServiceAreaInput!) {
+          updateTajirikaServiceArea(input: \$input) {
+            id
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'regionIds': regionIds,
+            'districtIds': districtIds,
+            'wardIds': wardIds,
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> updateAvailability(
+    List<AvailabilitySlot> schedule,
+  ) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateTajirikaAvailability(\$input: UpdateTajirikaAvailabilityInput!) {
+          updateTajirikaAvailability(input: \$input) {
+            dayOfWeek
+            startTime
+            endTime
+            isAvailable
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'slots': schedule
+                .map(
+                  (slot) => {
+                    'dayOfWeek': slot.dayOfWeek,
+                    'startTime': slot.startTime,
+                    'endTime': slot.endTime,
+                    'isAvailable': slot.isAvailable,
+                  },
+                )
+                .toList(),
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> updateSkills(List<String> skills) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateTajirikaSkills(\$skills: [String!]!) {
+          updateTajirikaSkills(skills: \$skills) {
+            id
+          }
+        }
+        ''',
+        variables: {'skills': skills},
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> submitSkillTest(
+    String categoryKey,
+    File file,
+  ) async {
+    try {
+      final uploaded = await GraphqlMediaService.uploadFile(
+        file,
+        mediaType: 'video',
+      );
+      final path = uploaded?['file_path']?.toString();
+      if (path == null) {
+        return TajirikaResult(success: false, message: 'Failed to upload video');
+      }
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaSkillTest(\$input: SubmitTajirikaSkillTestInput!) {
+          submitTajirikaSkillTest(input: \$input) {
+            id
+            status
+          }
+        }
+        ''',
+        variables: {
+          'input': {
+            'category': categoryKey,
+            'videoUrl': path,
+          },
         },
         auth: true,
       );

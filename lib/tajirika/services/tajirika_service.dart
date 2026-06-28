@@ -158,6 +158,13 @@ class TajirikaService {
     List<int> districtIds,
     List<int> wardIds,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updateServiceArea(
+        regionIds: regionIds,
+        districtIds: districtIds,
+        wardIds: wardIds,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/tajirika/partners/me/service-area?user_id=$userId'),
@@ -189,6 +196,9 @@ class TajirikaService {
     int userId,
     List<AvailabilitySlot> schedule,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updateAvailability(schedule);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/tajirika/partners/me/availability?user_id=$userId'),
@@ -426,6 +436,9 @@ class TajirikaService {
     int userId,
     List<String> skills,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updateSkills(skills);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/tajirika/partners/me/skills?user_id=$userId'),
@@ -453,6 +466,9 @@ class TajirikaService {
     String categoryKey,
     File file,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitSkillTest(categoryKey, file);
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -936,15 +952,14 @@ class TajirikaService {
     Object? dropOffMode,
     int page = 1,
   }) async {
-    if (ApiConfig.useGraphqlBackend &&
-        regionId == null &&
-        tier == null &&
-        minRating == null &&
-        available == null &&
-        dropOffMode == null &&
-        page == 1) {
+    if (ApiConfig.useGraphqlBackend && dropOffMode == null && page == 1) {
       return GraphqlTajirikaService.searchPartners(
         skill: skills != null && skills.isNotEmpty ? skills.first : null,
+        skills: skills,
+        regionId: regionId,
+        tier: tier,
+        minRating: minRating,
+        available: available,
       );
     }
     try {
