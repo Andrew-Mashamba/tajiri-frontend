@@ -72,8 +72,7 @@ class PeopleSearchService {
     if (!_graphqlSorts.contains(sort)) return false;
     if (sortValues != null && sortValues.isNotEmpty) return false;
     if (shuffle == true) return false;
-    return hasInterests != true &&
-        possibleBusinessConnection != true &&
+    return possibleBusinessConnection != true &&
         possibleEmployer != true;
   }
 
@@ -150,6 +149,7 @@ class PeopleSearchService {
         student: student,
         profileComplete: profileComplete,
         verified: verified,
+        hasInterests: hasInterests,
       );
     }
     try {

@@ -106,6 +106,9 @@ class EventService {
   }
 
   Future<PaginatedResult<Event>> getUserEvents({required int userId, int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getUserEvents(userId: userId, page: page);
+    }
     try {
       final response = await _dio.get('/events', queryParameters: {
         'creator_id': userId,
@@ -118,6 +121,9 @@ class EventService {
   }
 
   Future<PaginatedResult<Event>> getUserAttendingEvents({required int userId, int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getUserAttendingEvents(userId: userId, page: page);
+    }
     try {
       final response = await _dio.get('/events', queryParameters: {
         'attending_user_id': userId,

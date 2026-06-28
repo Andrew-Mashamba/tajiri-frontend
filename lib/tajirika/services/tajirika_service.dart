@@ -92,6 +92,9 @@ class TajirikaService {
     String token,
     int partnerId,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getPartnerProfile(partnerId);
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId'),

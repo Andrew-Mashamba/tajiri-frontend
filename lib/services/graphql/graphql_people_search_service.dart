@@ -62,10 +62,11 @@ class GraphqlPeopleSearchService {
     bool? student,
     bool? profileComplete,
     bool? verified,
+    bool? hasInterests,
   }) async {
     try {
       final key =
-          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}';
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}|${hasInterests == true}';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
@@ -126,7 +127,8 @@ class GraphqlPeopleSearchService {
               hasBusiness == true ||
               student == true ||
               profileComplete == true ||
-              verified == true)
+              verified == true ||
+              hasInterests == true)
             'filter': {
               if (hasPhoto == true) 'hasPhoto': true,
               if (online == true) 'online': true,
@@ -143,6 +145,7 @@ class GraphqlPeopleSearchService {
               if (student == true) 'student': true,
               if (profileComplete == true) 'profileComplete': true,
               if (verified == true) 'verified': true,
+              if (hasInterests == true) 'hasInterests': true,
             },
         },
         auth: true,

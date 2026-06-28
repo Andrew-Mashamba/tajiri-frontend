@@ -161,6 +161,29 @@ class GraphqlTajirikaService {
     }
   }
 
+  static Future<PartnerResult> getPartnerProfile(int partnerId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query TajirikaPartner(\$partnerId: ID!) {
+          tajirikaPartner(partnerId: \$partnerId) {
+            $_partnerFields
+          }
+        }
+        ''',
+        variables: {'partnerId': partnerId.toString()},
+        auth: true,
+      );
+      final row = data['tajirikaPartner'] as Map<String, dynamic>?;
+      if (row == null) {
+        return PartnerResult(success: false, message: 'Failed to load');
+      }
+      return PartnerResult(success: true, partner: _parsePartner(row));
+    } catch (e) {
+      return PartnerResult(success: false, message: 'Error: $e');
+    }
+  }
+
   static Future<List<TajirikaPartner>> searchPartners({
     String? query,
     String? skill,

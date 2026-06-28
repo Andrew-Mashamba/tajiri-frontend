@@ -15,6 +15,7 @@ class GraphqlProfileService {
     student
     profileComplete
     verified
+    interests
     updatedAt
   ''';
 
@@ -28,6 +29,7 @@ class GraphqlProfileService {
     'date_of_birth',
     'has_business',
     'student',
+    'interests',
   };
 
   static bool canHandlePayload(Map<String, dynamic> payload) {
@@ -48,6 +50,7 @@ class GraphqlProfileService {
       'student': row['student'],
       'profile_complete': row['profileComplete'],
       'verified': row['verified'],
+      'interests': row['interests'] ?? [],
     };
   }
 
@@ -83,6 +86,12 @@ class GraphqlProfileService {
       input['student'] = payload['student'] == true ||
           payload['student'] == 1 ||
           payload['student'] == '1';
+    }
+    if (payload.containsKey('interests')) {
+      final raw = payload['interests'];
+      if (raw is List) {
+        input['interests'] = raw.map((e) => e.toString()).toList();
+      }
     }
     return input;
   }

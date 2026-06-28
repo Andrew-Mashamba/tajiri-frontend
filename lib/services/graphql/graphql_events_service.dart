@@ -7,6 +7,10 @@ import 'tajiri_graphql_client.dart';
 class GraphqlEventsService {
   static String? _feedCursor;
   static int _feedLastPage = 1;
+  static String? _myCreatedCursor;
+  static int _myCreatedLastPage = 1;
+  static String? _myAttendingCursor;
+  static int _myAttendingLastPage = 1;
 
   static const _eventFields = r'''
     id
@@ -228,6 +232,128 @@ class GraphqlEventsService {
       return SingleResult(success: true, data: _parseEvent(row));
     } catch (e) {
       return SingleResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<Event>> getUserEvents({
+    required int userId,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      if (page == 1) {
+        _myCreatedCursor = null;
+        _myCreatedLastPage = 1;
+      } else if (page > _myCreatedLastPage + 1) {
+        return PaginatedResult(success: false, message: 'Invalid page');
+      } else if (page > 1 && _myCreatedCursor == null) {
+        return PaginatedResult(
+          success: true,
+          items: const [],
+          currentPage: page,
+          lastPage: page,
+          total: 0,
+          perPage: perPage,
+        );
+      }
+
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyCreatedEvents(\$cursor: String) {
+          myCreatedEvents(cursor: \$cursor) {
+            items { $_eventFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          if (_myCreatedCursor != null) 'cursor': _myCreatedCursor,
+        },
+        auth: true,
+      );
+      final conn = data['myCreatedEvents'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final items = rows.whereType<Map<String, dynamic>>().map(_parseEvent).toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) {
+        _myCreatedCursor = nextCursor;
+        _myCreatedLastPage = page + 1;
+      } else {
+        _myCreatedLastPage = page;
+      }
+      return PaginatedResult(
+        success: true,
+        items: items,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        total: items.length,
+        perPage: perPage,
+      );
+    } catch (e) {
+      return PaginatedResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<Event>> getUserAttendingEvents({
+    required int userId,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      if (page == 1) {
+        _myAttendingCursor = null;
+        _myAttendingLastPage = 1;
+      } else if (page > _myAttendingLastPage + 1) {
+        return PaginatedResult(success: false, message: 'Invalid page');
+      } else if (page > 1 && _myAttendingCursor == null) {
+        return PaginatedResult(
+          success: true,
+          items: const [],
+          currentPage: page,
+          lastPage: page,
+          total: 0,
+          perPage: perPage,
+        );
+      }
+
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyAttendingEvents(\$cursor: String) {
+          myAttendingEvents(cursor: \$cursor) {
+            items { $_eventFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          if (_myAttendingCursor != null) 'cursor': _myAttendingCursor,
+        },
+        auth: true,
+      );
+      final conn = data['myAttendingEvents'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final items = rows.whereType<Map<String, dynamic>>().map(_parseEvent).toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) {
+        _myAttendingCursor = nextCursor;
+        _myAttendingLastPage = page + 1;
+      } else {
+        _myAttendingLastPage = page;
+      }
+      return PaginatedResult(
+        success: true,
+        items: items,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        total: items.length,
+        perPage: perPage,
+      );
+    } catch (e) {
+      return PaginatedResult(success: false, message: '$e');
     }
   }
 

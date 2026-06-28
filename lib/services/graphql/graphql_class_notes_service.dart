@@ -5,7 +5,7 @@ import 'graphql_media_service.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL class notes (Phase 84 — backend rev 214).
-/// Week-number list filter stays REST-only when supplied.
+/// Week-number list filter wired in Phase 99.
 class GraphqlClassNotesService {
   static const _noteFields = r'''
     id
@@ -96,10 +96,11 @@ class GraphqlClassNotesService {
     String? subject,
     String? courseCode,
     String? search,
+    int? weekNumber,
     int page = 1,
   }) async {
     try {
-      final key = '${subject ?? ''}|${courseCode ?? ''}|${search ?? ''}';
+      final key = '${subject ?? ''}|${courseCode ?? ''}|${search ?? ''}|${weekNumber ?? ''}';
       if (page == 1 || _notesKey != key) {
         _notesCursor = null;
         _notesKey = key;
@@ -115,12 +116,14 @@ class GraphqlClassNotesService {
           \$subject: String
           \$courseCode: String
           \$search: String
+          \$weekNumber: Int
           \$cursor: String
         ) {
           classNotes(
             subject: \$subject
             courseCode: \$courseCode
             search: \$search
+            weekNumber: \$weekNumber
             cursor: \$cursor
           ) {
             items { $_noteFields }
@@ -133,6 +136,7 @@ class GraphqlClassNotesService {
           if (subject != null && subject.isNotEmpty) 'subject': subject,
           if (courseCode != null && courseCode.isNotEmpty) 'courseCode': courseCode,
           if (search != null && search.isNotEmpty) 'search': search,
+          if (weekNumber != null && weekNumber > 0) 'weekNumber': weekNumber,
           if (cursor != null) 'cursor': cursor,
         },
         auth: true,

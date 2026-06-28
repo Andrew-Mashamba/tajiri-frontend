@@ -15,11 +15,12 @@ class ClassNotesService {
     String? search,
     int page = 1,
   }) async {
-    if (ApiConfig.useGraphqlBackend && weekNumber == null) {
+    if (ApiConfig.useGraphqlBackend) {
       return GraphqlClassNotesService.getNotes(
         subject: subject,
         courseCode: courseCode,
         search: search,
+        weekNumber: weekNumber,
         page: page,
       );
     }
