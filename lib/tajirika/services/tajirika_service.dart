@@ -352,6 +352,9 @@ class TajirikaService {
   }
 
   static Future<VerificationStatus> getVerificationStatus(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getVerificationStatus();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/verifications?user_id=$userId'),
@@ -503,6 +506,9 @@ class TajirikaService {
     String token,
     int partnerId,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getPortfolio(partnerId);
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId/portfolio'),
@@ -718,6 +724,9 @@ class TajirikaService {
     int userId, {
     String period = 'monthly',
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getEarnings(period: period);
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/earnings?user_id=$userId&period=$period'),

@@ -67,8 +67,10 @@ class EventService {
     if (ApiConfig.useGraphqlBackend &&
         category == null &&
         (price == null || price == EventPriceFilter.all) &&
-        (sort == null || sort == EventSortBy.date)) {
-      final graphqlSort = sort == EventSortBy.date ? sort!.apiValue : null;
+        (sort == null ||
+            sort == EventSortBy.date ||
+            sort == EventSortBy.popularity)) {
+      final graphqlSort = sort?.apiValue;
       if (search != null && search.trim().length >= 2) {
         return GraphqlEventsService.searchEvents(
           query: search.trim(),
@@ -110,7 +112,7 @@ class EventService {
 
   Future<PaginatedResult<Event>> getTrendingEvents({int page = 1}) async {
     if (ApiConfig.useGraphqlBackend) {
-      return GraphqlEventsService.getEventsFeed(page: page);
+      return GraphqlEventsService.getEventsFeed(page: page, sort: 'popularity');
     }
     try {
       final response = await _dio.get('/events/trending', queryParameters: {'page': page});

@@ -212,4 +212,136 @@ class GraphqlTajirikaService {
       return [];
     }
   }
+
+  static Future<VerificationStatus> getVerificationStatus() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaVerifications {
+          myTajirikaVerifications {
+            nida { type status number documentUrl submittedAt verifiedAt expiresAt rejectionReason }
+            tin { type status number documentUrl submittedAt verifiedAt expiresAt rejectionReason }
+            professional { type status number documentUrl submittedAt verifiedAt expiresAt rejectionReason }
+            background { type status number documentUrl submittedAt verifiedAt expiresAt rejectionReason }
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final row = data['myTajirikaVerifications'] as Map<String, dynamic>?;
+      if (row == null) return VerificationStatus.empty();
+      return VerificationStatus.fromJson(_verificationToLegacy(row));
+    } catch (_) {
+      return VerificationStatus.empty();
+    }
+  }
+
+  static Map<String, dynamic> _verificationItemToLegacy(Map<String, dynamic> row) {
+    return {
+      'type': row['type'],
+      'status': row['status'],
+      if (row['number'] != null) 'number': row['number'],
+      if (row['documentUrl'] != null) 'document_url': row['documentUrl'],
+      if (row['submittedAt'] != null) 'submitted_at': row['submittedAt'],
+      if (row['verifiedAt'] != null) 'verified_at': row['verifiedAt'],
+      if (row['expiresAt'] != null) 'expires_at': row['expiresAt'],
+      if (row['rejectionReason'] != null) 'rejection_reason': row['rejectionReason'],
+    };
+  }
+
+  static Map<String, dynamic> _verificationToLegacy(Map<String, dynamic> row) {
+    return {
+      'nida': _verificationItemToLegacy(row['nida'] as Map<String, dynamic>? ?? {}),
+      'tin': _verificationItemToLegacy(row['tin'] as Map<String, dynamic>? ?? {}),
+      'professional': _verificationItemToLegacy(
+        row['professional'] as Map<String, dynamic>? ?? {},
+      ),
+      'background': _verificationItemToLegacy(
+        row['background'] as Map<String, dynamic>? ?? {},
+      ),
+    };
+  }
+
+  static Future<PortfolioListResult> getPortfolio(int partnerId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query TajirikaPartnerPortfolio(\$partnerId: ID!) {
+          tajirikaPartnerPortfolio(partnerId: \$partnerId) {
+            id
+            itemType
+            url
+            thumbnailUrl
+            caption
+            skillCategory
+            createdAt
+          }
+        }
+        ''',
+        variables: {'partnerId': partnerId.toString()},
+        auth: true,
+      );
+      final rows = data['tajirikaPartnerPortfolio'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => PortfolioItem.fromJson(_portfolioToLegacy(row)))
+          .toList();
+      return PortfolioListResult(success: true, items: items);
+    } catch (e) {
+      return PortfolioListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _portfolioToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'type': row['itemType'] ?? 'photo',
+      'url': row['url'],
+      if (row['thumbnailUrl'] != null) 'thumbnail_url': row['thumbnailUrl'],
+      if (row['caption'] != null) 'caption': row['caption'],
+      if (row['skillCategory'] != null) 'skill_category': row['skillCategory'],
+      if (row['createdAt'] != null) 'created_at': row['createdAt'],
+    };
+  }
+
+  static Future<PartnerEarnings> getEarnings({String period = 'monthly'}) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaEarnings(\$period: String) {
+          myTajirikaEarnings(period: \$period) {
+            totalEarnings
+            weeklyEarnings
+            monthlyEarnings
+            pendingPayout
+            byModule
+          }
+        }
+        ''',
+        variables: {'period': period},
+        auth: true,
+      );
+      final row = data['myTajirikaEarnings'] as Map<String, dynamic>?;
+      if (row == null) return PartnerEarnings();
+      return PartnerEarnings.fromJson(_earningsToLegacy(row));
+    } catch (_) {
+      return PartnerEarnings();
+    }
+  }
+
+  static Map<String, dynamic> _earningsToLegacy(Map<String, dynamic> row) {
+    final byModule = <String, dynamic>{};
+    if (row['byModule'] is Map) {
+      (row['byModule'] as Map).forEach((key, value) {
+        byModule[key.toString()] = value;
+      });
+    }
+    return {
+      'total_earnings': row['totalEarnings'] ?? 0,
+      'weekly_earnings': row['weeklyEarnings'] ?? 0,
+      'monthly_earnings': row['monthlyEarnings'] ?? 0,
+      'pending_payout': row['pendingPayout'] ?? 0,
+      'by_module': byModule,
+    };
+  }
 }
