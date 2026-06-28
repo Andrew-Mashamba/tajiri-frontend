@@ -3,17 +3,22 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_c2b_service.dart';
 import '../models/peer_endorsement.dart';
 
 void _log(String m) => debugPrint('[PeerEndorsementService] $m');
 
 class PeerEndorsementService {
   static Future<List<PeerEndorsement>> listForUser(int endorseeUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.listPeerEndorsements(endorseeUserId);
+    }
     final uri = Uri.parse('${ApiConfig.baseUrl}/peer-endorsements')
         .replace(queryParameters: {'endorsee_user_id': '$endorseeUserId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];
@@ -33,6 +38,13 @@ class PeerEndorsementService {
     required String skillCategory,
     String? comment,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.createPeerEndorsement(
+        endorseeUserId: endorseeUserId,
+        skillCategory: skillCategory,
+        comment: comment,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'endorsee_user_id': endorseeUserId,
@@ -53,6 +65,9 @@ class PeerEndorsementService {
   }
 
   static Future<bool> delete(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.deletePeerEndorsement(id);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/peer-endorsements/$id'),

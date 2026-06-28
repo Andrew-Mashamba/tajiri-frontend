@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_c2b_service.dart';
 import '../models/partner_skill_persona.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -19,11 +21,14 @@ class PartnerSkillPersonaService {
   static Future<PartnerSkillPersonaListResult> list({
     required int partnerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.listPartnerSkillPersonas(partnerUserId);
+    }
     final uri = Uri.parse('$_baseUrl/partner-skill-personas')
         .replace(queryParameters: {'partner_user_id': '$partnerUserId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -50,10 +55,16 @@ class PartnerSkillPersonaService {
     required int partnerUserId,
     required String skillCategory,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.getPartnerSkillPersona(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+      );
+    }
     final url = '$_baseUrl/partner-skill-personas/$partnerUserId/$skillCategory';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       return _decodeOne(res);
     } catch (e, s) {
       _log('get error: $e\n$s');
@@ -73,6 +84,18 @@ class PartnerSkillPersonaService {
     List<String>? tagPreset,
     String? autoReplyText,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.upsertPartnerSkillPersona(
+        skillCategory: skillCategory,
+        displayName: displayName,
+        profilePhotoUrl: profilePhotoUrl,
+        bio: bio,
+        pricingBandLowTzs: pricingBandLowTzs,
+        pricingBandHighTzs: pricingBandHighTzs,
+        tagPreset: tagPreset,
+        autoReplyText: autoReplyText,
+      );
+    }
     final url = '$_baseUrl/partner-skill-personas/$partnerUserId/$skillCategory';
     final body = <String, dynamic>{'acting_user_id': actingUserId};
     if (displayName != null) body['display_name'] = displayName;
@@ -100,21 +123,32 @@ class PartnerSkillPersonaService {
     required int partnerUserId,
     required String skillCategory,
     required int actingUserId,
-  }) =>
-      _action(partnerUserId, skillCategory, 'pause', actingUserId);
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.pausePartnerSkillPersona(skillCategory);
+    }
+    return _action(partnerUserId, skillCategory, 'pause', actingUserId);
+  }
 
   static Future<PartnerSkillPersonaResult> resume({
     required int partnerUserId,
     required String skillCategory,
     required int actingUserId,
-  }) =>
-      _action(partnerUserId, skillCategory, 'resume', actingUserId);
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.resumePartnerSkillPersona(skillCategory);
+    }
+    return _action(partnerUserId, skillCategory, 'resume', actingUserId);
+  }
 
   static Future<({bool success, String? message})> remove({
     required int partnerUserId,
     required String skillCategory,
     required int actingUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.removePartnerSkillPersona(skillCategory);
+    }
     final url = '$_baseUrl/partner-skill-personas/$partnerUserId/$skillCategory';
     _log('DELETE $url');
     try {

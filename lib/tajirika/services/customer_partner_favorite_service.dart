@@ -2,15 +2,20 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_c2b_service.dart';
 import '../models/customer_partner_favorite.dart';
 
 class CustomerPartnerFavoriteService {
   static Future<List<CustomerPartnerFavorite>> listForCustomer(int customerUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.listCustomerPartnerFavorites();
+    }
     final uri = Uri.parse('${ApiConfig.baseUrl}/customer-partner-favorites')
         .replace(queryParameters: {'customer_user_id': '$customerUserId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];
@@ -28,6 +33,12 @@ class CustomerPartnerFavoriteService {
     required int partnerUserId,
     String? skillCategory,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.addCustomerPartnerFavorite(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'customer_user_id': customerUserId,
@@ -48,6 +59,9 @@ class CustomerPartnerFavoriteService {
   }
 
   static Future<bool> remove(int favoriteId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.removeCustomerPartnerFavorite(favoriteId);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/customer-partner-favorites/$favoriteId'),

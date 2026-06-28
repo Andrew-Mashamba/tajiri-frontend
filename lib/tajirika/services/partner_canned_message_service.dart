@@ -2,15 +2,20 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_c2b_service.dart';
 import '../models/partner_canned_message.dart';
 
 class PartnerCannedMessageService {
   static Future<List<PartnerCannedMessage>> listForPartner(int partnerUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.listPartnerCannedMessages(partnerUserId);
+    }
     final uri = Uri.parse('${ApiConfig.baseUrl}/partner-canned-messages')
         .replace(queryParameters: {'partner_user_id': '$partnerUserId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];
@@ -28,6 +33,12 @@ class PartnerCannedMessageService {
     required String label,
     required String body,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.createPartnerCannedMessage(
+        label: label,
+        body: body,
+      );
+    }
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/partner-canned-messages'),
@@ -47,6 +58,9 @@ class PartnerCannedMessageService {
   }
 
   static Future<bool> delete(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaC2bService.deletePartnerCannedMessage(id);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/partner-canned-messages/$id'),
