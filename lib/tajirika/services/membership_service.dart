@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_sub_service.dart';
 
 /// Spec F6 #43 — Memberships (ClassPass-style credits).
 class Membership {
@@ -59,9 +61,12 @@ class Membership {
 
 class MembershipService {
   static Future<List<Membership>> myMemberships({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.myMemberships(userId: userId);
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/memberships/mine?user_id=$userId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['memberships'] is List) {
@@ -76,9 +81,12 @@ class MembershipService {
   static Future<List<Map<String, dynamic>>> partnerPlans({
     required int partnerId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.partnerPlans(partnerId: partnerId);
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/memberships/partner/$partnerId/plans')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['plans'] is List) {
@@ -98,6 +106,16 @@ class MembershipService {
     int? creditsTotal,
     int? durationDays,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.purchase(
+        userId: userId,
+        partnerId: partnerId,
+        plan: plan,
+        priceTzs: priceTzs,
+        creditsTotal: creditsTotal,
+        durationDays: durationDays,
+      );
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/memberships/purchase')!;
     final res = await http.post(
@@ -126,6 +144,13 @@ class MembershipService {
     required int membershipId,
     int credits = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.deductCredit(
+        userId: userId,
+        membershipId: membershipId,
+        credits: credits,
+      );
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/memberships/deduct')!;
     final res = await http.post(

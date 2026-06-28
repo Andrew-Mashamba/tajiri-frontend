@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_sub_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -69,8 +71,11 @@ class TajirikaPlusResult {
 
 class TajirikaPlusService {
   static Future<TajirikaPlusResult> getPlans() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.getPlans();
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika-plus/plans'),
         headers: {'Accept': 'application/json'},
       );
@@ -89,8 +94,11 @@ class TajirikaPlusService {
   }
 
   static Future<TajirikaPlusResult> getStatus(int partnerUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.getStatus(partnerUserId);
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika-plus/status?partner_user_id=$partnerUserId'),
         headers: {'Accept': 'application/json'},
       );
@@ -111,6 +119,13 @@ class TajirikaPlusService {
     required String tier,
     String paymentMethod = 'wallet_auto_debit',
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.subscribe(
+        partnerUserId: partnerUserId,
+        tier: tier,
+        paymentMethod: paymentMethod,
+      );
+    }
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/tajirika-plus/subscribe'),

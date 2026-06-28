@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_sub_service.dart';
 
 /// Spec F7 #73 — Engagement questionnaires service.
 class EngagementQuestionnaire {
@@ -92,9 +94,12 @@ class EngagementQuestionField {
 
 class EngagementQuestionnaireService {
   static Future<List<EngagementQuestionnaire>> mine({required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.mine(userId: userId);
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagement-questionnaires/mine?user_id=$userId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['questionnaires'] is List) {
@@ -114,6 +119,16 @@ class EngagementQuestionnaireService {
     bool isActive = true,
     required Map<String, dynamic> schemaJson,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.saveQuestionnaire(
+        userId: userId,
+        id: id,
+        title: title,
+        skillCategory: skillCategory,
+        isActive: isActive,
+        schemaJson: schemaJson,
+      );
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagement-questionnaires')!;
     final res = await http.post(
@@ -138,9 +153,12 @@ class EngagementQuestionnaireService {
   }
 
   static Future<EngagementQuestionnaire?> show(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.show(id);
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagement-questionnaires/$id')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return null;
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic>) {
@@ -159,6 +177,14 @@ class EngagementQuestionnaireService {
     int? engagementId,
     required Map<String, dynamic> answers,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.respond(
+        userId: userId,
+        questionnaireId: questionnaireId,
+        engagementId: engagementId,
+        answers: answers,
+      );
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagement-questionnaires/$questionnaireId/respond')!;
     final res = await http.post(

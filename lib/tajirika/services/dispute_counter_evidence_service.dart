@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_sub_service.dart';
 
 class DisputeCounterEvidenceService {
   static Future<bool> upload({
@@ -11,6 +13,15 @@ class DisputeCounterEvidenceService {
     String? description,
     required List<File> files,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.uploadDisputeEvidence(
+        disputeId: disputeId,
+        partnerUserId: partnerUserId,
+        evidenceType: evidenceType,
+        description: description,
+        files: files,
+      );
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -42,11 +53,18 @@ class DisputeCounterEvidenceService {
     int? partnerUserId,
     int limit = 50,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaSubService.listDisputeEvidence(
+        disputeId: disputeId,
+        partnerUserId: partnerUserId,
+        limit: limit,
+      );
+    }
     try {
       final params = <String, String>{'limit': '$limit'};
       if (disputeId != null) params['dispute_id'] = '$disputeId';
       if (partnerUserId != null) params['partner_user_id'] = '$partnerUserId';
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/dispute-counter-evidence')
             .replace(queryParameters: params),
       );
