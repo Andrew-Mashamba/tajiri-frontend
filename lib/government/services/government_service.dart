@@ -121,6 +121,9 @@ class GovernmentService {
     required int userId,
     required String businessName,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.searchBrela(businessName: businessName);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/brela/search'),
@@ -146,6 +149,9 @@ class GovernmentService {
     required int userId,
     required String memberNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.lookupNssf(memberNumber: memberNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/nssf/lookup'),
@@ -168,6 +174,9 @@ class GovernmentService {
     required int userId,
     required String memberNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.lookupNhif(memberNumber: memberNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/nhif/lookup'),

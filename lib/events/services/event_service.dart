@@ -67,7 +67,8 @@ class EventService {
     if (ApiConfig.useGraphqlBackend &&
         category == null &&
         (price == null || price == EventPriceFilter.all) &&
-        sort == null) {
+        (sort == null || sort == EventSortBy.date)) {
+      final graphqlSort = sort == EventSortBy.date ? sort!.apiValue : null;
       if (search != null && search.trim().length >= 2) {
         return GraphqlEventsService.searchEvents(
           query: search.trim(),
@@ -75,6 +76,7 @@ class EventService {
           perPage: perPage,
           dateFrom: dateFrom,
           dateTo: dateTo,
+          sort: graphqlSort,
         );
       }
       if (search == null || search.isEmpty) {
@@ -83,6 +85,7 @@ class EventService {
           perPage: perPage,
           dateFrom: dateFrom,
           dateTo: dateTo,
+          sort: graphqlSort,
         );
       }
     }

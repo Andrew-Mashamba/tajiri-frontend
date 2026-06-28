@@ -167,6 +167,9 @@ class KatibaService {
 
   // ─── Daily Article ────────────────────────────────────────────
   Future<SingleResult<Article>> getDailyArticle() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getDailyArticle();
+    }
     try {
       final r = await _dio.get('/katiba/daily');
       final d = r.data;
