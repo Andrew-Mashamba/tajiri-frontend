@@ -101,6 +101,9 @@ class LibraryService {
   }
 
   Future<LibraryListResult<ReadingList>> getReadingLists() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.getReadingLists();
+    }
     try {
       final res = await _dio.get('/education/library/reading-lists');
       if (res.statusCode == 200 && res.data['success'] == true) {

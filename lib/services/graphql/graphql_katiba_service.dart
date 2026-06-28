@@ -148,4 +148,32 @@ class GraphqlKatibaService {
       return PaginatedResult(message: '$e');
     }
   }
+
+  static Future<PaginatedResult<Article>> getChapterArticles(int chapterId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaArticles(\$chapterId: ID!) {
+          katibaArticles(chapterId: \$chapterId) {
+            id
+            chapterId
+            number
+            title
+            body
+          }
+        }
+        ''',
+        variables: {'chapterId': chapterId.toString()},
+        auth: false,
+      );
+      final rows = data['katibaArticles'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => Article.fromJson(_articleToLegacy(row)))
+          .toList();
+      return PaginatedResult(success: true, items: items, total: items.length);
+    } catch (e) {
+      return PaginatedResult(message: '$e');
+    }
+  }
 }

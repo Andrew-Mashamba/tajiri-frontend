@@ -4,6 +4,8 @@ import 'tajiri_graphql_client.dart';
 class GraphqlProfileService {
   static const _profileFields = r'''
     userId
+    fullName
+    username
     gender
     relationshipStatus
     location
@@ -20,6 +22,8 @@ class GraphqlProfileService {
   ''';
 
   static const graphqlKeys = {
+    'full_name',
+    'username',
     'gender',
     'relationship_status',
     'location',
@@ -39,6 +43,8 @@ class GraphqlProfileService {
 
   static Map<String, dynamic> _toLegacy(Map<String, dynamic> row) {
     return {
+      'full_name': row['fullName'],
+      'username': row['username'],
       'gender': row['gender'],
       'relationship_status': row['relationshipStatus'],
       'location': row['location'],
@@ -56,6 +62,12 @@ class GraphqlProfileService {
 
   static Map<String, dynamic> _payloadToInput(Map<String, dynamic> payload) {
     final input = <String, dynamic>{};
+    if (payload.containsKey('full_name')) {
+      input['fullName'] = payload['full_name'];
+    }
+    if (payload.containsKey('username')) {
+      input['username'] = payload['username'];
+    }
     if (payload.containsKey('gender')) {
       input['gender'] = payload['gender'];
     }

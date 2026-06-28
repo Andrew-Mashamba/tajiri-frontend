@@ -30,6 +30,26 @@ class KatibaService {
   }
 
   // ─── Article ──────────────────────────────────────────────────
+  Future<PaginatedResult<Article>> getChapterArticles(int chapterId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getChapterArticles(chapterId);
+    }
+    try {
+      final r = await _dio.get('/katiba/chapters/$chapterId/articles');
+      final d = r.data;
+      if (d['success'] == true) {
+        final items = (d['data'] as List?)
+                ?.map((e) => Article.fromJson(e))
+                .toList() ??
+            [];
+        return PaginatedResult(success: true, items: items);
+      }
+      return PaginatedResult(message: d['message'] ?? 'Failed');
+    } catch (e) {
+      return PaginatedResult(message: '$e');
+    }
+  }
+
   Future<SingleResult<Article>> getArticle(int id) async {
     if (ApiConfig.useGraphqlBackend) {
       return GraphqlKatibaService.getArticle(id);

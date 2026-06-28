@@ -68,9 +68,9 @@ class GraphqlClassNotesService {
       'topic': row['topic'],
       'week_number': row['weekNumber'],
       'requester_id': row['requesterId'],
-      'requester_name': '',
+      'requester_name': row['requesterName'] ?? '',
       'is_fulfilled': row['isFulfilled'],
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': row['createdAt'] ?? DateTime.now().toIso8601String(),
     };
   }
 
@@ -277,11 +277,13 @@ class GraphqlClassNotesService {
           noteRequests {
             id
             requesterId
+            requesterName
             subject
             courseCode
             topic
             weekNumber
             isFulfilled
+            createdAt
           }
         }
         ''',

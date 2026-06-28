@@ -2,7 +2,7 @@ import '../../library/models/library_models.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL digital library (Phase 82 — backend rev 213).
-/// Reading lists and citation styles remain REST-only.
+/// Citations remain REST-only.
 class GraphqlLibraryService {
   static const _bookFields = r'''
     id
@@ -184,6 +184,48 @@ class GraphqlLibraryService {
       return LibraryListResult(success: true, items: items);
     } catch (e) {
       return LibraryListResult(success: false, message: '$e');
+    }
+  }
+
+  static Map<String, dynamic> _readingListToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'name': row['name'],
+      'course_code': row['courseCode'],
+      'book_count': row['bookCount'] ?? 0,
+      'completed_count': row['completedCount'] ?? 0,
+      'created_at': row['createdAt'],
+    };
+  }
+
+  static Future<LibraryListResult<ReadingList>> getReadingLists() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyReadingLists {
+          myReadingLists {
+            id
+            name
+            courseCode
+            bookCount
+            completedCount
+            createdAt
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['myReadingLists'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => ReadingList.fromJson(_readingListToLegacy(row)))
+          .toList();
+      return LibraryListResult(success: true, items: items);
+    } catch (e) {
+      return LibraryListResult(
+        success: false,
+        message: 'Imeshindwa kupakia orodha: $e',
+      );
     }
   }
 }
