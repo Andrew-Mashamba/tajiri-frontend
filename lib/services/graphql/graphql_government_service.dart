@@ -113,4 +113,100 @@ class GraphqlGovernmentService {
       return GovtResult(success: false, message: '$e');
     }
   }
+
+  static Future<GovtResult<NhifInfo>> lookupNhif({
+    required String memberNumber,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query LookupNhif(\$memberNumber: String!) {
+          lookupNhif(memberNumber: \$memberNumber) {
+            memberNumber
+            status
+          }
+        }
+        ''',
+        variables: {'memberNumber': memberNumber},
+        auth: true,
+      );
+      final row = data['lookupNhif'] as Map<String, dynamic>?;
+      if (row == null) {
+        return GovtResult(success: false, message: 'Imeshindwa kuthibitisha NHIF');
+      }
+      return GovtResult(
+        success: true,
+        data: NhifInfo.fromJson({
+          'member_number': row['memberNumber'],
+          'status': row['status'],
+        }),
+      );
+    } catch (e) {
+      return GovtResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<GovtResult<NssfInfo>> lookupNssf({
+    required String memberNumber,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query LookupNssf(\$memberNumber: String!) {
+          lookupNssf(memberNumber: \$memberNumber) {
+            memberNumber
+            status
+          }
+        }
+        ''',
+        variables: {'memberNumber': memberNumber},
+        auth: true,
+      );
+      final row = data['lookupNssf'] as Map<String, dynamic>?;
+      if (row == null) {
+        return GovtResult(success: false, message: 'Imeshindwa kuthibitisha NSSF');
+      }
+      return GovtResult(
+        success: true,
+        data: NssfInfo.fromJson({
+          'member_number': row['memberNumber'],
+          'status': row['status'],
+        }),
+      );
+    } catch (e) {
+      return GovtResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<GovtListResult<BrelaInfo>> searchBrela({
+    required String businessName,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query SearchBrela(\$businessName: String!) {
+          searchBrela(businessName: \$businessName) {
+            businessName
+            status
+          }
+        }
+        ''',
+        variables: {'businessName': businessName},
+        auth: true,
+      );
+      final rows = data['searchBrela'] as List<dynamic>? ?? [];
+      final items = rows
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (row) => BrelaInfo.fromJson({
+              'business_name': row['businessName'],
+              'status': row['status'],
+            }),
+          )
+          .toList();
+      return GovtListResult(success: true, items: items);
+    } catch (e) {
+      return GovtListResult(success: false, message: '$e');
+    }
+  }
 }

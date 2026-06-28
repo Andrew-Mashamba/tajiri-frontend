@@ -67,9 +67,10 @@ class GraphqlEventsService {
     int perPage = 20,
     String? dateFrom,
     String? dateTo,
+    String? sort,
   }) async {
     try {
-      final key = '${dateFrom ?? ''}|${dateTo ?? ''}';
+      final key = '${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}';
       if (page == 1 || _feedKey != key) {
         _feedCursor = null;
         _feedLastPage = 1;
@@ -89,8 +90,8 @@ class GraphqlEventsService {
 
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String) {
-          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo) {
+        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String, \$sort: String) {
+          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo, sort: \$sort) {
             items { $_eventFields }
             nextCursor
             hasMore
@@ -101,6 +102,7 @@ class GraphqlEventsService {
           if (_feedCursor != null) 'cursor': _feedCursor,
           if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
           if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
+          if (sort != null && sort.isNotEmpty) 'sort': sort,
         },
         auth: true,
       );
@@ -376,6 +378,7 @@ class GraphqlEventsService {
     int perPage = 20,
     String? dateFrom,
     String? dateTo,
+    String? sort,
   }) async {
     try {
       final q = query.trim();
@@ -385,7 +388,7 @@ class GraphqlEventsService {
           message: 'Search query must be at least 2 characters',
         );
       }
-      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}';
+      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}|${sort ?? ''}';
       if (page == 1 || _searchQueryKey != key) {
         _searchCursor = null;
         _searchLastPage = 1;
@@ -410,12 +413,14 @@ class GraphqlEventsService {
           \$cursor: String
           \$dateFrom: String
           \$dateTo: String
+          \$sort: String
         ) {
           eventsSearch(
             q: \$q
             cursor: \$cursor
             dateFrom: \$dateFrom
             dateTo: \$dateTo
+            sort: \$sort
           ) {
             items { $_eventFields }
             nextCursor
@@ -428,6 +433,7 @@ class GraphqlEventsService {
           if (_searchCursor != null) 'cursor': _searchCursor,
           if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
           if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
+          if (sort != null && sort.isNotEmpty) 'sort': sort,
         },
         auth: true,
       );

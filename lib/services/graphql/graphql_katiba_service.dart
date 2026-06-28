@@ -2,7 +2,7 @@ import '../../katiba/models/katiba_models.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL Tanzania Constitution reference (Phase 94 — backend rev 216).
-/// Quiz, amendments, glossary, and daily article remain REST-only.
+/// Quiz, amendments, and glossary remain REST-only.
 class GraphqlKatibaService {
   static Map<String, dynamic> _chapterToLegacy(Map<String, dynamic> row) {
     final title = row['title']?.toString() ?? '';
@@ -204,6 +204,35 @@ class GraphqlKatibaService {
       return PaginatedResult(success: true, items: items, total: items.length);
     } catch (e) {
       return PaginatedResult(message: '$e');
+    }
+  }
+
+  static Future<SingleResult<Article>> getDailyArticle() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaDailyArticle {
+          katibaDailyArticle {
+            id
+            chapterId
+            number
+            title
+            body
+          }
+        }
+        ''',
+        auth: false,
+      );
+      final row = data['katibaDailyArticle'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(message: 'Not found');
+      }
+      return SingleResult(
+        success: true,
+        data: Article.fromJson(_articleToLegacy(row)),
+      );
+    } catch (e) {
+      return SingleResult(message: '$e');
     }
   }
 }
