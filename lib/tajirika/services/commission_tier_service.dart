@@ -1,11 +1,18 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_availability_service.dart';
 
 class CommissionTierService {
   static Future<List<CommissionTier>> list({required int partnerUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.listCommissionTiers(
+        partnerUserId: partnerUserId,
+      );
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/commission-tiers')
             .replace(queryParameters: {'partner_user_id': '$partnerUserId'}),
       );
@@ -31,6 +38,18 @@ class CommissionTierService {
     int? maxMonthlyRevenueTzs,
     bool isDefault = false,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.createCommissionTier(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+        tierName: tierName,
+        tierLevel: tierLevel,
+        commissionPct: commissionPct,
+        minMonthlyRevenueTzs: minMonthlyRevenueTzs,
+        maxMonthlyRevenueTzs: maxMonthlyRevenueTzs,
+        isDefault: isDefault,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'partner_user_id': partnerUserId,
@@ -60,6 +79,9 @@ class CommissionTierService {
   }
 
   static Future<bool> update(int id, Map<String, dynamic> fields) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.updateCommissionTier(id, fields);
+    }
     try {
       final res = await http.patch(
         Uri.parse('${ApiConfig.baseUrl}/commission-tiers/$id'),
@@ -73,6 +95,9 @@ class CommissionTierService {
   }
 
   static Future<bool> delete(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.deleteCommissionTier(id);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/commission-tiers/$id'),
@@ -88,13 +113,20 @@ class CommissionTierService {
     String? skillCategory,
     required int orderTotalTzs,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.applicableCommissionTier(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+        orderTotalTzs: orderTotalTzs,
+      );
+    }
     try {
       final params = <String, String>{
         'partner_user_id': '$partnerUserId',
         'order_total_tzs': '$orderTotalTzs',
       };
       if (skillCategory != null) params['skill_category'] = skillCategory;
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/commission-tiers/$partnerUserId/applies-to-order')
             .replace(queryParameters: params),
       );

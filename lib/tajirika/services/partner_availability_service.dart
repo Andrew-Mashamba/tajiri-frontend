@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_availability_service.dart';
 import '../models/partner_availability.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -41,6 +43,31 @@ class PartnerAvailabilityService {
     int? holidayPremiumTzs,
     int? parkingPassThroughTzs,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.upsertHours(
+        partnerUserId: partnerUserId,
+        weekday: weekday,
+        openTime: openTime,
+        closeTime: closeTime,
+        slotMinutes: slotMinutes,
+        skillCategory: skillCategory,
+        isActive: isActive,
+        reminderCadenceHours: reminderCadenceHours,
+        pricingModifierPct: pricingModifierPct,
+        minNoticeMinutes: minNoticeMinutes,
+        bookingHorizonDays: bookingHorizonDays,
+        lastMinuteDiscountEnabled: lastMinuteDiscountEnabled,
+        lastMinuteDiscountPct: lastMinuteDiscountPct,
+        waitlistMode: waitlistMode,
+        preBufferMinutes: preBufferMinutes,
+        processingMinutes: processingMinutes,
+        postBufferMinutes: postBufferMinutes,
+        travelSurchargeTzs: travelSurchargeTzs,
+        afterHoursSurchargeTzs: afterHoursSurchargeTzs,
+        holidayPremiumTzs: holidayPremiumTzs,
+        parkingPassThroughTzs: parkingPassThroughTzs,
+      );
+    }
     final url = '$_baseUrl/partner-availability';
     final body = <String, dynamic>{
       'partner_user_id': partnerUserId,
@@ -98,6 +125,12 @@ class PartnerAvailabilityService {
     required int partnerUserId,
     String? skillCategory,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.listHours(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+      );
+    }
     final params = <String, String>{'partner_user_id': '$partnerUserId'};
     if (skillCategory != null && skillCategory.isNotEmpty) {
       params['skill_category'] = skillCategory;
@@ -105,7 +138,7 @@ class PartnerAvailabilityService {
     final uri = Uri.parse('$_baseUrl/partner-availability').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('listHours status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -132,6 +165,12 @@ class PartnerAvailabilityService {
     required int id,
     required int partnerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.deactivateHours(
+        id: id,
+        partnerUserId: partnerUserId,
+      );
+    }
     final url = '$_baseUrl/partner-availability/$id';
     _log('DELETE $url');
     try {
@@ -158,6 +197,16 @@ class PartnerAvailabilityService {
     bool allDay = false,
     List<String>? skillCategories,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.addBlackout(
+        partnerUserId: partnerUserId,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        reason: reason,
+        allDay: allDay,
+        skillCategories: skillCategories,
+      );
+    }
     final url = '$_baseUrl/partner-availability/blackouts';
     final body = <String, dynamic>{
       'partner_user_id': partnerUserId,
@@ -186,11 +235,16 @@ class PartnerAvailabilityService {
   static Future<PartnerBlackoutListResult> listBlackouts({
     required int partnerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.listBlackouts(
+        partnerUserId: partnerUserId,
+      );
+    }
     final uri = Uri.parse('$_baseUrl/partner-availability/blackouts')
         .replace(queryParameters: {'partner_user_id': '$partnerUserId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('listBlackouts status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -217,6 +271,12 @@ class PartnerAvailabilityService {
     required int id,
     required int partnerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.deleteBlackout(
+        id: id,
+        partnerUserId: partnerUserId,
+      );
+    }
     final url = '$_baseUrl/partner-availability/blackouts/$id';
     _log('DELETE $url');
     try {
@@ -241,6 +301,14 @@ class PartnerAvailabilityService {
     DateTime? from,
     DateTime? to,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.fetchSlots(
+        partnerUserId: partnerUserId,
+        skillCategory: skillCategory,
+        from: from,
+        to: to,
+      );
+    }
     final params = <String, String>{
       'partner_user_id': '$partnerUserId',
     };
@@ -256,7 +324,7 @@ class PartnerAvailabilityService {
     final uri = Uri.parse('$_baseUrl/partner-availability/slots').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('fetchSlots status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {

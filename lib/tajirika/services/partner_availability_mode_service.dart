@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_availability_service.dart';
 
 /// Spec line 305-313 — partner-side controls for availability mode.
 /// open|busy|closed plus busy ETA delta. Auto-pause flow has a Resume CTA.
@@ -13,6 +14,14 @@ class PartnerAvailabilityModeService {
     DateTime? busyUntil,
     int busyEtaExtraMinutes = 0,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.setAvailabilityMode(
+        partnerUserId: partnerUserId,
+        mode: mode,
+        busyUntil: busyUntil,
+        busyEtaExtraMinutes: busyEtaExtraMinutes,
+      );
+    }
     final body = <String, dynamic>{
       'availability_mode': mode,
       'busy_eta_extra_minutes': busyEtaExtraMinutes,
@@ -31,6 +40,9 @@ class PartnerAvailabilityModeService {
   }
 
   static Future<bool> resume(int partnerUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.resumeAvailability(partnerUserId);
+    }
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/partners/$partnerUserId/resume'),

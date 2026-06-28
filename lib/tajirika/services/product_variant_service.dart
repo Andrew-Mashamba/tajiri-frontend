@@ -3,18 +3,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_availability_service.dart';
 import '../models/product_variant.dart';
 
 void _log(String m) => debugPrint('[ProductVariantService] $m');
 
 class ProductVariantService {
   static Future<List<ProductVariant>> listForProduct(int productId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.listProductVariants(productId);
+    }
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/partner-product-variants',
     ).replace(queryParameters: {'partner_product_id': '$productId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];
@@ -38,6 +43,17 @@ class ProductVariantService {
     int durationMinutes = 0,
     int sortOrder = 0,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.createProductVariant(
+        partnerProductId: partnerProductId,
+        labelSw: labelSw,
+        labelEn: labelEn,
+        priceTzs: priceTzs,
+        leadTimeHours: leadTimeHours,
+        durationMinutes: durationMinutes,
+        sortOrder: sortOrder,
+      );
+    }
     final body = <String, dynamic>{
       'partner_product_id': partnerProductId,
       'price_tzs': priceTzs,
@@ -64,6 +80,9 @@ class ProductVariantService {
   }
 
   static Future<bool> delete(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaAvailabilityService.deleteProductVariant(id);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/partner-product-variants/$id'),
