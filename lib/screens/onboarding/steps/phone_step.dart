@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../config/api_config.dart';
 import '../../../models/registration_models.dart';
+import '../../../services/graphql/graphql_onboarding_service.dart';
 import '../../../services/user_service.dart';
 import '../../login/login_screen.dart';
 
@@ -83,12 +85,15 @@ class _PhoneStepState extends State<PhoneStep> {
       _isChecking = true;
     });
 
-    final result = await _userService.checkPhoneAvailability(_normalised);
+    final useGql = ApiConfig.useGraphqlBackend;
+    final available = useGql
+        ? await GraphqlOnboardingService.checkMsisdnAvailable(_normalised)
+        : (await _userService.checkPhoneAvailability(_normalised)).available;
 
     if (!mounted) return;
     setState(() => _isChecking = false);
 
-    if (!result.available) {
+    if (!available) {
       // Phone is already taken — offer to go to login.
       final shouldLogin = await showDialog<bool>(
         context: context,
@@ -138,10 +143,104 @@ class _PhoneStepState extends State<PhoneStep> {
       return;
     }
 
-    // Phone is available — persist and proceed.
+    // Phone is available.
+    if (useGql) {
+      final otp = await GraphqlOnboardingService.requestOtp(_normalised);
+      if (!mounted) return;
+      final token = await _promptAndVerifyOtp(devCode: otp.devCode);
+      if (token == null) return; // cancelled or verification failed
+      widget.state.signupToken = token;
+    }
     widget.state.phoneNumber = _normalised;
     widget.state.isPhoneVerified = true;
     widget.onNext();
+  }
+
+  /// Bottom-sheet OTP entry; verifies via GraphQL and returns a signup token.
+  Future<String?> _promptAndVerifyOtp({String? devCode}) async {
+    final controller = TextEditingController(text: devCode ?? '');
+    String? error;
+    bool verifying = false;
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Weka msimbo wa uthibitisho',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _primary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tumetuma msimbo wa tarakimu 6 kwa $_normalised',
+                style: const TextStyle(fontSize: 13, color: _secondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  counterText: '',
+                  errorText: error,
+                  hintText: '______',
+                  filled: true,
+                  fillColor: _fieldBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: _primary),
+                onPressed: verifying
+                    ? null
+                    : () async {
+                        if (controller.text.length != 6) {
+                          setSheet(() => error = 'Weka tarakimu 6');
+                          return;
+                        }
+                        setSheet(() {
+                          verifying = true;
+                          error = null;
+                        });
+                        final res = await GraphqlOnboardingService.verifyOtp(
+                          _normalised,
+                          controller.text,
+                        );
+                        if (!ctx.mounted) return;
+                        if (res.success) {
+                          Navigator.of(ctx).pop(res.signupToken);
+                        } else {
+                          setSheet(() {
+                            verifying = false;
+                            error = 'Msimbo si sahihi';
+                          });
+                        }
+                      },
+                child: verifying
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Thibitisha'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------

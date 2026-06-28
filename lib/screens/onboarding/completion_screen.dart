@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../config/api_config.dart';
 import '../../models/registration_models.dart';
 import '../../services/auth_service.dart';
+import '../../services/graphql/graphql_onboarding_service.dart';
 import '../../services/user_service.dart';
 import '../home/home_screen.dart';
 
@@ -81,6 +83,10 @@ class _CompletionScreenState extends State<CompletionScreen>
     });
 
     try {
+      if (ApiConfig.useGraphqlBackend) {
+        await _registerViaGraphql();
+        return;
+      }
       final result = await UserService().register(widget.state);
 
       if (!mounted) return;
@@ -126,6 +132,50 @@ class _CompletionScreenState extends State<CompletionScreen>
         _errorMessage = 'Hitilafu ya mtandao. Angalia muunganiko wako.';
       });
     }
+  }
+
+  /// GraphQL registerAccount: creates the account for a phone that passed OTP
+  /// (signup token from the phone step) and auto-logs in.
+  Future<void> _registerViaGraphql() async {
+    final s = widget.state;
+    final deviceId = await AuthService.instance.getDeviceId();
+    final input = <String, dynamic>{
+      'signupToken': s.signupToken,
+      'pin': s.pin,
+      'deviceId': deviceId,
+      'fullName': s.fullName,
+      // TODO: profilePhotoPath via media upload; granular education/employer
+      // once those pickers write structured selections into state.
+      if (s.location?.regionName != null) 'location': s.location!.regionName,
+    };
+
+    final res = await GraphqlOnboardingService.registerAccount(input);
+    if (!mounted) return;
+
+    if (!res.success || res.payload == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = res.error ?? 'Usajili umeshindwa. Jaribu tena.';
+      });
+      return;
+    }
+
+    final payload = res.payload!;
+    final user = (payload['user'] as Map<String, dynamic>?) ?? const {};
+    await AuthService.instance.saveSession(
+      accessToken: payload['accessToken'] as String,
+      refreshToken: payload['refreshToken'] as String?,
+      accessExpiresIn: payload['accessExpiresIn'] as int? ?? 86400,
+      refreshExpiresIn: payload['refreshExpiresIn'] as int? ?? 7776000,
+      user: s,
+    );
+    if (!mounted) return;
+
+    final userId = int.tryParse('${user['id']}') ?? s.userId ?? 0;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => HomeScreen(currentUserId: userId)),
+      (_) => false,
+    );
   }
 
   // ---------------------------------------------------------------------------

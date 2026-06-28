@@ -25,6 +25,10 @@ class RegistrationState {
   // Step 2b: PIN
   String? pin;
 
+  // Proof-of-phone token from verifyOtp (GraphQL onboarding); required by
+  // registerAccount. Not persisted to flat JSON.
+  String? signupToken;
+
   // Step 3: Location
   LocationSelection? location;
 
@@ -63,6 +67,7 @@ class RegistrationState {
     this.isPhoneVerified = false,
     this.verificationId,
     this.pin,
+    this.signupToken,
     this.location,
     this.primarySchool,
     this.secondarySchool,
