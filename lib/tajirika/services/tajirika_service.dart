@@ -247,6 +247,9 @@ class TajirikaService {
     int userId,
     String nidaNumber,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitNidaVerification(nidaNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/verifications/nida'),
@@ -273,6 +276,9 @@ class TajirikaService {
     int userId,
     String tinNumber,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitTinVerification(tinNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/verifications/tin'),
@@ -300,6 +306,9 @@ class TajirikaService {
     String licenseType,
     File file,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitProfessionalLicense(licenseType, file);
+    }
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -330,6 +339,9 @@ class TajirikaService {
   }
 
   static Future<TajirikaResult> submitBackgroundCheck(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitBackgroundVerification();
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/verifications/background'),
@@ -377,6 +389,9 @@ class TajirikaService {
     int userId,
     int partnerId,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.submitPeerVouch(partnerId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/tajirika/partners/$partnerId/vouch'),
@@ -650,6 +665,9 @@ class TajirikaService {
     int courseId,
     double progress,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.updateCourseProgress(courseId, progress);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/tajirika/training/$courseId/progress?user_id=$userId'),
@@ -672,6 +690,9 @@ class TajirikaService {
     String token,
     int userId,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaService.getMentorshipMatches();
+    }
     try {
       final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/tajirika/mentorship?user_id=$userId'),

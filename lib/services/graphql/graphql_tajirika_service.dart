@@ -681,4 +681,179 @@ class GraphqlTajirikaService {
       if (row['certificateUrl'] != null) 'certificate_url': row['certificateUrl'],
     };
   }
+
+  static Future<TajirikaResult> submitNidaVerification(String nidaNumber) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaNidaVerification(\$nidaNumber: String!) {
+          submitTajirikaNidaVerification(nidaNumber: \$nidaNumber)
+        }
+        ''',
+        variables: {'nidaNumber': nidaNumber},
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> submitTinVerification(String tinNumber) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaTinVerification(\$tinNumber: String!) {
+          submitTajirikaTinVerification(tinNumber: \$tinNumber)
+        }
+        ''',
+        variables: {'tinNumber': tinNumber},
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> submitBackgroundVerification() async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaBackgroundVerification {
+          submitTajirikaBackgroundVerification
+        }
+        ''',
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> submitProfessionalLicense(
+    String licenseType,
+    File file,
+  ) async {
+    try {
+      final uploaded = await GraphqlMediaService.uploadFile(
+        file,
+        mediaType: 'document',
+      );
+      final path = uploaded?['file_path']?.toString();
+      if (path == null) {
+        return TajirikaResult(success: false, message: 'Failed to upload document');
+      }
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaProfessionalVerification(
+          \$input: SubmitTajirikaProfessionalVerificationInput!
+        ) {
+          submitTajirikaProfessionalVerification(input: \$input)
+        }
+        ''',
+        variables: {
+          'input': {
+            'licenseType': licenseType,
+            'documentUrl': path,
+          },
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> submitPeerVouch(int partnerId) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation SubmitTajirikaPeerVouch(\$partnerId: ID!) {
+          submitTajirikaPeerVouch(partnerId: \$partnerId)
+        }
+        ''',
+        variables: {'partnerId': partnerId.toString()},
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<TajirikaResult> updateCourseProgress(
+    int courseId,
+    double progress,
+  ) async {
+    try {
+      await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation UpdateTajirikaTrainingProgress(\$courseId: ID!, \$progress: Float!) {
+          updateTajirikaTrainingProgress(courseId: \$courseId, progress: \$progress) {
+            id
+            progress
+            isCompleted
+          }
+        }
+        ''',
+        variables: {
+          'courseId': courseId.toString(),
+          'progress': progress,
+        },
+        auth: true,
+      );
+      return TajirikaResult(success: true);
+    } catch (e) {
+      return TajirikaResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  static Future<List<MentorshipMatch>> getMentorshipMatches() async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query MyTajirikaMentorshipMatches {
+          myTajirikaMentorshipMatches {
+            id
+            mentorUserId
+            mentorName
+            mentorPhoto
+            mentorTier
+            menteeUserId
+            menteeName
+            menteePhoto
+            status
+            createdAt
+          }
+        }
+        ''',
+        auth: true,
+      );
+      final rows = data['myTajirikaMentorshipMatches'] as List<dynamic>? ?? [];
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map((row) => MentorshipMatch.fromJson(_mentorshipToLegacy(row)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Map<String, dynamic> _mentorshipToLegacy(Map<String, dynamic> row) {
+    return {
+      'id': int.tryParse(row['id']?.toString() ?? '') ?? 0,
+      'mentor_id': int.tryParse(row['mentorUserId']?.toString() ?? '') ?? 0,
+      'mentor_name': row['mentorName'] ?? '',
+      if (row['mentorPhoto'] != null) 'mentor_photo': row['mentorPhoto'],
+      'mentor_tier': row['mentorTier'] ?? 'mwanafunzi',
+      'mentee_id': int.tryParse(row['menteeUserId']?.toString() ?? '') ?? 0,
+      'mentee_name': row['menteeName'] ?? '',
+      if (row['menteePhoto'] != null) 'mentee_photo': row['menteePhoto'],
+      'status': row['status'] ?? 'active',
+      'created_at': row['createdAt'] ?? DateTime.now().toIso8601String(),
+    };
+  }
 }
