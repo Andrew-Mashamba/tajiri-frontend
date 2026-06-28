@@ -140,10 +140,12 @@ class GraphqlSubscriptionService {
   static Map<String, dynamic> _followUserToLegacy(Map<String, dynamic> row) {
     return {
       'id': int.parse(row['id'].toString()),
-      'first_name': row['firstName'] ?? '',
-      'last_name': row['lastName'] ?? '',
+      // FollowUserGql exposes displayName + avatarUrl (no separate first/last);
+      // map displayName into the legacy first_name, leaving last_name blank.
+      'first_name': row['displayName'] ?? row['username'] ?? '',
+      'last_name': '',
       'username': row['username'],
-      'profile_photo_path': row['profilePhotoUrl'],
+      'profile_photo_path': row['avatarUrl'],
       'is_following': row['isFollowing'] == true,
       'is_followed_by': row['isFollowedBy'] == true,
     };
@@ -507,9 +509,9 @@ class GraphqlSubscriptionService {
         );
       }
       final data = await TajiriGraphqlClient.instance.query(
-        r'''
-        query ManagedCreatorSubscribers($q: String, $filter: String, $sort: String, $cursor: String, $limit: Int!) {
-          managedCreatorSubscribers(q: $q, filter: $filter, sort: $sort, cursor: $cursor, limit: $limit) {
+        '''
+        query ManagedCreatorSubscribers(\$q: String, \$filter: String, \$sort: String, \$cursor: String, \$limit: Int!) {
+          managedCreatorSubscribers(q: \$q, filter: \$filter, sort: \$sort, cursor: \$cursor, limit: \$limit) {
             totalCount
             hasMore
             nextCursor
@@ -676,10 +678,9 @@ class GraphqlSubscriptionService {
           userSubscribers(userId: \$userId, cursor: \$cursor, limit: \$limit) {
             items {
               id
-              firstName
-              lastName
+              displayName
               username
-              profilePhotoUrl
+              avatarUrl
               isFollowing
               isFollowedBy
             }
@@ -785,7 +786,7 @@ class GraphqlSubscriptionService {
       final data = await TajiriGraphqlClient.instance.query(
         '''
         query CreatorEarnings(\$type: String, \$status: String, \$cursor: String) {
-          creatorEarnings(type: \$type, status: \$status, cursor: \$cursor) {
+          creatorEarnings(earningType: \$type, status: \$status, cursor: \$cursor) {
             items {
               $_earningFields
             }

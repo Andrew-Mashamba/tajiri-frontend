@@ -61,7 +61,7 @@ class GraphqlBusinessService {
     sdl wcf netSalary
   ''';
 
-  static const _payrollRunFields = r'''
+  static const _payrollRunFields = '''
     id businessId month year employees { $_payrollEntryFields }
     totalGross totalNet totalPaye totalNssf totalSdl totalWcf status createdAt
   ''';

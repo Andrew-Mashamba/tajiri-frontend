@@ -225,14 +225,14 @@ class GraphqlWalletService {
     try {
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query WalletFee(\$amount: Float!, \$type: String) {
-          walletFee(amount: \$amount, type: \$type) {
+        query WalletFee(\$amount: Float!, \$feeType: String!) {
+          walletFee(amount: \$amount, feeType: \$feeType) {
             fee
             total
           }
         }
         ''',
-        variables: {'amount': amount, 'type': type},
+        variables: {'amount': amount, 'feeType': type},
       );
       final quote = data['walletFee'] as Map<String, dynamic>? ?? {};
       return (

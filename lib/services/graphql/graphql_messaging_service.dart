@@ -138,6 +138,8 @@ class GraphqlMessagingService {
       $messageType: String
       $clientMessageId: String
       $replyToId: ID
+      $mediaPath: String
+      $mediaType: String
     ) {
       sendMessage(
         conversationId: $conversationId

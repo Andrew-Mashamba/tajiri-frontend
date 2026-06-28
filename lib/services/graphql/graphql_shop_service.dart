@@ -170,7 +170,7 @@ class GraphqlShopService {
     }
   ''';
 
-  static const _cartFields = r'''
+  static const _cartFields = '''
     items {
       productId
       quantity

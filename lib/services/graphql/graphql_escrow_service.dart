@@ -60,9 +60,9 @@ class GraphqlEscrowService {
     }
   ''';
 
-  static const _disputesQuery = r'''
-    query ShopEscrowDisputes($status: String) {
-      shopEscrowDisputes(status: $status) {
+  static const _disputesQuery = '''
+    query ShopEscrowDisputes(\$status: String) {
+      shopEscrowDisputes(status: \$status) {
         $_disputeFields
       }
     }

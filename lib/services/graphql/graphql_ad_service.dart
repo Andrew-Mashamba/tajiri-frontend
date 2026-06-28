@@ -216,7 +216,7 @@ class GraphqlAdService {
       final data = await TajiriGraphqlClient.instance.mutate(
         '''
         mutation ReportAdMobRevenue(\$input: ReportAdMobRevenueInput!) {
-          reportAdMobRevenue(input: \$input)
+          reportAdmobRevenue(input: \$input)
         }
         ''',
         variables: {
@@ -228,7 +228,7 @@ class GraphqlAdService {
         },
         auth: true,
       );
-      return data['reportAdMobRevenue'] == true;
+      return data['reportAdmobRevenue'] == true;
     } catch (_) {
       return false;
     }
