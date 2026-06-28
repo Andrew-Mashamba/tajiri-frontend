@@ -66,8 +66,6 @@ class EventService {
   }) async {
     if (ApiConfig.useGraphqlBackend &&
         category == null &&
-        dateFrom == null &&
-        dateTo == null &&
         (price == null || price == EventPriceFilter.all) &&
         sort == null) {
       if (search != null && search.trim().length >= 2) {
@@ -75,10 +73,17 @@ class EventService {
           query: search.trim(),
           page: page,
           perPage: perPage,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
         );
       }
       if (search == null || search.isEmpty) {
-        return GraphqlEventsService.getEventsFeed(page: page, perPage: perPage);
+        return GraphqlEventsService.getEventsFeed(
+          page: page,
+          perPage: perPage,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+        );
       }
     }
     try {

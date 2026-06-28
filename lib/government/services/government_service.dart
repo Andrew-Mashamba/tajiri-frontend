@@ -71,6 +71,9 @@ class GovernmentService {
     required int userId,
     required String nidaNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.lookupNida(nidaNumber: nidaNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/nida/lookup'),
@@ -93,6 +96,9 @@ class GovernmentService {
     required int userId,
     required String tinNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlGovernmentService.lookupTin(tinNumber: tinNumber);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/government/tra/lookup'),

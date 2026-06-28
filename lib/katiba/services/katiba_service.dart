@@ -9,6 +9,22 @@ class KatibaService {
   Dio get _dio => AuthenticatedDio.instance;
 
   // ─── Chapters ─────────────────────────────────────────────────
+  Future<SingleResult<Chapter>> getChapter(int chapterId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getChapter(chapterId);
+    }
+    try {
+      final r = await _dio.get('/katiba/chapters/$chapterId');
+      final d = r.data;
+      if (d['success'] == true && d['data'] != null) {
+        return SingleResult(success: true, data: Chapter.fromJson(d['data']));
+      }
+      return SingleResult(message: d['message'] ?? 'Not found');
+    } catch (e) {
+      return SingleResult(message: '$e');
+    }
+  }
+
   Future<PaginatedResult<Chapter>> getChapters() async {
     if (ApiConfig.useGraphqlBackend) {
       return GraphqlKatibaService.getChapters();

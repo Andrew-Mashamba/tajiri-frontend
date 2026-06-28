@@ -2,7 +2,7 @@ import '../../library/models/library_models.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL digital library (Phase 82 — backend rev 213).
-/// Citations remain REST-only.
+/// Citations via GraphQL (Phase 110); no migration needed.
 class GraphqlLibraryService {
   static const _bookFields = r'''
     id
@@ -226,6 +226,44 @@ class GraphqlLibraryService {
         success: false,
         message: 'Imeshindwa kupakia orodha: $e',
       );
+    }
+  }
+
+  static Future<LibraryResult<Citation>> getCitation({
+    required int bookId,
+    required String style,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query LibraryBookCitation(\$bookId: ID!, \$style: String!) {
+          libraryBookCitation(bookId: \$bookId, style: \$style) {
+            bookId
+            formatted
+            style
+          }
+        }
+        ''',
+        variables: {
+          'bookId': bookId.toString(),
+          'style': style,
+        },
+        auth: true,
+      );
+      final row = data['libraryBookCitation'] as Map<String, dynamic>?;
+      if (row == null) {
+        return LibraryResult(success: false, message: 'Imeshindwa kutengeneza citation');
+      }
+      return LibraryResult(
+        success: true,
+        data: Citation.fromJson({
+          'book_id': row['bookId'],
+          'formatted': row['formatted'],
+          'style': row['style'],
+        }),
+      );
+    } catch (e) {
+      return LibraryResult(success: false, message: '$e');
     }
   }
 }

@@ -7,6 +7,7 @@ import 'tajiri_graphql_client.dart';
 class GraphqlEventsService {
   static String? _feedCursor;
   static int _feedLastPage = 1;
+  static String? _feedKey;
   static String? _myCreatedCursor;
   static int _myCreatedLastPage = 1;
   static String? _myAttendingCursor;
@@ -64,11 +65,15 @@ class GraphqlEventsService {
   static Future<PaginatedResult<Event>> getEventsFeed({
     int page = 1,
     int perPage = 20,
+    String? dateFrom,
+    String? dateTo,
   }) async {
     try {
-      if (page == 1) {
+      final key = '${dateFrom ?? ''}|${dateTo ?? ''}';
+      if (page == 1 || _feedKey != key) {
         _feedCursor = null;
         _feedLastPage = 1;
+        _feedKey = key;
       } else if (page > _feedLastPage + 1) {
         return PaginatedResult(success: false, message: 'Invalid page');
       } else if (page > 1 && _feedCursor == null) {
@@ -84,8 +89,8 @@ class GraphqlEventsService {
 
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query EventsFeed(\$cursor: String) {
-          eventsFeed(cursor: \$cursor) {
+        query EventsFeed(\$cursor: String, \$dateFrom: String, \$dateTo: String) {
+          eventsFeed(cursor: \$cursor, dateFrom: \$dateFrom, dateTo: \$dateTo) {
             items { $_eventFields }
             nextCursor
             hasMore
@@ -94,6 +99,8 @@ class GraphqlEventsService {
         ''',
         variables: {
           if (_feedCursor != null) 'cursor': _feedCursor,
+          if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
+          if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
         },
         auth: true,
       );
@@ -367,6 +374,8 @@ class GraphqlEventsService {
     required String query,
     int page = 1,
     int perPage = 20,
+    String? dateFrom,
+    String? dateTo,
   }) async {
     try {
       final q = query.trim();
@@ -376,12 +385,11 @@ class GraphqlEventsService {
           message: 'Search query must be at least 2 characters',
         );
       }
-      if (page == 1) {
+      final key = '${q.toLowerCase()}|${dateFrom ?? ''}|${dateTo ?? ''}';
+      if (page == 1 || _searchQueryKey != key) {
         _searchCursor = null;
         _searchLastPage = 1;
-        _searchQueryKey = q.toLowerCase();
-      } else if (_searchQueryKey != q.toLowerCase()) {
-        return PaginatedResult(success: false, message: 'Query changed — restart from page 1');
+        _searchQueryKey = key;
       } else if (page > _searchLastPage + 1) {
         return PaginatedResult(success: false, message: 'Invalid page');
       } else if (page > 1 && _searchCursor == null) {
@@ -397,8 +405,18 @@ class GraphqlEventsService {
 
       final data = await TajiriGraphqlClient.instance.query(
         '''
-        query EventsSearch(\$q: String!, \$cursor: String) {
-          eventsSearch(q: \$q, cursor: \$cursor) {
+        query EventsSearch(
+          \$q: String!
+          \$cursor: String
+          \$dateFrom: String
+          \$dateTo: String
+        ) {
+          eventsSearch(
+            q: \$q
+            cursor: \$cursor
+            dateFrom: \$dateFrom
+            dateTo: \$dateTo
+          ) {
             items { $_eventFields }
             nextCursor
             hasMore
@@ -408,6 +426,8 @@ class GraphqlEventsService {
         variables: {
           'q': q,
           if (_searchCursor != null) 'cursor': _searchCursor,
+          if (dateFrom != null && dateFrom.isNotEmpty) 'dateFrom': dateFrom,
+          if (dateTo != null && dateTo.isNotEmpty) 'dateTo': dateTo,
         },
         auth: true,
       );

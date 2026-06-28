@@ -122,6 +122,9 @@ class LibraryService {
     required int bookId,
     required String style,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlLibraryService.getCitation(bookId: bookId, style: style);
+    }
     try {
       final res = await _dio.get(
         '/education/library/books/$bookId/cite',

@@ -149,6 +149,36 @@ class GraphqlKatibaService {
     }
   }
 
+  static Future<SingleResult<Chapter>> getChapter(int chapterId) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query KatibaChapter(\$chapterId: ID!) {
+          katibaChapter(chapterId: \$chapterId) {
+            id
+            number
+            title
+            summary
+            articleCount
+          }
+        }
+        ''',
+        variables: {'chapterId': chapterId.toString()},
+        auth: false,
+      );
+      final row = data['katibaChapter'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(message: 'Not found');
+      }
+      return SingleResult(
+        success: true,
+        data: Chapter.fromJson(_chapterToLegacy(row)),
+      );
+    } catch (e) {
+      return SingleResult(message: '$e');
+    }
+  }
+
   static Future<PaginatedResult<Article>> getChapterArticles(int chapterId) async {
     try {
       final data = await TajiriGraphqlClient.instance.query(

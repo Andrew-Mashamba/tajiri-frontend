@@ -49,4 +49,68 @@ class GraphqlGovernmentService {
       );
     }
   }
+
+  static Future<GovtResult<NidaInfo>> lookupNida({
+    required String nidaNumber,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query LookupNida(\$nidaNumber: String!) {
+          lookupNida(nidaNumber: \$nidaNumber) {
+            number
+            status
+          }
+        }
+        ''',
+        variables: {'nidaNumber': nidaNumber},
+        auth: true,
+      );
+      final row = data['lookupNida'] as Map<String, dynamic>?;
+      if (row == null) {
+        return GovtResult(success: false, message: 'Imeshindwa kuthibitisha NIDA');
+      }
+      return GovtResult(
+        success: true,
+        data: NidaInfo.fromJson({
+          'number': row['number'],
+          'status': row['status'],
+        }),
+      );
+    } catch (e) {
+      return GovtResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<GovtResult<TinInfo>> lookupTin({
+    required String tinNumber,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query LookupTin(\$tinNumber: String!) {
+          lookupTin(tinNumber: \$tinNumber) {
+            number
+            status
+          }
+        }
+        ''',
+        variables: {'tinNumber': tinNumber},
+        auth: true,
+      );
+      final row = data['lookupTin'] as Map<String, dynamic>?;
+      if (row == null) {
+        return GovtResult(success: false, message: 'Imeshindwa kutafuta TIN');
+      }
+      return GovtResult(
+        success: true,
+        data: TinInfo.fromJson({
+          'number': row['number'],
+          'status': row['status'],
+        }),
+      );
+    } catch (e) {
+      return GovtResult(success: false, message: '$e');
+    }
+  }
 }
