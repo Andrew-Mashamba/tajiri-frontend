@@ -63,10 +63,12 @@ class GraphqlPeopleSearchService {
     bool? profileComplete,
     bool? verified,
     bool? hasInterests,
+    bool? possibleEmployer,
+    bool? possibleBusinessConnection,
   }) async {
     try {
       final key =
-          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}|${hasInterests == true}';
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}|${hasInterests == true}|${possibleEmployer == true}|${possibleBusinessConnection == true}';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
@@ -128,7 +130,9 @@ class GraphqlPeopleSearchService {
               student == true ||
               profileComplete == true ||
               verified == true ||
-              hasInterests == true)
+              hasInterests == true ||
+              possibleEmployer == true ||
+              possibleBusinessConnection == true)
             'filter': {
               if (hasPhoto == true) 'hasPhoto': true,
               if (online == true) 'online': true,
@@ -146,6 +150,9 @@ class GraphqlPeopleSearchService {
               if (profileComplete == true) 'profileComplete': true,
               if (verified == true) 'verified': true,
               if (hasInterests == true) 'hasInterests': true,
+              if (possibleEmployer == true) 'possibleEmployer': true,
+              if (possibleBusinessConnection == true)
+                'possibleBusinessConnection': true,
             },
         },
         auth: true,

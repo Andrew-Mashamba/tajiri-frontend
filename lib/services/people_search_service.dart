@@ -72,8 +72,7 @@ class PeopleSearchService {
     if (!_graphqlSorts.contains(sort)) return false;
     if (sortValues != null && sortValues.isNotEmpty) return false;
     if (shuffle == true) return false;
-    return possibleBusinessConnection != true &&
-        possibleEmployer != true;
+    return true;
   }
 
   /// Search people. Empty q with no filters returns discovery feed; with q (2+ chars) or filters, returns filtered results.
@@ -150,6 +149,8 @@ class PeopleSearchService {
         profileComplete: profileComplete,
         verified: verified,
         hasInterests: hasInterests,
+        possibleEmployer: possibleEmployer,
+        possibleBusinessConnection: possibleBusinessConnection,
       );
     }
     try {

@@ -33,6 +33,14 @@ class EventService {
     double radiusKm = 50,
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getEventsNearMe(
+        lat: lat,
+        lng: lng,
+        radiusKm: radiusKm,
+        page: page,
+      );
+    }
     try {
       final response = await _dio.get('/events/nearby', queryParameters: {
         'latitude': lat,
@@ -58,12 +66,20 @@ class EventService {
   }) async {
     if (ApiConfig.useGraphqlBackend &&
         category == null &&
-        (search == null || search.isEmpty) &&
         dateFrom == null &&
         dateTo == null &&
         (price == null || price == EventPriceFilter.all) &&
         sort == null) {
-      return GraphqlEventsService.getEventsFeed(page: page, perPage: perPage);
+      if (search != null && search.trim().length >= 2) {
+        return GraphqlEventsService.searchEvents(
+          query: search.trim(),
+          page: page,
+          perPage: perPage,
+        );
+      }
+      if (search == null || search.isEmpty) {
+        return GraphqlEventsService.getEventsFeed(page: page, perPage: perPage);
+      }
     }
     try {
       final params = <String, dynamic>{
@@ -85,6 +101,9 @@ class EventService {
   }
 
   Future<PaginatedResult<Event>> getTrendingEvents({int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlEventsService.getEventsFeed(page: page);
+    }
     try {
       final response = await _dio.get('/events/trending', queryParameters: {'page': page});
       return _parsePaginatedEvents(response.data);

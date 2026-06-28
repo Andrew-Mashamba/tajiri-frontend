@@ -11,6 +11,12 @@ class GraphqlEventsService {
   static int _myCreatedLastPage = 1;
   static String? _myAttendingCursor;
   static int _myAttendingLastPage = 1;
+  static String? _searchCursor;
+  static int _searchLastPage = 1;
+  static String? _searchQueryKey;
+  static String? _nearMeCursor;
+  static int _nearMeLastPage = 1;
+  static String? _nearMeKey;
 
   static const _eventFields = r'''
     id
@@ -343,6 +349,158 @@ class GraphqlEventsService {
         _myAttendingLastPage = page + 1;
       } else {
         _myAttendingLastPage = page;
+      }
+      return PaginatedResult(
+        success: true,
+        items: items,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        total: items.length,
+        perPage: perPage,
+      );
+    } catch (e) {
+      return PaginatedResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<Event>> searchEvents({
+    required String query,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final q = query.trim();
+      if (q.length < 2) {
+        return PaginatedResult(
+          success: false,
+          message: 'Search query must be at least 2 characters',
+        );
+      }
+      if (page == 1) {
+        _searchCursor = null;
+        _searchLastPage = 1;
+        _searchQueryKey = q.toLowerCase();
+      } else if (_searchQueryKey != q.toLowerCase()) {
+        return PaginatedResult(success: false, message: 'Query changed — restart from page 1');
+      } else if (page > _searchLastPage + 1) {
+        return PaginatedResult(success: false, message: 'Invalid page');
+      } else if (page > 1 && _searchCursor == null) {
+        return PaginatedResult(
+          success: true,
+          items: const [],
+          currentPage: page,
+          lastPage: page,
+          total: 0,
+          perPage: perPage,
+        );
+      }
+
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query EventsSearch(\$q: String!, \$cursor: String) {
+          eventsSearch(q: \$q, cursor: \$cursor) {
+            items { $_eventFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'q': q,
+          if (_searchCursor != null) 'cursor': _searchCursor,
+        },
+        auth: true,
+      );
+      final conn = data['eventsSearch'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final items = rows.whereType<Map<String, dynamic>>().map(_parseEvent).toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) {
+        _searchCursor = nextCursor;
+        _searchLastPage = page + 1;
+      } else {
+        _searchLastPage = page;
+      }
+      return PaginatedResult(
+        success: true,
+        items: items,
+        currentPage: page,
+        lastPage: hasMore ? page + 1 : page,
+        total: items.length,
+        perPage: perPage,
+      );
+    } catch (e) {
+      return PaginatedResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<PaginatedResult<Event>> getEventsNearMe({
+    required double lat,
+    required double lng,
+    double radiusKm = 50,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final key = '$lat|$lng|$radiusKm';
+      if (page == 1) {
+        _nearMeCursor = null;
+        _nearMeLastPage = 1;
+        _nearMeKey = key;
+      } else if (_nearMeKey != key) {
+        return PaginatedResult(success: false, message: 'Location changed — restart from page 1');
+      } else if (page > _nearMeLastPage + 1) {
+        return PaginatedResult(success: false, message: 'Invalid page');
+      } else if (page > 1 && _nearMeCursor == null) {
+        return PaginatedResult(
+          success: true,
+          items: const [],
+          currentPage: page,
+          lastPage: page,
+          total: 0,
+          perPage: perPage,
+        );
+      }
+
+      final data = await TajiriGraphqlClient.instance.query(
+        '''
+        query EventsNearMe(
+          \$latitude: Float!
+          \$longitude: Float!
+          \$radiusKm: Float!
+          \$cursor: String
+        ) {
+          eventsNearMe(
+            latitude: \$latitude
+            longitude: \$longitude
+            radiusKm: \$radiusKm
+            cursor: \$cursor
+          ) {
+            items { $_eventFields }
+            nextCursor
+            hasMore
+          }
+        }
+        ''',
+        variables: {
+          'latitude': lat,
+          'longitude': lng,
+          'radiusKm': radiusKm,
+          if (_nearMeCursor != null) 'cursor': _nearMeCursor,
+        },
+        auth: true,
+      );
+      final conn = data['eventsNearMe'] as Map<String, dynamic>? ?? {};
+      final rows = conn['items'] as List<dynamic>? ?? [];
+      final items = rows.whereType<Map<String, dynamic>>().map(_parseEvent).toList();
+      final hasMore = conn['hasMore'] == true;
+      final nextCursor = conn['nextCursor']?.toString();
+      if (hasMore && nextCursor != null) {
+        _nearMeCursor = nextCursor;
+        _nearMeLastPage = page + 1;
+      } else {
+        _nearMeLastPage = page;
       }
       return PaginatedResult(
         success: true,
