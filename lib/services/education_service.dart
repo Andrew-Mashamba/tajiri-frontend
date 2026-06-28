@@ -179,17 +179,43 @@ class UniversityDetailedService {
         .toList();
   }
 
-  // College/department/programme hierarchy is not yet exposed via GraphQL
-  // (only flat university institutions are loaded). Returns empty until a
-  // backend query lands; the university step falls back to university-only.
-  Future<List<UniversityCollege>> getColleges(int universityId) async =>
-      <UniversityCollege>[];
+  Future<List<UniversityCollege>> getColleges(int universityId) async {
+    final rows = await GraphqlOnboardingService.universityColleges('$universityId');
+    return rows
+        .map((g) => UniversityCollege.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'university_id': universityId,
+            }))
+        .toList();
+  }
 
-  Future<List<UniversityDepartment>> getDepartments(int collegeId) async =>
-      <UniversityDepartment>[];
+  Future<List<UniversityDepartment>> getDepartments(int collegeId) async {
+    final rows = await GraphqlOnboardingService.collegeDepartments('$collegeId');
+    return rows
+        .map((g) => UniversityDepartment.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'college_id': collegeId,
+            }))
+        .toList();
+  }
 
-  Future<List<UniversityProgramme>> getProgrammesByDepartment(int departmentId) async =>
-      <UniversityProgramme>[];
+  Future<List<UniversityProgramme>> getProgrammesByDepartment(int departmentId) async {
+    final rows = await GraphqlOnboardingService.departmentProgrammes('$departmentId');
+    return rows
+        .map((g) => UniversityProgramme.fromJson({
+              'id': int.tryParse('${g['id']}') ?? 0,
+              'code': g['code'],
+              'name': g['name'],
+              'level_code': g['level'],
+              'duration': g['duration'],
+              'department_id': departmentId,
+            }))
+        .toList();
+  }
 
   Future<List<UniversityProgramme>> getProgrammesByUniversity(int universityId) async {
     final response = await httpGetWithRetry(

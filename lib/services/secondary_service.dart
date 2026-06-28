@@ -191,10 +191,23 @@ class AlevelSchoolService {
         .toList();
   }
 
-  // A-level subject combinations are not yet exposed via GraphQL (stored in
-  // ref_institutions.extras; no query). Returns empty until a backend query lands.
-  Future<List<AlevelCombination>> getCombinations() async => <AlevelCombination>[];
+  Future<List<AlevelCombination>> getCombinations() async {
+    final rows = await GraphqlOnboardingService.alevelCombinations();
+    return rows.map(_combinationFromGql).toList();
+  }
 
-  Future<List<AlevelCombination>> getSchoolCombinations(int schoolId) async =>
-      <AlevelCombination>[];
+  Future<List<AlevelCombination>> getSchoolCombinations(int schoolId) async {
+    final rows = await GraphqlOnboardingService.schoolCombinations('$schoolId');
+    return rows.map(_combinationFromGql).toList();
+  }
+
+  AlevelCombination _combinationFromGql(Map<String, dynamic> g) =>
+      AlevelCombination.fromJson({
+        'id': int.tryParse('${g['id']}') ?? 0,
+        'code': g['code'],
+        'name': g['name'],
+        'category': g['category'],
+        'subjects': g['subjects'],
+        'careers': g['careers'],
+      });
 }

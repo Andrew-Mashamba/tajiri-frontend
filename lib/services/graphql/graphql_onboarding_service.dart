@@ -164,4 +164,41 @@ class GraphqlOnboardingService {
     );
     return (data['searchBusinesses'] as List? ?? []).cast<Map<String, dynamic>>();
   }
+
+  // ── Detailed pickers: a-level combinations + university tree ──────────────
+  static const _combinationFields = r'id code name category subjects careers';
+
+  static Future<List<Map<String, dynamic>>> alevelCombinations() async {
+    final data = await TajiriGraphqlClient.instance.query(
+      '{ alevelCombinations { $_combinationFields } }');
+    return (data['alevelCombinations'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  static Future<List<Map<String, dynamic>>> schoolCombinations(String institutionId) async {
+    final data = await TajiriGraphqlClient.instance.query(
+      'query(\$s: ID!){ schoolCombinations(institutionId: \$s){ $_combinationFields } }',
+      variables: {'s': institutionId});
+    return (data['schoolCombinations'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  static Future<List<Map<String, dynamic>>> universityColleges(String universityId) async {
+    final data = await TajiriGraphqlClient.instance.query(
+      r'query($u: ID!){ universityColleges(universityId: $u){ id code name } }',
+      variables: {'u': universityId});
+    return (data['universityColleges'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  static Future<List<Map<String, dynamic>>> collegeDepartments(String collegeId) async {
+    final data = await TajiriGraphqlClient.instance.query(
+      r'query($c: ID!){ collegeDepartments(collegeId: $c){ id code name } }',
+      variables: {'c': collegeId});
+    return (data['collegeDepartments'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  static Future<List<Map<String, dynamic>>> departmentProgrammes(String departmentId) async {
+    final data = await TajiriGraphqlClient.instance.query(
+      r'query($d: ID!){ departmentProgrammes(departmentId: $d){ id code name level duration } }',
+      variables: {'d': departmentId});
+    return (data['departmentProgrammes'] as List? ?? []).cast<Map<String, dynamic>>();
+  }
 }
