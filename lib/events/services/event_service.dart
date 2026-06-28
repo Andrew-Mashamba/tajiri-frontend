@@ -56,6 +56,15 @@ class EventService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend &&
+        category == null &&
+        (search == null || search.isEmpty) &&
+        dateFrom == null &&
+        dateTo == null &&
+        (price == null || price == EventPriceFilter.all) &&
+        sort == null) {
+      return GraphqlEventsService.getEventsFeed(page: page, perPage: perPage);
+    }
     try {
       final params = <String, dynamic>{
         'page': page,

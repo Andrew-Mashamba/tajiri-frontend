@@ -1,6 +1,8 @@
 // lib/katiba/services/katiba_service.dart
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
 import '../../services/authenticated_dio.dart';
+import '../../services/graphql/graphql_katiba_service.dart';
 import '../models/katiba_models.dart';
 
 class KatibaService {
@@ -8,6 +10,9 @@ class KatibaService {
 
   // ─── Chapters ─────────────────────────────────────────────────
   Future<PaginatedResult<Chapter>> getChapters() async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getChapters();
+    }
     try {
       final r = await _dio.get('/katiba/chapters');
       final d = r.data;
@@ -26,6 +31,9 @@ class KatibaService {
 
   // ─── Article ──────────────────────────────────────────────────
   Future<SingleResult<Article>> getArticle(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.getArticle(id);
+    }
     try {
       final r = await _dio.get('/katiba/articles/$id');
       final d = r.data;
@@ -43,6 +51,9 @@ class KatibaService {
     String query, {
     int page = 1,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlKatibaService.searchArticles(query, page: page);
+    }
     try {
       final r = await _dio.get('/katiba/search', queryParameters: {
         'q': query,

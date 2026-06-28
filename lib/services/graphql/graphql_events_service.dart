@@ -238,6 +238,9 @@ class GraphqlEventsService {
     List<String>? guestNames,
   }) async {
     try {
+      if (status == RSVPStatus.notGoing) {
+        return cancelRsvp(eventId: eventId);
+      }
       final data = await TajiriGraphqlClient.instance.mutate(
         '''
         mutation RsvpEvent(\$eventId: ID!, \$status: String!) {
@@ -265,6 +268,43 @@ class GraphqlEventsService {
           status: status,
           guestCount: guestCount,
           guestNames: guestNames ?? const [],
+          respondedAt: DateTime.now(),
+        ),
+      );
+    } catch (e) {
+      return SingleResult(success: false, message: '$e');
+    }
+  }
+
+  static Future<SingleResult<EventRSVP>> cancelRsvp({
+    required int eventId,
+  }) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        '''
+        mutation CancelRsvpEvent(\$eventId: ID!) {
+          cancelRsvpEvent(eventId: \$eventId) {
+            id
+            viewerRsvpStatus
+          }
+        }
+        ''',
+        variables: {'eventId': eventId.toString()},
+        auth: true,
+      );
+      final row = data['cancelRsvpEvent'] as Map<String, dynamic>?;
+      if (row == null) {
+        return SingleResult(success: false, message: 'Cancel RSVP failed');
+      }
+      return SingleResult(
+        success: true,
+        data: EventRSVP(
+          id: 0,
+          eventId: eventId,
+          userId: 0,
+          status: RSVPStatus.notGoing,
+          guestCount: 0,
+          guestNames: const [],
           respondedAt: DateTime.now(),
         ),
       );

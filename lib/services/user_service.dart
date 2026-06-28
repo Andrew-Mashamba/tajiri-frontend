@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/registration_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_profile_service.dart';
+import 'http_retry.dart';
+import '../models/registration_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -191,7 +193,7 @@ class UserService {
   /// Get user profile by phone number
   Future<RegistrationState?> getByPhone(String phoneNumber) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/phone/$phoneNumber'),
       );
 
@@ -213,6 +215,21 @@ class UserService {
     String phone,
     Map<String, dynamic> payload,
   ) async {
+    if (ApiConfig.useGraphqlBackend &&
+        GraphqlProfileService.canHandlePayload(payload)) {
+      try {
+        final data = await GraphqlProfileService.updateUserProfile(payload);
+        return ProfileUpdateResult(
+          success: true,
+          data: data,
+        );
+      } catch (e) {
+        return ProfileUpdateResult(
+          success: false,
+          message: 'Imeshindwa kusasisha wasifu: $e',
+        );
+      }
+    }
     try {
       final encodedPhone = Uri.encodeComponent(phone);
       final response = await http.put(

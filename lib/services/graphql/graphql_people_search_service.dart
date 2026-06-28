@@ -58,10 +58,14 @@ class GraphqlPeopleSearchService {
     String? relationshipStatus,
     int? ageMin,
     int? ageMax,
+    bool? hasBusiness,
+    bool? student,
+    bool? profileComplete,
+    bool? verified,
   }) async {
     try {
       final key =
-          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax';
+          '${query ?? ''}|$friendsOfFriendsOnly|$sort|${hasPhoto == true}|${online == true}|$gender|$location|$employer|$school|$sector|$relationshipStatus|$ageMin|$ageMax|${hasBusiness == true}|${student == true}|${profileComplete == true}|${verified == true}';
       if (page == 1) {
         _cursor = null;
         _lastPage = 1;
@@ -118,7 +122,11 @@ class GraphqlPeopleSearchService {
               sector != null ||
               relationshipStatus != null ||
               ageMin != null ||
-              ageMax != null)
+              ageMax != null ||
+              hasBusiness == true ||
+              student == true ||
+              profileComplete == true ||
+              verified == true)
             'filter': {
               if (hasPhoto == true) 'hasPhoto': true,
               if (online == true) 'online': true,
@@ -131,6 +139,10 @@ class GraphqlPeopleSearchService {
                 'relationshipStatus': relationshipStatus,
               if (ageMin != null) 'ageMin': ageMin,
               if (ageMax != null) 'ageMax': ageMax,
+              if (hasBusiness == true) 'hasBusiness': true,
+              if (student == true) 'student': true,
+              if (profileComplete == true) 'profileComplete': true,
+              if (verified == true) 'verified': true,
             },
         },
         auth: true,
