@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_loyalty_service.dart';
 
 /// Spec §F — partner_c2b daily metrics rows. Backend rebuilds via
 /// `app:rebuild-partner-c2b-metrics` (daily 02:30 EAT scheduler).
@@ -105,6 +105,15 @@ class PartnerC2BMetricsApi {
     DateTime? from,
     DateTime? to,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.fetchC2bMetrics(
+        userId: userId,
+        role: role,
+        sourceType: sourceType,
+        from: from,
+        to: to,
+      );
+    }
     final params = <String, String>{'user_id': '$userId'};
     if (role != null) params['role'] = role;
     if (sourceType != null) params['source_type'] = sourceType;
@@ -113,7 +122,7 @@ class PartnerC2BMetricsApi {
     final uri = Uri.parse('$_baseUrl/partner-c2b/metrics').replace(queryParameters: params);
     debugPrint('[PartnerC2BMetricsApi] GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

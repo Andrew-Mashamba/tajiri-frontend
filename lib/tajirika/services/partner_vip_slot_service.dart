@@ -2,13 +2,18 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_loyalty_service.dart';
 import '../models/partner_vip_slot.dart';
 
 class PartnerVipSlotService {
   static Future<List<PartnerVipSlot>> listForPartner(int partnerUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.listPartnerVipSlots(partnerUserId);
+    }
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/partner-vip-slots')
             .replace(queryParameters: {'partner_user_id': '$partnerUserId'}),
       );
@@ -31,6 +36,15 @@ class PartnerVipSlotService {
     required int weekday,
     required String slotTime,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.createPartnerVipSlot(
+        partnerUserId: partnerUserId,
+        customerUserId: customerUserId,
+        weekday: weekday,
+        slotTime: slotTime,
+        skillCategory: skillCategory,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'partner_user_id': partnerUserId,
@@ -53,6 +67,9 @@ class PartnerVipSlotService {
   }
 
   static Future<bool> delete(int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.deletePartnerVipSlot(id);
+    }
     try {
       final res = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/partner-vip-slots/$id'),

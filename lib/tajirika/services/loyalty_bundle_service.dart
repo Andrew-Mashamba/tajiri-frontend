@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_loyalty_service.dart';
 import '../models/loyalty_bundle.dart';
 
 void _log(String m) => debugPrint('[LoyaltyBundleService] $m');
@@ -17,11 +19,14 @@ class LoyaltyBundleService {
   static Future<LoyaltyBundleListResult> listForPartner({
     required int partnerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.listLoyaltyBundles(partnerUserId);
+    }
     final uri = Uri.parse('${ApiConfig.baseUrl}/partner-c2b/loyalty-bundles')
         .replace(queryParameters: {'partner_user_id': '$partnerUserId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -49,6 +54,9 @@ class LoyaltyBundleService {
     required int bundleId,
     required int customerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.purchaseLoyaltyBundle(bundleId);
+    }
     final url = '${ApiConfig.baseUrl}/partner-c2b/loyalty-bundles/$bundleId/purchase';
     _log('POST $url');
     try {

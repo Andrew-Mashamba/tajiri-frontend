@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
+import '../../services/graphql/graphql_tajirika_loyalty_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -60,6 +61,9 @@ class LoyaltyStampService {
     required int partnerId,
     required int customerUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlTajirikaLoyaltyService.fetchLoyaltyStampCard(partnerId: partnerId);
+    }
     final uri = Uri.parse('$_baseUrl/loyalty-stamp-cards')
         .replace(queryParameters: {
       'partner_id': '$partnerId',
@@ -67,7 +71,7 @@ class LoyaltyStampService {
     });
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('status=${res.statusCode}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true && body['data'] != null) {
