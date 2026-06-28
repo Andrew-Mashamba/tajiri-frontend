@@ -101,8 +101,8 @@ class _CompletionScreenState extends State<CompletionScreen>
       'pin': s.pin,
       'deviceId': deviceId,
       'fullName': s.fullName,
-      // TODO: profilePhotoPath via media upload; granular education/employer
-      // once those pickers write structured selections into state.
+      // Photo is uploaded after register (media upload needs the new token).
+      // TODO: granular education/employer once pickers write structured state.
       if (s.location?.regionName != null) 'location': s.location!.regionName,
     };
 
@@ -126,6 +126,18 @@ class _CompletionScreenState extends State<CompletionScreen>
       refreshExpiresIn: payload['refreshExpiresIn'] as int? ?? 7776000,
       user: s,
     );
+
+    // Upload the avatar now that we have an auth token, then attach it.
+    final photo = s.profilePhotoPath;
+    if (photo != null && photo.isNotEmpty) {
+      final filePath = await GraphqlOnboardingService.uploadAvatar(
+        photo,
+        payload['accessToken'] as String,
+      );
+      if (filePath != null) {
+        await GraphqlOnboardingService.setProfilePhoto(filePath);
+      }
+    }
     if (!mounted) return;
 
     final userId = int.tryParse('${user['id']}') ?? s.userId ?? 0;

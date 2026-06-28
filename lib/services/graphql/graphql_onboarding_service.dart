@@ -1,5 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../../config/api_config.dart';
 import 'tajiri_graphql_client.dart';
 
 /// GraphQL onboarding (phone-OTP registration journey) against TAJIRI-BACKEND.
@@ -70,6 +74,46 @@ class GraphqlOnboardingService {
     } catch (e) {
       if (kDebugMode) debugPrint('[GraphqlOnboardingService] registerAccount: $e');
       return (success: false, payload: null, error: '$e');
+    }
+  }
+
+  // ── Profile photo (post-register; media upload needs an auth token) ───────
+  /// Uploads the avatar file to the media endpoint and returns its file_path.
+  static Future<String?> uploadAvatar(String filePath, String accessToken) async {
+    try {
+      final req = http.MultipartRequest(
+        'POST',
+        Uri.parse(ApiConfig.graphqlMediaUploadUrl),
+      );
+      req.headers['Authorization'] = 'Bearer $accessToken';
+      req.fields['media_type'] = 'image';
+      req.files.add(await http.MultipartFile.fromPath('file', filePath));
+      final streamed = await req.send();
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode == 200) {
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          return (data['data'] as Map<String, dynamic>)['file_path'] as String?;
+        }
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlOnboardingService] uploadAvatar: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> setProfilePhoto(String path) async {
+    try {
+      final data = await TajiriGraphqlClient.instance.mutate(
+        r'mutation($p: String!){ setProfilePhoto(path: $p){ id avatarUrl } }',
+        variables: {'p': path},
+        auth: true,
+      );
+      return data['setProfilePhoto'] != null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[GraphqlOnboardingService] setProfilePhoto: $e');
+      return false;
     }
   }
 
