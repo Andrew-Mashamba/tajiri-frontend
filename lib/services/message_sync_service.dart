@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/message_models.dart';
+import 'graphql/graphql_messaging_service.dart';
 import 'message_database.dart';
 import 'local_storage_service.dart';
 
@@ -52,6 +54,28 @@ class MessageSyncService {
     final db = MessageDatabase.instance;
     final syncState = await db.getSyncState(conversationId);
     final sinceId = syncState?['last_synced_message_id'] as int? ?? 0;
+
+    if (ApiConfig.useGraphqlBackend) {
+      final batch = await GraphqlMessagingService.syncMessages(
+        conversationId: conversationId,
+        sinceId: sinceId,
+      );
+      if (batch.messages.isNotEmpty) {
+        await db.upsertMessages(batch.messages);
+        final maxId = batch.messages.map((m) => m.id).reduce((a, b) => a > b ? a : b);
+        await db.updateSyncState(
+          conversationId,
+          maxId,
+          DateTime.now().toIso8601String(),
+        );
+      }
+      if (batch.hasMore) {
+        final more = await _syncConversationInner(conversationId, userId);
+        return [...batch.messages, ...more];
+      }
+      return batch.messages;
+    }
+
     final sinceTimestamp = syncState?['last_sync_timestamp'] as String?;
 
     final token = LocalStorageService.instanceSync?.getAuthToken();
@@ -73,7 +97,7 @@ class MessageSyncService {
       debugPrint('[MessageSyncService] GET $url');
     }
 
-    final response = await http.get(url, headers: ApiConfig.authHeaders(token));
+    final response = await httpGetWithRetry(url, headers: ApiConfig.authHeaders(token));
 
     // If /sync endpoint doesn't exist (404), fall back to standard messages fetch
     if (response.statusCode == 404) {
@@ -149,7 +173,7 @@ class MessageSyncService {
       debugPrint('[MessageSyncService] fallbackFetch GET $url');
     }
 
-    final response = await http.get(url, headers: ApiConfig.authHeaders(token));
+    final response = await httpGetWithRetry(url, headers: ApiConfig.authHeaders(token));
     if (response.statusCode != 200) return [];
 
     final body = jsonDecode(response.body);
@@ -192,6 +216,23 @@ class MessageSyncService {
 
   /// Sync conversation list.
   Future<List<Conversation>> syncConversationList(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final result = await GraphqlMessagingService.getConversations(
+          page: 1,
+          perPage: 100,
+        );
+        if (!result.success) return [];
+        final db = MessageDatabase.instance;
+        await db.upsertConversations(result.conversations);
+        return result.conversations;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[MessageSyncService] syncConversationList graphql: $e');
+        }
+        return [];
+      }
+    }
     try {
       final token = LocalStorageService.instanceSync?.getAuthToken();
       if (token == null) return [];
@@ -207,7 +248,7 @@ class MessageSyncService {
       }
 
       final response =
-          await http.get(url, headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(url, headers: ApiConfig.authHeaders(token));
       if (response.statusCode != 200) return [];
 
       final body = jsonDecode(response.body);
@@ -257,6 +298,30 @@ class MessageSyncService {
   /// Send a pending message from the offline queue.
   Future<bool> sendPendingMessage(
       Map<String, dynamic> pending, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final conversationId = pending['conversation_id'] as int;
+        final result = await GraphqlMessagingService.sendMessage(
+          conversationId: conversationId,
+          content: pending['content']?.toString(),
+          messageType: pending['message_type']?.toString() ?? 'text',
+          replyToId: pending['reply_to_id'] as int?,
+          clientMessageId: pending['local_id']?.toString(),
+        );
+        if (result.success && result.message != null) {
+          final db = MessageDatabase.instance;
+          await db.removePendingMessage(pending['local_id'] as String);
+          await db.upsertMessage(result.message!);
+          return true;
+        }
+        return false;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[MessageSyncService] sendPendingMessage graphql: $e');
+        }
+        return false;
+      }
+    }
     try {
       final token = LocalStorageService.instanceSync?.getAuthToken();
       if (token == null) return false;
@@ -321,6 +386,33 @@ class MessageSyncService {
 
   /// Initial full sync for a conversation (first time opening).
   Future<List<Message>> initialSync(int conversationId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final result = await GraphqlMessagingService.getMessages(
+          conversationId: conversationId,
+          page: 1,
+          perPage: 50,
+        );
+        if (!result.success) return [];
+        final messages = result.messages;
+        if (messages.isNotEmpty) {
+          final db = MessageDatabase.instance;
+          await db.upsertMessages(messages);
+          final maxId = messages.map((m) => m.id).reduce((a, b) => a > b ? a : b);
+          await db.updateSyncState(
+            conversationId,
+            maxId,
+            DateTime.now().toIso8601String(),
+          );
+        }
+        return messages;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[MessageSyncService] initialSync graphql: $e');
+        }
+        return [];
+      }
+    }
     try {
       final token = LocalStorageService.instanceSync?.getAuthToken();
       if (token == null) return [];
@@ -335,7 +427,7 @@ class MessageSyncService {
       }
 
       final response =
-          await http.get(url, headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(url, headers: ApiConfig.authHeaders(token));
       if (response.statusCode != 200) return [];
 
       final body = jsonDecode(response.body);

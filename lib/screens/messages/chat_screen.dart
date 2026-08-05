@@ -42,9 +42,10 @@ import '../../services/link_preview_service.dart';
 import '../../services/presence_service.dart';
 import '../../widgets/sticker_browser.dart';
 import '../../services/sticker_service.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/message_reminder_service.dart';
+import '../../services/graphql/tajiri_realtime_service.dart';
 
 // Design: DOCS/DESIGN.md — #FAFAFA background, 48dp min touch targets
 // Story 39: sender bubble blue, receiver gray; read receipts, timestamps; text, image, video, voice
@@ -144,6 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Map<int, PresenceInfo> _presences = {};
 
   StreamSubscription<LiveUpdateEvent>? _liveUpdateSubscription;
+  StreamSubscription<Map<String, dynamic>>? _realtimeSubscription;
 
   @override
   void initState() {
@@ -160,6 +162,15 @@ class _ChatScreenState extends State<ChatScreen> {
         _onLiveMessageUpdate();
       }
     });
+    if (ApiConfig.useGraphqlBackend) {
+      _realtimeSubscription = TajiriRealtimeService.instance.onEvent.listen((event) {
+        if (event['type'] != 'message.new') return;
+        final convId = int.tryParse(event['conversation_id']?.toString() ?? '');
+        if (convId == widget.conversationId && mounted) {
+          _onLiveMessageUpdate();
+        }
+      });
+    }
     _messageController.addListener(_onTypingChanged);
     _messageController.addListener(_onDraftChanged);
     _messageController.addListener(_onMentionCheck);
@@ -176,6 +187,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _messageService.stopRecording(widget.conversationId, widget.currentUserId);
     }
     _liveUpdateSubscription?.cancel();
+    _realtimeSubscription?.cancel();
     _messageController.removeListener(_onTypingChanged);
     _messageController.removeListener(_onDraftChanged);
     _messageController.removeListener(_onMentionCheck);
@@ -3117,7 +3129,7 @@ class _GifPickerContentState extends State<_GifPickerContent> {
     setState(() { _loading = true; _error = null; });
     try {
       final uri = Uri.parse('https://api.giphy.com/v1/gifs/trending?api_key=$_apiKey&limit=30&rating=g');
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (!mounted) return;
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -3140,7 +3152,7 @@ class _GifPickerContentState extends State<_GifPickerContent> {
     setState(() { _loading = true; _error = null; });
     try {
       final uri = Uri.parse('https://api.giphy.com/v1/gifs/search?api_key=$_apiKey&q=${Uri.encodeComponent(query)}&limit=30&rating=g');
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (!mounted) return;
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

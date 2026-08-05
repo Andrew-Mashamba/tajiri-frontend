@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/livestream_models.dart';
 import '../config/api_config.dart';
 // TODO: Wire ExpenditureService into sendGift() once gift value (price * quantity)
@@ -16,7 +17,7 @@ class LiveStreamService {
       if (status != null) url += 'status=$status&';
       if (currentUserId != null) url += 'current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -129,7 +130,7 @@ class LiveStreamService {
   /// GET /streams/{id}/check — lightweight status for reconnection/polling.
   Future<StreamCheckResponse> checkStream(int streamId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/streams/$streamId/check'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/streams/$streamId/check'));
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return StreamCheckResponse.fromJson(data);
     } catch (e) {
@@ -148,7 +149,7 @@ class LiveStreamService {
       String url = '$_baseUrl/streams/$streamId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -238,12 +239,16 @@ class LiveStreamService {
   }
 
   /// POST /streams/{id}/join — returns playback_url + websocket; handle 200/404/409/410 per API guide.
-  Future<JoinStreamResult> joinStream(int streamId, int userId) async {
+  /// [shareUid] is forwarded so backend fires `view_from_share·sharer` for the original
+  /// link sharer (streams.md §III row 26).
+  Future<JoinStreamResult> joinStream(int streamId, int userId, {String? shareUid}) async {
     try {
+      final body = <String, dynamic>{'user_id': userId};
+      if (shareUid != null && shareUid.isNotEmpty) body['share_uid'] = shareUid;
       final response = await http.post(
         Uri.parse('$_baseUrl/streams/$streamId/join'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId}),
+        body: jsonEncode(body),
       );
       final data = response.body.isNotEmpty
           ? (jsonDecode(response.body) as Map<String, dynamic>? ?? <String, dynamic>{})
@@ -320,7 +325,7 @@ class LiveStreamService {
   // Comments
   Future<CommentsResult> getComments(int streamId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/streams/$streamId/comments'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/streams/$streamId/comments'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -365,7 +370,7 @@ class LiveStreamService {
   // Gifts
   Future<GiftsResult> getAvailableGifts() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/streams/gifts'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/streams/gifts'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -380,19 +385,24 @@ class LiveStreamService {
     }
   }
 
-  Future<bool> sendGift(int streamId, int senderId, int giftId, {int quantity = 1, String? message}) async {
+  Future<bool> sendGift(int streamId, int senderId, int giftId, {int quantity = 1, String? message, String? transactionId}) async {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/streams/$streamId/gifts'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'sender_id': senderId,
+          // Backend validation requires `user_id` (not `sender_id`).
+          'user_id': senderId,
           'gift_id': giftId,
           'quantity': quantity,
           if (message != null) 'message': message,
+          // L1 — idempotency. Caller passes a stable UUIDv4 per tap so a
+          // network retry short-circuits via the partial unique index
+          // stream_gifts_transaction_id_unique.
+          if (transactionId != null) 'transaction_id': transactionId,
         }),
       );
-      return response.statusCode == 201;
+      return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
       return false;
     }
@@ -437,7 +447,7 @@ class LiveStreamService {
   // Viewers
   Future<ViewersResult> getViewers(int streamId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/streams/$streamId/viewers'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/streams/$streamId/viewers'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -495,7 +505,7 @@ class LiveStreamService {
   // User's streams
   Future<StreamsResult> getUserStreams(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/streams/user/$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/streams/user/$userId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -508,6 +518,790 @@ class LiveStreamService {
     } catch (e) {
       return StreamsResult(success: false, message: 'Error: $e');
     }
+  }
+
+  // ─── Phase A — viewer earnings emitters ────────────────────────────
+
+  /// streams.md §I row 3 — live_reaction·author. Fires per heart/fire/clap.
+  /// reaction_type ∈ {heart, fire, love, wow, clap, laugh}
+  Future<bool> sendReaction(int streamId, int userId, String reactionType) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/reaction'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'reaction_type': reactionType}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §I row 2 — live_watch_minute·author. Client should call once
+  /// per minute while video is playing. Backend dedupes per (actor, stream,
+  /// minute-bucket) via funding_source.
+  Future<bool> heartbeat(int streamId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §I row 16 — screenshot_during_live·author. Fired by the
+  /// ScreenCaptureEvent listener on iOS/Android.
+  Future<bool> screenshotFeedback(int streamId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/screenshot'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §III row 25 — stream_share·sharer. Returns share_uid + URL.
+  Future<({bool success, String? shareUid, String? shareUrl})> shareStream(
+      int streamId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/share'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      if (response.statusCode == 200) {
+        final d = jsonDecode(response.body) as Map<String, dynamic>;
+        return (
+          success: d['success'] == true,
+          shareUid: d['share_uid'] as String?,
+          shareUrl: d['share_url'] as String?,
+        );
+      }
+      return (success: false, shareUid: null, shareUrl: null);
+    } catch (_) {
+      return (success: false, shareUid: null, shareUrl: null);
+    }
+  }
+
+  /// streams.md §I row 5 — live_super_chat·author. Paid pinned chat.
+  Future<bool> sendSuperChat(int streamId, int userId, int amount, {String? message}) async {
+    try {
+      final body = <String, dynamic>{'user_id': userId, 'amount': amount};
+      if (message != null && message.isNotEmpty) body['message'] = message;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/super-chats'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §II — Q&A (rows 20, 21).
+  Future<({bool success, int? questionId})> submitQuestion(
+      int streamId, int userId, String question) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/questions'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'question': question}),
+      );
+      if (response.statusCode == 200) {
+        final d = jsonDecode(response.body) as Map<String, dynamic>;
+        final qid = (d['question'] is Map ? (d['question'] as Map)['id'] : null)
+            ?? (d['data'] is Map ? (d['data'] as Map)['id'] : null);
+        return (success: d['success'] == true, questionId: qid is int ? qid : null);
+      }
+      return (success: false, questionId: null);
+    } catch (_) { return (success: false, questionId: null); }
+  }
+
+  Future<bool> upvoteQuestion(int streamId, int userId, int questionId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/questions/$questionId/upvote'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  Future<bool> answerQuestion(int streamId, int userId, int questionId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/questions/$questionId/answer'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── Phase A — negative attribution ────────────────────────────────
+
+  /// Streams Integrity Framework §A. signal ∈ {
+  ///   negative_reaction_during_live, rapid_leave, session_exit_after_join,
+  ///   mute_streamer, unfollow_during_or_after_stream, block_streamer,
+  ///   report_stream, not_interested_in_streams_like_this,
+  ///   negative_share_during_stream, chat_disable_for_creator
+  /// }
+  Future<bool> negativeFeedback(int streamId, int userId, String signal,
+      {Map<String, dynamic>? metadata}) async {
+    try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'signal_type': signal,
+      };
+      if (metadata != null) body['metadata'] = metadata;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/feedback'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── Phase A — external link click ─────────────────────────────────
+
+  Future<bool> externalLinkClick(int streamId, int userId, String url) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/external-link-click'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'url': url}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── Phase B — streamer tools ──────────────────────────────────────
+
+  /// streams.md §III row 28 — raid_in·raid_streamer.
+  Future<bool> raidStream({
+    required int sourceStreamId,
+    required int raidStreamerId,
+    required int targetStreamId,
+    int viewerCount = 0,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$sourceStreamId/raid'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'raid_streamer_id': raidStreamerId,
+          'target_stream_id': targetStreamId,
+          'viewer_count': viewerCount,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §III row 29 — host_in·host_streamer.
+  Future<bool> hostStream({
+    required int hostStreamId,
+    required int hostStreamerId,
+    required int hostedStreamId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$hostStreamId/host'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'host_streamer_id': hostStreamerId,
+          'hosted_stream_id': hostedStreamId,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §IX row 54 — live_product_show·author.
+  Future<bool> pinStreamProduct({
+    required int streamId,
+    required int streamerUserId,
+    int? productId,
+    String? externalUrl,
+    String? label,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/products'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'streamer_user_id': streamerUserId,
+          if (productId != null) 'product_id': productId,
+          if (externalUrl != null) 'external_url': externalUrl,
+          if (label != null) 'label': label,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §IX row 55 — live_product_expand·author.
+  Future<bool> expandStreamProduct({
+    required int streamId,
+    required int streamProductId,
+    required int userId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/products/$streamProductId/expand'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §IX row 56 — live_wishlist_add·author.
+  Future<bool> wishlistStreamProduct({
+    required int streamId,
+    required int streamProductId,
+    required int userId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/products/$streamProductId/wishlist'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §XI row 71 — synthetic_avatar_disclosed·author.
+  Future<bool> disclosesyntheticAvatar({
+    required int streamId,
+    required int subjectUserId,
+    String? avatarProvider,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/ai/synthetic-avatar-disclosed'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stream_id': streamId,
+          'subject_user_id': subjectUserId,
+          if (avatarProvider != null) 'avatar_provider': avatarProvider,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── Phase C — VOD ─────────────────────────────────────────────────
+
+  Future<bool> vodView({required int streamId, required int userId}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/vod/view'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  Future<bool> vodHeartbeat({required int streamId, required int userId, int watchedSeconds = 30}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/vod/heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'watched_seconds': watchedSeconds}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §VIII rows 51-53 — utility events.
+  /// event ∈ {tutorial-completion, bookmark, transcript-save}
+  Future<bool> recordUtilityEvent({
+    required int streamId,
+    required int userId,
+    required String event,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/utility/$event'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          if (metadata != null) 'metadata': metadata,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── Phase A — notify followers (creator-side) ────────────────────
+
+  Future<bool> notifyFollowers(int streamId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/notify-followers'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Phase F — Remaining 14 surfaces (closes streams.md §V/§VII/§XI/§III)
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─── §V Localization (4) ──────────────────────────────────────────
+
+  /// streams.md §V row 40 — live_caption_create·captioner.
+  Future<int?> createCaption({
+    required int streamId,
+    required int captionerUserId,
+    String languageCode = 'en',
+    String? captionUrl,
+    bool isLive = true,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/captions'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'captioner_user_id': captionerUserId,
+          'language_code': languageCode,
+          if (captionUrl != null) 'caption_url': captionUrl,
+          'is_live': isLive,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) return data['caption_id'] as int?;
+      }
+      return null;
+    } catch (_) { return null; }
+  }
+
+  /// streams.md §V row 41 — subtitle_localization·translator.
+  Future<int?> createTranslation({
+    required int streamId,
+    required int translatorUserId,
+    required String sourceLanguageCode,
+    required String targetLanguageCode,
+    String? subtitleUrl,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/translations'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'translator_user_id': translatorUserId,
+          'source_language_code': sourceLanguageCode,
+          'target_language_code': targetLanguageCode,
+          if (subtitleUrl != null) 'subtitle_url': subtitleUrl,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) return data['translation_id'] as int?;
+      }
+      return null;
+    } catch (_) { return null; }
+  }
+
+  /// streams.md §V row 42 — dub_overlay·voice_actor.
+  Future<int?> createDub({
+    required int streamId,
+    required int voiceActorUserId,
+    required String languageCode,
+    String? audioUrl,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/dubs'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'voice_actor_user_id': voiceActorUserId,
+          'language_code': languageCode,
+          if (audioUrl != null) 'audio_url': audioUrl,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) return data['dub_id'] as int?;
+      }
+      return null;
+    } catch (_) { return null; }
+  }
+
+  /// streams.md §V row 43 — translated_vod_view·translator.
+  /// Fired when a viewer activates a non-default subtitle track on VOD.
+  Future<bool> viewTranslation({
+    required int streamId,
+    required int translationId,
+    required int userId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/translations/$translationId/view'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── §XI AI provenance (3 — synthetic_avatar already wired above) ─
+
+  /// streams.md §XI row 68 — ai_clip_generation·author.
+  /// Fired when an AI pipeline generates a derivative clip from this stream.
+  /// Original creator earns; pipeline/clipper is recorded as actor.
+  Future<bool> aiClipGeneration({
+    required int streamId,
+    required int subjectUserId,
+    required int actorUserId,
+    String? modelId,
+    String? licenseId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/ai/clip-generation'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stream_id': streamId,
+          'subject_user_id': subjectUserId,
+          'actor_user_id': actorUserId,
+          if (modelId != null) 'model_id': modelId,
+          if (licenseId != null) 'license_id': licenseId,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §XI row 69 — ai_voice_clone_usage·author.
+  Future<bool> aiVoiceCloneUsage({
+    required int subjectUserId,
+    required int actorUserId,
+    int? streamId,
+    String? licenseId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/ai/voice-clone-usage'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          if (streamId != null) 'stream_id': streamId,
+          'subject_user_id': subjectUserId,
+          'actor_user_id': actorUserId,
+          if (licenseId != null) 'license_id': licenseId,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §XI row 70 — ai_assisted_remix·remixer.
+  Future<bool> aiAssistedRemix({
+    required int streamId,
+    required int remixerUserId,
+    String? modelId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/ai/assisted-remix'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stream_id': streamId,
+          'remixer_user_id': remixerUserId,
+          if (modelId != null) 'model_id': modelId,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── §III Distribution — cross_post_view (1) ──────────────────────
+
+  /// streams.md §IV row 38 — highlight_compilation·editor.
+  /// Fired when an AI auto-clip pipeline (Lever 3) compiles a highlight
+  /// reel from a stream. Caller is typically the pipeline service or a
+  /// human curator who triggers the job.
+  Future<bool> highlightCompilation({
+    required int streamId,
+    required int editorUserId,
+    String? modelId,
+    List<int>? sourceClipIds,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/ai/highlight-compilation'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stream_id': streamId,
+          'editor_user_id': editorUserId,
+          if (modelId != null) 'model_id': modelId,
+          if (sourceClipIds != null) 'source_clip_ids': sourceClipIds,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §III row 32 — cross_post_view·sharer (Lever 4).
+  /// Fired when a stream is opened from a cross-post on an external
+  /// platform (the share link carries `?from=<platform>`).
+  Future<bool> crossPostView({
+    required int streamId,
+    required int sharerUserId,
+    required String externalPlatform,
+    int? viewerUserId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/cross-post-view'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'sharer_user_id': sharerUserId,
+          if (viewerUserId != null) 'viewer_user_id': viewerUserId,
+          'external_platform': externalPlatform,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── §VII Multi-streamer (cohost variants + guest) ────────────────
+
+  /// streams.md §VII — invite a user to co-host this stream.
+  Future<bool> cohostInvite({
+    required int streamId,
+    required int userId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/cohost/invite'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §VII — accept (or decline) a co-host invitation.
+  /// Backend sets joined_at when accept=true; cohost_split fires
+  /// automatically as tip_pool_distributions roll in.
+  Future<bool> cohostRespond({
+    required int streamId,
+    required int userId,
+    required bool accept,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/cohost/respond'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'accept': accept}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §VII — leave an active co-host slot.
+  Future<bool> cohostLeave({
+    required int streamId,
+    required int userId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/cohost/leave'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §VII row 50 — guest_appearance·guest.
+  /// Records a guest drop-in / panel / interview appearance.
+  Future<bool> guestAppearance({
+    required int streamId,
+    required int guestUserId,
+    String role = 'guest',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/guests'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'guest_user_id': guestUserId,
+          'role': role,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── §I Direct — host-side dwell (1) ──────────────────────────────
+
+  /// streams.md §I — host_duration_heartbeat·author.
+  /// Mirrors viewer heartbeat; host fires every 60s while broadcasting.
+  Future<bool> hostHeartbeat({
+    required int streamId,
+    required int streamerUserId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/host-heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'streamer_user_id': streamerUserId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  // ─── §VI Curation (2) ─────────────────────────────────────────────
+
+  /// streams.md §VI row 44 — category_feature·curator.
+  Future<bool> curationCategoryFeature({
+    required int streamId,
+    required int curatorUserId,
+    required String category,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/curation/category-feature'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'curator_user_id': curatorUserId,
+          'category': category,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// Phase G — broadcaster persists a pinned outbound link.
+  /// Pass `url=null` (or empty) to clear. When set, the backend self-fires
+  /// external_link_click·author for attribution; viewers see it via
+  /// the standard getStream payload (`pinned_link_url`/`pinned_link_label`).
+  Future<bool> setPinnedLink({
+    required int streamId,
+    required int streamerUserId,
+    String? url,
+    String? label,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/pinned-link'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'streamer_user_id': streamerUserId,
+          if (url != null) 'url': url,
+          if (label != null) 'label': label,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §I row 11 — notify_live_optin·author.
+  /// Per-viewer toggle: opts the viewer in/out of "notify when this
+  /// streamer goes live" pushes. Enabling fires the earnings event
+  /// (creator earns) the first time it's enabled.
+  Future<bool> notifyLiveToggle({
+    required int streamerUserId,
+    required int userId,
+    required bool enabled,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/streamer/$streamerUserId/notify-live-toggle'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'enabled': enabled}),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  Future<bool> notifyLiveStatus({
+    required int streamerUserId,
+    required int userId,
+  }) async {
+    try {
+      final response = await httpGetWithRetry(
+        Uri.parse('$_baseUrl/streams/streamer/$streamerUserId/notify-live-toggle?user_id=$userId'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['enabled'] == true;
+      }
+      return false;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §II row 18 — chat_reaction·chat_author.
+  /// Viewer reacts to another viewer's chat message; backend upserts
+  /// (one per comment+user) and credits the chat author.
+  Future<bool> reactToComment({
+    required int streamId,
+    required int commentId,
+    required int userId,
+    required String reactionType, // heart|fire|clap|wow|laugh|sad
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/comments/$commentId/reaction'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'reaction_type': reactionType,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
+  }
+
+  /// streams.md §II row 20 — list questions submitted on a stream
+  /// (viewer-side Q&A panel reads this to show upvote-able questions).
+  Future<List<StreamQuestion>> getQuestions(int streamId) async {
+    try {
+      final response = await httpGetWithRetry(
+        Uri.parse('$_baseUrl/streams/$streamId/questions'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return (data['questions'] as List)
+              .map((q) => StreamQuestion.fromJson(q as Map<String, dynamic>))
+              .toList();
+        }
+      }
+      return const [];
+    } catch (_) { return const []; }
+  }
+
+  /// streams.md §VI row 45 — collection_add·curator.
+  Future<bool> curationCollectionAdd({
+    required int streamId,
+    required int curatorUserId,
+    required int collectionId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/streams/$streamId/curation/collection-add'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'curator_user_id': curatorUserId,
+          'collection_id': collectionId,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) { return false; }
   }
 }
 

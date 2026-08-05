@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/story_models.dart';
 import '../config/api_config.dart';
 
@@ -12,7 +13,7 @@ class StoryService {
       String url = '$_baseUrl/stories';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -97,7 +98,7 @@ class StoryService {
       String url = '$_baseUrl/stories/$storyId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -125,7 +126,7 @@ class StoryService {
       String url = '$_baseUrl/stories/user/$userId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -157,7 +158,7 @@ class StoryService {
 
   Future<ViewersResult> getViewers(int storyId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/stories/$storyId/viewers'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/stories/$storyId/viewers'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -203,7 +204,7 @@ class StoryService {
   // Highlights
   Future<HighlightsResult> getHighlights(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/stories/highlights/$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/stories/highlights/$userId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -23,6 +23,7 @@ import 'creator_revenue_report_screen.dart';
 import 'income_activity_screen.dart';
 import 'posts_earnings_by_type_screen.dart';
 import 'sponsored_posts_screen.dart';
+import 'stream_type_earnings_screen.dart';
 
 const Color _kPrimary = Color(0xFF1A1A1A);
 const Color _kSecondary = Color(0xFF666666);
@@ -201,6 +202,22 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen>
         );
         return;
       case CreatorRevenueCategory.streams:
+        // Streams opens the dedicated Streams.earnings strategy
+        // renderer — shows all 67 income sources across §I-§XII plus
+        // the §X integrity framework (8 bonuses + 9 engagement
+        // penalties + 17 system/safety/anti-gaming clamps + catchall).
+        // Defaults to the most common live_video stream type;
+        // backend `stream_type` filtering can switch this in future.
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StreamTypeEarningsScreen(
+              creatorId: widget.creatorId,
+              streamType: 'live_video',
+            ),
+          ),
+        );
+        return;
       case CreatorRevenueCategory.subscribers:
       case CreatorRevenueCategory.adRevenue:
         break; // fall through to backend-source drilldown

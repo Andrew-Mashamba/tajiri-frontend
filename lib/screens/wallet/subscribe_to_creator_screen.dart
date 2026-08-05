@@ -11,12 +11,21 @@ class SubscribeToCreatorScreen extends StatefulWidget {
   final int creatorId;
   final int currentUserId;
   final String? creatorDisplayName;
+  /// streams §I — when the subscribe flow is launched from a live stream
+  /// or a shared link, these route the attribution to backend so the
+  /// creator earns subscribe_from_live·author / subscribe_from_share·sharer.
+  final int? originStreamId;
+  final int? originPostId;
+  final String? shareUid;
 
   const SubscribeToCreatorScreen({
     super.key,
     required this.creatorId,
     required this.currentUserId,
     this.creatorDisplayName,
+    this.originStreamId,
+    this.originPostId,
+    this.shareUid,
   });
 
   @override
@@ -127,6 +136,9 @@ class _SubscribeToCreatorScreenState extends State<SubscribeToCreatorScreen> {
       tierId: _selectedTier!.id,
       paymentMethod: 'wallet',
       pin: pin,
+      originStreamId: widget.originStreamId,
+      originPostId: widget.originPostId,
+      shareUid: widget.shareUid,
     );
 
     if (!mounted) return;

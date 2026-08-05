@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../models/photo_models.dart';
 import '../../config/api_config.dart';
 import '../../services/post_service.dart';
@@ -16,7 +17,7 @@ class PhotoService {
     int perPage = 20,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/photos?page=$page&per_page=$perPage'),
       );
 
@@ -248,7 +249,7 @@ class PhotoService {
   /// Get a single photo
   Future<PhotoResult> getPhoto(int photoId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/photos/$photoId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/photos/$photoId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -308,7 +309,7 @@ class PhotoService {
   /// Get user's albums
   Future<AlbumListResult> getAlbums(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/albums'),
       );
 
@@ -364,7 +365,7 @@ class PhotoService {
   /// Get a single album with photos
   Future<AlbumDetailResult> getAlbum(int albumId, {int page = 1, int perPage = 20}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/albums/$albumId?page=$page&per_page=$perPage'),
       );
 

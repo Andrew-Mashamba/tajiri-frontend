@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
@@ -30,7 +31,7 @@ class DoctorService {
       if (onlineOnly == true) params['online'] = '1';
 
       final uri = Uri.parse('$_baseUrl/doctors').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -49,7 +50,7 @@ class DoctorService {
 
   Future<DoctorResult<Doctor>> getDoctorProfile(int doctorId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/doctors/$doctorId'),
       );
       if (response.statusCode == 200) {
@@ -105,7 +106,7 @@ class DoctorService {
 
   Future<DoctorResult<Doctor>> getMyDoctorProfile(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/doctors/me?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -122,6 +123,8 @@ class DoctorService {
 
   // ─── Appointments ──────────────────────────────────────────────
 
+  /// UN-015: forward [originPostId] when patient arrived from a tagged
+  /// doctor post so backend fires local_business_conversion·author.
   Future<DoctorResult<Appointment>> bookAppointment({
     required int patientId,
     required int doctorId,
@@ -131,6 +134,7 @@ class DoctorService {
     String? symptoms,
     required String paymentMethod,
     String? phoneNumber,
+    int? originPostId,
   }) async {
     try {
       final response = await http.post(
@@ -145,6 +149,7 @@ class DoctorService {
           if (symptoms != null) 'symptoms': symptoms,
           'payment_method': paymentMethod,
           if (phoneNumber != null) 'phone_number': phoneNumber,
+          if (originPostId != null) 'origin_post_id': originPostId,
         }),
       );
       final data = jsonDecode(response.body);
@@ -185,7 +190,7 @@ class DoctorService {
       String url = '$_baseUrl/doctors/appointments?user_id=$userId&page=$page';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -256,7 +261,7 @@ class DoctorService {
 
   Future<DoctorListResult<Prescription>> getMyPrescriptions(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/doctors/prescriptions?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -307,7 +312,7 @@ class DoctorService {
 
   Future<DoctorListResult<ConsultationReview>> getDoctorReviews(int doctorId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/doctors/$doctorId/reviews'),
       );
       if (response.statusCode == 200) {

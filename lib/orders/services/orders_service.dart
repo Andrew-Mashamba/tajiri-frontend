@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/incoming_order.dart';
 
@@ -45,7 +46,7 @@ class OrdersService {
         url += '?${Uri(queryParameters: params).query}';
       }
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -257,7 +258,7 @@ class CallSignalingService {
         headers['Authorization'] = 'Bearer $authToken';
       }
 
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await httpGetWithRetry(Uri.parse(url), headers: headers);
       final raw = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200) {
@@ -301,7 +302,7 @@ class CallSignalingService {
         headers['Authorization'] = 'Bearer $authToken';
       }
 
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await httpGetWithRetry(Uri.parse(url), headers: headers);
       final data = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
 
       if (response.statusCode == 200 && data['data'] != null) {
@@ -439,7 +440,7 @@ class CallSignalingService {
       if (authToken != null && authToken.isNotEmpty) {
         headers['Authorization'] = 'Bearer $authToken';
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/calls/$callId/participants'),
         headers: headers,
       );

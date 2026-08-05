@@ -42,6 +42,13 @@ class WebSocketService {
   final _questionUpvoteController = StreamController<QuestionUpvoteEvent>.broadcast();
   final _superChatController = StreamController<SuperChatEvent>.broadcast();
   final _battleController = StreamController<BattleEvent>.broadcast();
+  final _tipController = StreamController<TipEvent>.broadcast();
+  /// L8 — dedupe `tip.received` events when the same client receives both
+  /// Reverb (Pusher) and plain-WS broadcasts. Keys are tip_id; entries expire
+  /// after 5s, which is longer than any reasonable broadcast jitter and
+  /// shorter than the toaster dismiss window so legitimate consecutive tips
+  /// from the same user are never collapsed.
+  final Map<int, int> _recentTipIds = <int, int>{};
 
   // Public streams
   Stream<Map<String, dynamic>> get viewerCountStream => _viewerCountController.stream;
@@ -59,6 +66,10 @@ class WebSocketService {
   Stream<QuestionUpvoteEvent> get questionUpvoteStream => _questionUpvoteController.stream;
   Stream<SuperChatEvent> get superChatStream => _superChatController.stream;
   Stream<BattleEvent> get battleStream => _battleController.stream;
+  /// Tip received during a live stream — fires when SubscriptionController::sendTip
+  /// is called with stream_id set. Broadcaster listens to animate a toaster and
+  /// update the running earnings ticker.
+  Stream<TipEvent> get tipStream => _tipController.stream;
 
   bool get isConnected => _isConnected;
 
@@ -321,6 +332,30 @@ class WebSocketService {
             timestamp: DateTime.now(),
           );
           _giftController.add(giftEvent);
+          break;
+
+        case 'tip.received':
+          final tipId = (payload['tip_id'] as num?)?.toInt() ?? 0;
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          // Drop stale entries first so the map doesn't grow unbounded.
+          _recentTipIds.removeWhere((_, expiresAt) => expiresAt < nowMs);
+          if (tipId > 0 && _recentTipIds.containsKey(tipId)) {
+            // Duplicate broadcast — likely the same event arrived via the
+            // other transport. Skip.
+            break;
+          }
+          if (tipId > 0) {
+            _recentTipIds[tipId] = nowMs + 5000;
+          }
+          final tipEvent = TipEvent(
+            tipId: tipId,
+            streamId: (payload['stream_id'] as num?)?.toInt() ?? 0,
+            amount: (payload['amount'] as num?)?.toDouble() ?? 0.0,
+            message: payload['message'] as String?,
+            sender: payload['sender'] != null ? StreamUser.fromJson(payload['sender']) : null,
+            timestamp: DateTime.now(),
+          );
+          _tipController.add(tipEvent);
           break;
 
         case 'reaction':
@@ -705,6 +740,7 @@ class WebSocketService {
     _questionUpvoteController.close();
     _superChatController.close();
     _battleController.close();
+    _tipController.close();
   }
 }
 
@@ -734,6 +770,26 @@ class GiftEvent {
     required this.gift,
     required this.quantity,
     this.message,
+    required this.timestamp,
+  });
+}
+
+/// Cash tip received during a live stream (streams.md §I row 7 — live_tip).
+/// Backend fires the matching Reverb event `tip.received` on `stream.{id}`.
+class TipEvent {
+  final int tipId;
+  final int streamId;
+  final double amount;
+  final String? message;
+  final StreamUser? sender;
+  final DateTime timestamp;
+
+  TipEvent({
+    required this.tipId,
+    required this.streamId,
+    required this.amount,
+    this.message,
+    this.sender,
     required this.timestamp,
   });
 }

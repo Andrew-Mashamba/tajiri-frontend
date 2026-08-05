@@ -1,6 +1,7 @@
 // lib/zaka/services/zaka_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/zaka_models.dart';
 
@@ -10,7 +11,7 @@ class ZakaService {
   // ─── Get Nisab Info ─────────────────────────────────────────
   Future<SingleResult<NisabInfo>> getNisabInfo() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/zakat/nisab'),
       );
       if (response.statusCode == 200) {
@@ -98,7 +99,7 @@ class ZakaService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/zakat/payments?page=$page'),
         headers: ApiConfig.authHeaders(token),
       );

@@ -11,6 +11,7 @@ import '../../models/post_models.dart';
 import '../../models/draft_models.dart';
 import '../../services/post_service.dart';
 import '../../services/draft_service.dart';
+import '../../widgets/ai_provenance_section.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
@@ -70,6 +71,11 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
   String? _recordedFilePath;
   String? _selectedCategory;
   final TextEditingController _locationController = TextEditingController();
+
+  /// UW-005 — AI provenance declaration. For audio, "AI" typically means
+  /// TTS / voice synthesis / dub.
+  bool _declaredAiUsed = false;
+  String? _aiModelUsed;
 
   late AnimationController _pulseController;
 
@@ -462,6 +468,14 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
       if (mounted) {
         setState(() => _isPosting = false);
         if (result.success) {
+          // UW-005: AI provenance declaration for audio (TTS/dub).
+          if (_declaredAiUsed && result.post?.id != null) {
+            unawaited(_postService.declareAiProvenance(
+              postId: result.post!.id,
+              declaredAiUsed: true,
+              aiModelUsed: _aiModelUsed,
+            ));
+          }
           if (_draftId != null) await _draftService.deleteDraft(_draftId!);
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1139,6 +1153,14 @@ class _CreateAudioPostScreenState extends State<CreateAudioPostScreen>
                       selectedCategory: _selectedCategory,
                       onCategoryChanged: (v) => setState(() => _selectedCategory = v),
                       locationController: _locationController,
+                    ),
+                    const SizedBox(height: 12),
+                    AiProvenanceSection(
+                      declaredAiUsed: _declaredAiUsed,
+                      aiModelUsed: _aiModelUsed,
+                      onDeclaredChanged: (v) => setState(() => _declaredAiUsed = v),
+                      onModelChanged: (m) => setState(() => _aiModelUsed = m),
+                      models: const ['ElevenLabs', 'OpenAI TTS', 'Suno', 'Other'],
                     ),
                     const SizedBox(height: 24),
 

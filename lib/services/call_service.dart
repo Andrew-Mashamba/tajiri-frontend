@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/call_models.dart';
 import '../config/api_config.dart';
 import 'call_signaling_service.dart';
@@ -204,7 +205,7 @@ class CallService {
   /// Get call status (legacy endpoint). Call history screen uses CallSignalingService.getCallLog when authToken is set.
   Future<CallResult> getCallStatus(String callId, int userId, {String? authToken}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/calls/$callId/status?user_id=$userId'),
       );
 
@@ -236,7 +237,7 @@ class CallService {
       if (type != null) url += '&type=$type';
       if (direction != null) url += '&direction=$direction';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -403,7 +404,7 @@ class CallService {
   /// Get active call in a conversation
   Future<GroupCallResult?> getActiveCall(int conversationId, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/calls/group/active/$conversationId?user_id=$userId'),
       );
 

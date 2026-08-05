@@ -1,7 +1,7 @@
 // lib/qibla/services/qibla_service.dart
 import 'dart:convert';
 import 'dart:math' as math;
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/qibla_models.dart';
 
@@ -41,7 +41,7 @@ class QiblaService {
           'longitude': '$longitude',
         },
       );
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {

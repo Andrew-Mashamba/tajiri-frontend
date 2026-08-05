@@ -149,7 +149,7 @@ class ZegoStreamingService {
     _isInitialized = false;
   }
 
-  static String generateRTMPUrl(int streamID, {String baseURL = 'rtmp://zima-uat.site:8003/live'}) {
+  static String generateRTMPUrl(int streamID, {String baseURL = 'rtmp://tajiri.zimasystems.com/live'}) {
     return '$baseURL/$streamID';
   }
 

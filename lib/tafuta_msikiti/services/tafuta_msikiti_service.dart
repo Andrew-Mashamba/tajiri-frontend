@@ -1,6 +1,7 @@
 // lib/tafuta_msikiti/services/tafuta_msikiti_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/tafuta_msikiti_models.dart';
 
@@ -32,7 +33,7 @@ class TafutaMsikitiService {
 
       final uri = Uri.parse('$_baseUrl/mosques/search')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -58,7 +59,7 @@ class TafutaMsikitiService {
   // ─── Get Mosque Detail ──────────────────────────────────────
   Future<SingleResult<Mosque>> getMosqueDetail(int mosqueId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/mosques/$mosqueId'),
       );
       if (response.statusCode == 200) {
@@ -82,7 +83,7 @@ class TafutaMsikitiService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/mosques/$mosqueId/reviews?page=$page'),
       );
       if (response.statusCode == 200) {

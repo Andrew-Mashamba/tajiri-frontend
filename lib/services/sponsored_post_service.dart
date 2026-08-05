@@ -1,15 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/sponsored_post_models.dart';
+import 'graphql/graphql_sponsored_post_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class SponsoredPostService {
   Future<List<SponsoredPost>> getActiveSponsoredPosts({required String token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSponsoredPostService.getActiveSponsoredPosts();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/sponsored-posts'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -27,8 +32,11 @@ class SponsoredPostService {
   }
 
   Future<List<SponsorableCreator>> browseSponsorableCreators({required String token}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSponsoredPostService.browseSponsorableCreators();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/sponsored-posts/creators'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -52,6 +60,14 @@ class SponsoredPostService {
     required double budget,
     required int impressionsTarget,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSponsoredPostService.createSponsoredPost(
+        postId: postId,
+        creatorUserId: creatorUserId,
+        budget: budget,
+        impressionsTarget: impressionsTarget,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/sponsored-posts'),
@@ -71,8 +87,11 @@ class SponsoredPostService {
   }
 
   Future<List<SponsoredPost>> getCreatorSponsored({required String token, required int creatorId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSponsoredPostService.getCreatorSponsored(creatorId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/creators/$creatorId/sponsored'),
         headers: ApiConfig.authHeaders(token),
       );

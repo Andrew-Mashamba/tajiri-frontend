@@ -111,12 +111,17 @@ class AdaptiveMediaZone extends StatefulWidget {
   /// Opens image viewer. Uses its own BuildContext for navigation.
   final Function(List<PostMedia>, PostMedia)? onImageTap;
 
+  /// G-F-005: fires once when viewer reaches the last slide of a multi-slide
+  /// carousel. PostCard wires this to recordInstructionalCompletion.
+  final VoidCallback? onLastSlideReached;
+
   const AdaptiveMediaZone({
     super.key,
     required this.media,
     this.dominantColor,
     this.onTap,
     this.onImageTap,
+    this.onLastSlideReached,
   });
 
   @override
@@ -463,6 +468,11 @@ class _AdaptiveMediaZoneState extends State<AdaptiveMediaZone> {
                         final page = pageController.page?.round() ?? 0;
                         if (page != currentPage) {
                           setLocalState(() => currentPage = page);
+                          // G-F-005: emit completion when last slide reached
+                          // for multi-slide posts.
+                          if (page == media.length - 1 && media.length > 1) {
+                            widget.onLastSlideReached?.call();
+                          }
                         }
                       }
                       return false;

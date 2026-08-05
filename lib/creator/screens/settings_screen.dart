@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../services/local_storage_service.dart';
 import '../../services/profile_service.dart';
+import '../services/creator_onboarding_service.dart';
 
 /// Creator preferences — the canonical home for opt-outs and creator-
 /// specific toggles. Reachable from:
@@ -42,6 +44,9 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
   bool _optOutCollaboration = false;
   bool _optOutBattles = false;
   bool _optOutThreads = false;
+  bool _offDayMode = false;
+
+  final CreatorOnboardingService _onboardingService = CreatorOnboardingService();
 
   @override
   void initState() {
@@ -69,7 +74,7 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
     try {
       final token = storage.getAuthToken();
       if (token != null) {
-        final r = await http.get(
+        final r = await httpGetWithRetry(
           Uri.parse(
               '${ApiConfig.baseUrl}/users/${widget.currentUserId}/privacy-settings'),
           headers: ApiConfig.authHeaders(token),
@@ -90,7 +95,35 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
       // Local Hive value remains shown; no inline error needed for
       // background refresh failure.
     }
+    // Phase 1.7 — load wellness off-day mode from the dedicated onboarding
+    // endpoint (separate column on user_profiles, lives outside the privacy
+    // payload).
+    try {
+      final state = await _onboardingService.fetch(widget.currentUserId);
+      if (state != null && mounted) {
+        setState(() => _offDayMode = state.offDayMode);
+      }
+    } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _toggleOffDayMode(bool value) async {
+    final prev = !value;
+    setState(() {
+      _saving.add('off_day_mode');
+      _offDayMode = value;
+      _formError = null;
+    });
+    final ok =
+        await _onboardingService.setOffDayMode(widget.currentUserId, value);
+    if (!mounted) return;
+    setState(() => _saving.remove('off_day_mode'));
+    if (!ok) {
+      setState(() {
+        _offDayMode = prev;
+        _formError = 'sync_failed';
+      });
+    }
   }
 
   Future<void> _toggle(String key, bool value, void Function(bool) setLocal) async {
@@ -239,6 +272,37 @@ class _CreatorSettingsScreenState extends State<CreatorSettingsScreen> {
                           v,
                           (b) => _optOutThreads = b,
                         ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Phase 1.7 — wellness section. Off-day mode silences
+                      // server-side creator-economy push notifications for
+                      // the user. Implementation plan §1.7.
+                      _section(s?.isSwahili == true
+                          ? 'Afya na ustawi'
+                          : 'Health & wellness'),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                        child: Text(
+                          s?.isSwahili == true
+                              ? 'Hali ya kupumzika husitisha vikumbusho vya kuendeleza utendaji wako kwa siku moja.'
+                              : 'Off-day mode silences creator-economy nudges for 24 hours.',
+                          style: const TextStyle(
+                              fontSize: 12, color: _secondary),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      _switchTile(
+                        keyId: 'off_day_mode',
+                        icon: Icons.spa_rounded,
+                        title: s?.isSwahili == true
+                            ? 'Hali ya kupumzika'
+                            : 'Off-day mode',
+                        subtitle: s?.isSwahili == true
+                            ? 'Zima vikumbusho leo'
+                            : 'Silence nudges today',
+                        value: _offDayMode,
+                        onChanged: _toggleOffDayMode,
                       ),
                       const SizedBox(height: 24),
                       Padding(

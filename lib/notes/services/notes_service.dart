@@ -1,6 +1,7 @@
 // lib/notes/services/notes_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/notes_models.dart';
 
@@ -16,7 +17,7 @@ class NotesService {
       if (search != null && search.isNotEmpty) params['search'] = search;
       final uri = Uri.parse('$_baseUrl/notes')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -36,7 +37,7 @@ class NotesService {
 
   Future<NotesResult<Note>> getNote(int noteId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/notes/$noteId'),
       );
       if (response.statusCode == 200) {

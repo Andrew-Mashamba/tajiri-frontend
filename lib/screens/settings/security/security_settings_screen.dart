@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../services/http_retry.dart';
 import '../../../config/api_config.dart';
 import '../../../l10n/app_strings_scope.dart';
 import '../../../services/local_storage_service.dart';
@@ -45,7 +46,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         if (mounted) setState(() => _loadingAlerts = false);
         return;
       }
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/users/${widget.currentUserId}/privacy-settings'),
         headers: ApiConfig.authHeaders(token),
       );

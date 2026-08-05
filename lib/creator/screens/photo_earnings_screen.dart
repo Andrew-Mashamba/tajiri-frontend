@@ -31,6 +31,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../services/local_storage_service.dart';
 import '../../widgets/tajiri_app_bar.dart';
 import '../models/creator_earnings_models.dart';
+import '../models/post_type_earnings_taxonomy.dart';
 import '../services/creator_earnings_service.dart';
 import 'my_posts_earnings_list_screen.dart';
 
@@ -54,15 +55,34 @@ extension _PeriodWire on _Period {
       };
 }
 
-class PhotoEarningsScreen extends StatefulWidget {
+/// Generic strategy renderer keyed by post type. Reads its label,
+/// icon, and per-row applicability from [kPostTypeEarningsConfigs]
+/// + [isRowRelevantForPostType] in
+/// `lib/creator/models/post_type_earnings_taxonomy.dart`.
+class PostTypeEarningsScreen extends StatefulWidget {
   final int creatorId;
-  const PhotoEarningsScreen({super.key, required this.creatorId});
+  final String postType;
+  const PostTypeEarningsScreen({
+    super.key,
+    required this.creatorId,
+    required this.postType,
+  });
 
   @override
-  State<PhotoEarningsScreen> createState() => _PhotoEarningsScreenState();
+  State<PostTypeEarningsScreen> createState() => _PostTypeEarningsScreenState();
 }
 
-class _PhotoEarningsScreenState extends State<PhotoEarningsScreen> {
+/// Backward-compat wrapper — the rest of the app still imports
+/// PhotoEarningsScreen by name.
+class PhotoEarningsScreen extends StatelessWidget {
+  final int creatorId;
+  const PhotoEarningsScreen({super.key, required this.creatorId});
+  @override
+  Widget build(BuildContext context) =>
+      PostTypeEarningsScreen(creatorId: creatorId, postType: 'photo');
+}
+
+class _PostTypeEarningsScreenState extends State<PostTypeEarningsScreen> {
   final _service = CreatorEarningsService();
 
   _Period _period = _Period.month;
@@ -96,23 +116,25 @@ class _PhotoEarningsScreenState extends State<PhotoEarningsScreen> {
       // Fetch (metric × actor_role) breakdown, derivative-kind
       // breakdown, AND per-multiplier contribution analysis in
       // parallel. The third feeds §XI.A bonus + §XI.B clamp rows.
+      final wire = postTypeEarningsConfigFor(widget.postType)?.wire
+          ?? widget.postType;
       final breakdownF = _service.getByMetric(
         userId: widget.creatorId,
         token: _token!,
         period: _period.wire,
-        postType: 'photo',
+        postType: wire,
       );
       final byKindF = _service.getByDerivativeKind(
         userId: widget.creatorId,
         token: _token!,
         period: _period.wire,
-        postType: 'photo',
+        postType: wire,
       );
       final byMultiplierF = _service.getByMultiplier(
         userId: widget.creatorId,
         token: _token!,
         period: _period.wire,
-        postType: 'photo',
+        postType: wire,
       );
       final fresh = await breakdownF;
       final byKind = await byKindF;
@@ -153,10 +175,14 @@ class _PhotoEarningsScreenState extends State<PhotoEarningsScreen> {
   @override
   Widget build(BuildContext context) {
     final isSw = AppStringsScope.of(context)?.isSwahili ?? false;
+    final cfg = postTypeEarningsConfigFor(widget.postType);
+    final title = cfg == null
+        ? (isSw ? '${widget.postType} · Mapato' : '${widget.postType} · Earnings')
+        : (isSw ? '${cfg.labelSw} · Mapato' : '${cfg.labelEn} · Earnings');
     return Scaffold(
       backgroundColor: _kBackground,
       appBar: TajiriAppBar(
-        title: isSw ? 'Picha · Mapato' : 'Photos · Earnings',
+        title: title,
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -176,104 +202,206 @@ class _PhotoEarningsScreenState extends State<PhotoEarningsScreen> {
   Widget _buildBody(bool isSw) {
     final data = _data!;
     final agg = _PairAgg.fromRows(data.rows);
+    final pt = widget.postType;
 
-    Widget section(_SectionMeta meta, List<_Pair> pairs, {Widget? trailing}) {
+    // Filter helper — drops rows whose required capabilities the
+    // current post type doesn't have. e.g. text posts hide
+    // watch_second·author, photo posts hide dub_create·voice_actor.
+    List<_Pair> filterPairs(List<_Pair> all) => all
+        .where((p) => isRowRelevantForPostType(
+              postType: pt,
+              metric: p.metric,
+              actorRole: p.actorRole,
+            ))
+        .toList(growable: false);
+
+    Widget? section(_SectionMeta meta, List<_Pair> pairs, {Widget? trailing}) {
+      final relevant = filterPairs(pairs);
+      // If a section has no relevant rows AND no trailing widget,
+      // hide it entirely so we don't show empty section labels.
+      if (relevant.isEmpty && trailing == null) return null;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionLabel(meta.label(isSw)),
           const SizedBox(height: 8),
-          _PairTable(pairs: pairs, agg: agg, isSw: isSw),
+          if (relevant.isNotEmpty) _PairTable(pairs: relevant, agg: agg, isSw: isSw),
           if (trailing != null) ...[
-            const SizedBox(height: 8),
+            if (relevant.isNotEmpty) const SizedBox(height: 8),
             trailing,
           ],
         ],
       );
     }
 
+    // Gather section widgets, skipping any that are nullable + null.
+    Widget? maybeSection5 = shouldShowClipperSection(pt)
+        ? section(_kSection5, _kSection5Pairs)
+        : null;
+    Widget? maybeSection6 = shouldShowLocalizationSection(pt)
+        ? section(_kSection6, _kSection6Pairs)
+        : null;
+    Widget? maybeSection10 = shouldShowCommerceSection(pt)
+        ? section(_kSection10, _kSection10Pairs)
+        : null;
+    final contribRoles = contributorRolesForPostType(pt);
+    Widget? maybeSection8 = shouldShowContributorRoles(pt)
+        ? section(
+            _kSection8,
+            _kSection8Pairs,
+            trailing: _ContributorRoleTable(isSw: isSw, roles: contribRoles),
+          )
+        : null;
+
+    // Catchall: any (metric × actor_role) returned by the backend
+    // that isn't in any of the 91 canonical pairs. Prevents silent
+    // value drops if the backend ships new metrics or a different
+    // stream (e.g. fan_funding subscriptions) lands under a post_type
+    // filter.
+    final knownPairs = <String>{
+      ..._kSection1Pairs.map((p) => p.key),
+      ..._kSection2Pairs.map((p) => p.key),
+      ..._kSection3Pairs.map((p) => p.key),
+      ..._kSection4Pairs.map((p) => p.key),
+      ..._kSection5Pairs.map((p) => p.key),
+      ..._kSection6Pairs.map((p) => p.key),
+      ..._kSection7Pairs.map((p) => p.key),
+      ..._kSection8Pairs.map((p) => p.key),
+      ..._kSection9Pairs.map((p) => p.key),
+      ..._kSection10Pairs.map((p) => p.key),
+      ..._kSection12Pairs.map((p) => p.key),
+      ..._kSection13Pairs.map((p) => p.key),
+    };
+    final unknownPairs = <_Pair>[
+      for (final entry in agg.map.entries)
+        if (!knownPairs.contains(entry.key) && entry.value.netTsh.abs() > 0)
+          _Pair(
+            entry.key.split('|').first,
+            entry.key.split('|').elementAt(1),
+          ),
+    ]..sort((a, b) => a.key.compareTo(b.key));
+    Widget? catchallSection;
+    if (unknownPairs.isNotEmpty) {
+      catchallSection = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel(isSw
+              ? '∗  MENGINEYO (HAYAJATAJWA)'
+              : '∗  OTHER (UNCATEGORISED)'),
+          const SizedBox(height: 8),
+          _PairTable(pairs: unknownPairs, agg: agg, isSw: isSw),
+        ],
+      );
+    }
+
+    final body = <Widget?>[
+      _Hero(data: data, isSw: isSw, postType: pt),
+      const SizedBox(height: 14),
+      _PeriodPills(
+        selected: _period, onChanged: _setPeriod, isSw: isSw),
+      const SizedBox(height: 18),
+      section(_kSection1, _kSection1Pairs),
+      const SizedBox(height: 18),
+      section(_kSection2, _kSection2Pairs),
+      const SizedBox(height: 18),
+      section(_kSection3, _kSection3Pairs),
+      const SizedBox(height: 18),
+      section(
+        _kSection4,
+        _kSection4Pairs,
+        trailing: _DerivativeKindTable(byKind: _byKind, isSw: isSw),
+      ),
+      const SizedBox(height: 18),
+      maybeSection5,
+      if (maybeSection5 != null) const SizedBox(height: 18),
+      maybeSection6,
+      if (maybeSection6 != null) const SizedBox(height: 18),
+      section(_kSection7, _kSection7Pairs),
+      const SizedBox(height: 18),
+      maybeSection8,
+      if (maybeSection8 != null) const SizedBox(height: 18),
+      section(_kSection9, _kSection9Pairs),
+      const SizedBox(height: 18),
+      maybeSection10,
+      if (maybeSection10 != null) const SizedBox(height: 18),
+    ].whereType<Widget>().toList();
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        _Hero(data: data, isSw: isSw),
-        const SizedBox(height: 14),
-        _PeriodPills(
-          selected: _period, onChanged: _setPeriod, isSw: isSw),
+        ...body,
+        // §XI — 3 explicit sub-tables + 1 catchall, all sourced from
+        // /by-multiplier. Catchall renders any backend multiplier not
+        // listed in A/B/C so nothing drops silently.
+        Builder(builder: (_) {
+          final returned = <String>{
+            for (final r in _byMultiplier?.rows ?? const []) r.multiplier,
+          };
+          final unknown = returned.difference(_kSection11AllListed).toList()
+            ..sort();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionLabel(_kSection11.label(isSw)),
+              const SizedBox(height: 8),
+              _SubLabel(isSw ? 'Bonasi' : 'Bonuses'),
+              const SizedBox(height: 6),
+              _MultiplierTable(
+                multipliers: _kSection11BonusMultipliers,
+                contributions: _byMultiplier,
+                isSw: isSw,
+              ),
+              const SizedBox(height: 12),
+              _SubLabel(isSw
+                  ? 'Adhabu za ubora wa mwingiliano'
+                  : 'Engagement-quality penalties'),
+              const SizedBox(height: 6),
+              _MultiplierTable(
+                multipliers: _kSection11EngagementPenaltyMultipliers,
+                contributions: _byMultiplier,
+                isSw: isSw,
+              ),
+              const SizedBox(height: 12),
+              _SubLabel(isSw
+                  ? 'Punguzo za uaminifu, udanganyifu, usalama na AI'
+                  : 'Trust / fraud / safety / AI clamps'),
+              const SizedBox(height: 6),
+              _MultiplierTable(
+                multipliers: _kSection11SystemClampMultipliers,
+                contributions: _byMultiplier,
+                isSw: isSw,
+              ),
+              if (unknown.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _SubLabel(isSw ? 'Mengineyo' : 'Other (uncategorised)'),
+                const SizedBox(height: 6),
+                _MultiplierTable(
+                  multipliers: unknown,
+                  contributions: _byMultiplier,
+                  isSw: isSw,
+                ),
+              ],
+            ],
+          );
+        }),
         const SizedBox(height: 18),
-        section(_kSection1, _kSection1Pairs),
-        const SizedBox(height: 18),
-        section(_kSection2, _kSection2Pairs),
-        const SizedBox(height: 18),
-        section(_kSection3, _kSection3Pairs),
-        const SizedBox(height: 18),
-        section(
-          _kSection4,
-          _kSection4Pairs,
-          trailing: _DerivativeKindTable(byKind: _byKind, isSw: isSw),
-        ),
-        const SizedBox(height: 18),
-        section(_kSection5, _kSection5Pairs),
-        const SizedBox(height: 18),
-        section(_kSection6, _kSection6Pairs),
-        const SizedBox(height: 18),
-        section(_kSection7, _kSection7Pairs),
-        const SizedBox(height: 18),
-        section(
-          _kSection8,
-          _kSection8Pairs,
-          trailing: _ContributorRoleTable(isSw: isSw),
-        ),
-        const SizedBox(height: 18),
-        section(_kSection9, _kSection9Pairs),
-        const SizedBox(height: 18),
-        section(_kSection10, _kSection10Pairs),
-        const SizedBox(height: 18),
-        // §XI is rendered as 3 stacked sub-tables under one section
-        // header per integrity framework split (Bonuses /
-        // Engagement-quality penalties / Content-safety + AI).
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionLabel(_kSection11.label(isSw)),
-            const SizedBox(height: 8),
-            _SubLabel(isSw ? 'Bonasi' : 'Bonuses'),
-            const SizedBox(height: 6),
-            _MultiplierTable(
-              pairs: _kSection11BonusPairs,
-              contributions: _byMultiplier,
-              isSw: isSw,
-            ),
-            const SizedBox(height: 12),
-            _SubLabel(isSw
-                ? 'Adhabu za ubora wa mwingiliano'
-                : 'Engagement-quality penalties'),
-            const SizedBox(height: 6),
-            _MultiplierTable(
-              pairs: _kSection11EngagementPenaltyPairs,
-              contributions: _byMultiplier,
-              isSw: isSw,
-            ),
-            const SizedBox(height: 12),
-            _SubLabel(isSw
-                ? 'Adhabu za usalama wa maudhui & AI'
-                : 'Content-safety & AI penalties'),
-            const SizedBox(height: 6),
-            _PairTable(
-              pairs: _kSection11ContentPenaltyPairs,
-              agg: agg,
-              isSw: isSw,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        section(_kSection12, _kSection12Pairs),
-        const SizedBox(height: 18),
-        section(_kSection13, _kSection13Pairs),
+        ...[
+          section(_kSection12, _kSection12Pairs),
+          if (filterPairs(_kSection12Pairs).isNotEmpty)
+            const SizedBox(height: 18),
+          section(_kSection13, _kSection13Pairs),
+          if (catchallSection != null) const SizedBox(height: 18),
+          catchallSection,
+        ].whereType<Widget>(),
         const SizedBox(height: 22),
-        _ViewPhotosCTA(creatorId: widget.creatorId, isSw: isSw),
+        _ViewPostsCTA(
+          creatorId: widget.creatorId,
+          postType: pt,
+          isSw: isSw,
+        ),
         const SizedBox(height: 16),
-        _HowItWorks(isSw: isSw),
+        _HowItWorks(isSw: isSw, postType: pt),
       ],
     );
   }
@@ -396,50 +524,86 @@ const List<_Pair> _kSection10Pairs = [
 
 /// §XI — Platform Health & Quality.
 ///
-/// Expanded from `posts.md` §XI (8 rows) using the integrity
-/// framework at `docs/creators/posts/strategies/platform_integrity_negative_attribution_framework.md`.
-/// Three sub-tables under one section header:
+/// All three sub-tables are sourced from `/by-multiplier`; rows are
+/// keyed by **multiplier name** (the canonical key the backend
+/// emits in `earning_events.multipliers`). Lists below match the
+/// authoritative emitters in:
+///   • app/Services/Earnings/MultiplierEngine.php  (engine-level)
+///   • app/Services/Earnings/Filters/QualityFilter.php
+///   • app/Services/Earnings/Filters/TrustFilter.php
+///   • app/Services/Earnings/Filters/FraudFilter.php
+///   • app/Services/Earnings/Filters/SafetyFilter.php
 ///
-///   §XI.A — Bonuses (8 positive multipliers)
-///   §XI.B — Engagement-quality penalties (5 viewer-driven)
-///   §XI.C — Content-safety & AI penalties (11 classifier-driven)
-///
-/// Total: 24 rows. Framework §II's 10 negative engagement signals
-/// (hide / mute / block / report / etc.) are inputs to the
-/// engagement penalties, not standalone earning rows.
+/// A 4th catchall sub-table renders any multiplier returned by the
+/// backend that isn't explicitly listed below — prevents silent
+/// drops if the backend adds new multipliers.
 
-const List<_Pair> _kSection11BonusPairs = [
-  _Pair('originality_bonus', 'author'),
-  _Pair('evergreen_bonus', 'author'),
-  _Pair('trust_score_bonus', 'author'),
-  _Pair('healthy_discussion_bonus', 'author'),
-  _Pair('cross_ideology_bonus', 'author'),
-  _Pair('expert_participation_bonus', 'author'),
-  _Pair('fact_checked_bonus', 'author'),
-  _Pair('community_health_bonus', 'host'),
+/// §XI.A Bonuses — multipliers that boost earnings on positive
+/// signals. All entries here have a value range ≥ 1.0 (or are
+/// bidirectional and mostly-positive in practice, like
+/// `watch_completion` 0.5..2.5).
+const List<String> _kSection11BonusMultipliers = [
+  'mwanzo_boost',          // 2.0 during launch window, else null
+  'watch_completion',      // 0.5..2.5 (bidirectional — listed here
+                           // because positive completion is the
+                           // common case; row tile auto-flips icon)
+  'tier_boost',            // 1.05 for partners, else null
+  'streak',                // 1.10 for active creators, else null
+  'actor_trust_expert',    // 1.5 for verified experts
+  'originality_bonus',     // 1.20 for original posts (framework §XIII)
+  'evergreen_bonus',       // 1.15 for posts older than 7d still active
+  'trust_score_bonus',     // graduated from TrustScoreService
+  'healthy_discussion_bonus',
+  'cross_ideology_bonus',
+  'expert_participation_bonus',
+  'fact_checked_bonus',
+  'community_health_bonus',
 ];
 
-const List<_Pair> _kSection11EngagementPenaltyPairs = [
-  _Pair('rapid_hide_penalty', 'author'),
-  _Pair('report_penalty', 'author'),
-  _Pair('bounce_penalty', 'author'),
-  _Pair('mute_after_view_penalty', 'author'),
-  _Pair('spam_ring_detection_penalty', 'author'),
+/// §XI.B Engagement-quality penalties (≤ 1.0) — viewer-driven from
+/// the negative-attribution framework's negative_events table.
+const List<String> _kSection11EngagementPenaltyMultipliers = [
+  'rapid_hide_penalty',
+  'report_penalty',
+  'bounce_penalty',
+  'mute_after_view_penalty',
+  'spam_ring_detection_penalty',
+  'coordinated_bot_ring_penalty',
 ];
 
-const List<_Pair> _kSection11ContentPenaltyPairs = [
-  _Pair('spam_penalty', 'author'),
-  _Pair('misinformation_penalty', 'author'),
-  _Pair('harassment_penalty', 'author'),
-  _Pair('ragebait_penalty', 'author'),
-  _Pair('adult_content_reduction', 'author'),
-  _Pair('sexual_engagement_bait_penalty', 'author'),
-  _Pair('mature_content_distribution_limit', 'author'),
-  _Pair('synthetic_spam_detection', 'author'),
-  _Pair('ai_content_flood_penalty', 'author'),
-  _Pair('coordinated_bot_ring_penalty', 'author'),
-  _Pair('mass_generation_penalty', 'author'),
+/// §XI.C Trust / fraud / safety / AI clamps (≤ 1.0) — system-driven
+/// from TrustFilter, FraudFilter, SafetyFilter, and AI-spam clamps in
+/// QualityFilter. Also includes engine-level clamps that range 0..1:
+///   • `originality` (1.0 original / 0.7 derivative_substantial /
+///                    0.4 derivative_minimal / 0.0 reused)
+///     — distinct from `originality_bonus` (§XI.A); this is a
+///     base-score clamp on derivative content.
+///   • `discovery_mode` (0.70 when post is in discovery push).
+const List<String> _kSection11SystemClampMultipliers = [
+  'originality',
+  'discovery_mode',
+  'actor_trust_age',
+  'actor_authenticity',
+  'actor_network_reputation',
+  'fraud_risk',
+  'human_probability',
+  'device_cluster',
+  'diminishing_returns',
+  'synthetic_spam_detection',
+  'ai_content_flood_penalty',
+  'mass_generation_penalty',
+  'ragebait_penalty',
+  'content_safety_mature',
+  'content_safety_suggestive',
 ];
+
+/// Union of all explicitly-listed multipliers — used to compute the
+/// catchall (any backend multiplier NOT in this set).
+final Set<String> _kSection11AllListed = {
+  ..._kSection11BonusMultipliers,
+  ..._kSection11EngagementPenaltyMultipliers,
+  ..._kSection11SystemClampMultipliers,
+};
 
 /// §XII — AI & Synthetic Media (rows 89-92).
 const List<_Pair> _kSection12Pairs = [
@@ -474,17 +638,9 @@ const List<String> _kRelationshipTypes = [
   'dub',
 ];
 
-/// 8 canonical contributor_roles — strategy doc §VIII (rows 65-72).
-const List<String> _kContributorRoles = [
-  'photographer',
-  'editor',
-  'colorist',
-  'thumbnail_designer',
-  'caption_writer',
-  'narrator',
-  'composer',
-  'creative_director',
-];
+/// Per-type contributor roles now live in
+/// `lib/creator/models/post_type_earnings_taxonomy.dart` —
+/// `contributorRolesForPostType()`.
 
 /// Bilingual section header pulled from docs/creators/posts/strategies/posts.md.
 class _SectionMeta {
@@ -553,7 +709,12 @@ class _PairAgg {
 class _Hero extends StatelessWidget {
   final MetricBreakdownResponse data;
   final bool isSw;
-  const _Hero({required this.data, required this.isSw});
+  final String postType;
+  const _Hero({
+    required this.data,
+    required this.isSw,
+    required this.postType,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -576,15 +737,19 @@ class _Hero extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(Icons.image_outlined,
-                    color: Colors.white, size: 18),
+                child: Icon(
+                  postTypeEarningsConfigFor(postType)?.icon
+                      ?? Icons.image_outlined,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   isSw
-                      ? 'Picha · ${_formatMonth(data.periodStart, true)}'
-                      : 'Photos · ${_formatMonth(data.periodStart, false)}',
+                      ? '${postTypeEarningsConfigFor(postType)?.labelSw ?? postType} · ${_formatMonth(data.periodStart, true)}'
+                      : '${postTypeEarningsConfigFor(postType)?.labelEn ?? postType} · ${_formatMonth(data.periodStart, false)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white.withValues(alpha: 0.70),
@@ -892,11 +1057,11 @@ class _PairRowTile extends StatelessWidget {
 /// positive contributions; clamping multipliers (<1.0) yield
 /// negative contributions (rendered with leading "−").
 class _MultiplierTable extends StatelessWidget {
-  final List<_Pair> pairs;
+  final List<String> multipliers;
   final MultiplierContributionResponse? contributions;
   final bool isSw;
   const _MultiplierTable({
-    required this.pairs,
+    required this.multipliers,
     required this.contributions,
     required this.isSw,
   });
@@ -916,13 +1081,13 @@ class _MultiplierTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var i = 0; i < pairs.length; i++) ...[
+          for (var i = 0; i < multipliers.length; i++) ...[
             _MultiplierRowTile(
-              pair: pairs[i],
-              contribution: map[pairs[i].metric],
+              multiplier: multipliers[i],
+              contribution: map[multipliers[i]],
               isSw: isSw,
             ),
-            if (i < pairs.length - 1)
+            if (i < multipliers.length - 1)
               const Divider(
                   height: 1,
                   color: _kBorder,
@@ -936,11 +1101,11 @@ class _MultiplierTable extends StatelessWidget {
 }
 
 class _MultiplierRowTile extends StatelessWidget {
-  final _Pair pair;
+  final String multiplier;
   final MultiplierContributionRow? contribution;
   final bool isSw;
   const _MultiplierRowTile({
-    required this.pair,
+    required this.multiplier,
     required this.contribution,
     required this.isSw,
   });
@@ -950,11 +1115,8 @@ class _MultiplierRowTile extends StatelessWidget {
     final c = contribution;
     final hasData = c != null && c.contributionTsh.abs() > 0;
     final isClamp = c != null && c.avgValue < 1.0;
-    final tzsLabel = c == null
-        ? 'TZS 0'
-        : (c.contributionTsh >= 0
-            ? 'TZS ${_fmtAmount(c.contributionTsh)}'
-            : '−TZS ${_fmtAmount(c.contributionTsh.abs())}');
+    final tzsLabel =
+        c == null ? 'TZS 0' : 'TZS ${_fmtAmount(c.contributionTsh)}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -982,7 +1144,7 @@ class _MultiplierRowTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${pair.metric} · ${pair.actorRole}',
+                  multiplier,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -995,10 +1157,10 @@ class _MultiplierRowTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   c == null || c.eventCount == 0
-                      ? metricLabel(pair.metric, isSw)
+                      ? metricLabel(multiplier, isSw)
                       : (isSw
-                          ? '${metricLabel(pair.metric, isSw)} · ${c.avgValue.toStringAsFixed(2)}× wastani · ${c.eventCount} matukio'
-                          : '${metricLabel(pair.metric, isSw)} · ${c.avgValue.toStringAsFixed(2)}× avg · ${c.eventCount} events'),
+                          ? '${metricLabel(multiplier, isSw)} · ${c.avgValue.toStringAsFixed(2)}× wastani · ${c.eventCount} matukio'
+                          : '${metricLabel(multiplier, isSw)} · ${c.avgValue.toStringAsFixed(2)}× avg · ${c.eventCount} events'),
                   style: const TextStyle(
                     fontSize: 11,
                     color: _kTertiary,
@@ -1074,10 +1236,12 @@ class _DerivativeKindTable extends StatelessWidget {
 /// each row reads as a placeholder taxonomy entry.
 class _ContributorRoleTable extends StatelessWidget {
   final bool isSw;
-  const _ContributorRoleTable({required this.isSw});
+  final List<String> roles;
+  const _ContributorRoleTable({required this.isSw, required this.roles});
 
   @override
   Widget build(BuildContext context) {
+    if (roles.isEmpty) return const SizedBox.shrink();
     return Container(
       decoration: BoxDecoration(
         color: _kSurface,
@@ -1086,7 +1250,7 @@ class _ContributorRoleTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var i = 0; i < _kContributorRoles.length; i++) ...[
+          for (var i = 0; i < roles.length; i++) ...[
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 12),
@@ -1109,7 +1273,7 @@ class _ContributorRoleTable extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _kContributorRoles[i],
+                          roles[i],
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -1121,8 +1285,7 @@ class _ContributorRoleTable extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          contributorRoleLabel(
-                              _kContributorRoles[i], isSw),
+                          contributorRoleLabel(roles[i], isSw),
                           style: const TextStyle(
                             fontSize: 11,
                             color: _kTertiary,
@@ -1146,7 +1309,7 @@ class _ContributorRoleTable extends StatelessWidget {
                 ],
               ),
             ),
-            if (i < _kContributorRoles.length - 1)
+            if (i < roles.length - 1)
               const Divider(
                   height: 1,
                   color: _kBorder,
@@ -1247,13 +1410,21 @@ class _DerivativeKindRowTile extends StatelessWidget {
       };
 }
 
-class _ViewPhotosCTA extends StatelessWidget {
+class _ViewPostsCTA extends StatelessWidget {
   final int creatorId;
+  final String postType;
   final bool isSw;
-  const _ViewPhotosCTA({required this.creatorId, required this.isSw});
+  const _ViewPostsCTA({
+    required this.creatorId,
+    required this.postType,
+    required this.isSw,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cfg = postTypeEarningsConfigFor(postType);
+    final labelEn = cfg?.labelEn.toLowerCase() ?? postType;
+    final labelSw = cfg?.labelSw ?? postType;
     return Material(
       color: _kPrimary,
       borderRadius: BorderRadius.circular(12),
@@ -1266,7 +1437,7 @@ class _ViewPhotosCTA extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => MyPostsEarningsListScreen(
                 creatorId: creatorId,
-                postTypeFilter: 'photo',
+                postTypeFilter: postType,
               ),
             ),
           );
@@ -1275,7 +1446,7 @@ class _ViewPhotosCTA extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              const Icon(Icons.photo_library_outlined,
+              Icon(cfg?.icon ?? Icons.photo_library_outlined,
                   size: 18, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
@@ -1284,8 +1455,8 @@ class _ViewPhotosCTA extends StatelessWidget {
                   children: [
                     Text(
                       isSw
-                          ? 'Tazama picha zako moja moja'
-                          : 'View your photos individually',
+                          ? 'Tazama $labelSw zako moja moja'
+                          : 'View your $labelEn individually',
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1297,8 +1468,8 @@ class _ViewPhotosCTA extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       isSw
-                          ? 'Per-picha: kila post na mapato yake halisi'
-                          : 'Per-photo: each post and its actual earnings',
+                          ? 'Per-post: kila post na mapato yake halisi'
+                          : 'Per-post: each post and its actual earnings',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.75),
@@ -1323,7 +1494,8 @@ class _ViewPhotosCTA extends StatelessWidget {
 
 class _HowItWorks extends StatelessWidget {
   final bool isSw;
-  const _HowItWorks({required this.isSw});
+  final String postType;
+  const _HowItWorks({required this.isSw, required this.postType});
 
   @override
   Widget build(BuildContext context) {
@@ -1357,18 +1529,23 @@ class _HowItWorks extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            isSw
-                ? 'Idadi hii ni jumla ya mapato halisi kutoka kwa picha zako zote katika kipindi kilichochaguliwa, baada ya ada za jukwaa na WHT. Mapato ya kuchakata yana dirisha la siku 30 kabla ya kuingia kwenye mkoba wako.'
-                : 'These totals are your net earnings across all of your photo posts in the selected period, after platform fees and WHT. Each event has a 30-day clearing window before it lands in your wallet.',
-            style: const TextStyle(
-              fontSize: 12,
-              color: _kSecondary,
-              height: 1.5,
-            ),
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Builder(builder: (_) {
+            final cfg = postTypeEarningsConfigFor(postType);
+            final labelEn = cfg?.labelEn.toLowerCase() ?? '$postType';
+            final labelSw = cfg?.labelSw ?? '$postType';
+            return Text(
+              isSw
+                  ? 'Idadi hii ni jumla ya mapato halisi kutoka kwa $labelSw zako zote katika kipindi kilichochaguliwa, baada ya ada za jukwaa na WHT. Mapato ya kuchakata yana dirisha la siku 30 kabla ya kuingia kwenye mkoba wako.'
+                  : 'These totals are your net earnings across all of your $labelEn posts in the selected period, after platform fees and WHT. Each event has a 30-day clearing window before it lands in your wallet.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: _kSecondary,
+                height: 1.5,
+              ),
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+            );
+          }),
         ],
       ),
     );
@@ -1482,20 +1659,29 @@ String _formatMonth(String iso, bool isSw) {
 }
 
 String _fmtAmount(double v) {
-  if (v >= 1000000) {
-    return '${(v / 1000000).toStringAsFixed(v >= 10000000 ? 0 : 1)}M';
+  // Always preserve the sign — totals can legitimately be negative
+  // when system clamps + integrity penalties exceed positive
+  // earnings for the period.
+  final negative = v < 0;
+  final abs = v.abs();
+  String body;
+  if (abs >= 1000000) {
+    body = '${(abs / 1000000).toStringAsFixed(abs >= 10000000 ? 0 : 1)}M';
+  } else if (abs >= 10000) {
+    body = '${(abs / 1000).toStringAsFixed(0)}K';
+  } else {
+    final whole = abs.truncateToDouble() == abs;
+    final s = whole ? abs.toStringAsFixed(0) : abs.toStringAsFixed(2);
+    final parts = s.split('.');
+    final intPart = parts[0];
+    final reversed = intPart.split('').reversed.toList();
+    final out = StringBuffer();
+    for (var i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) out.write(',');
+      out.write(reversed[i]);
+    }
+    final formatted = out.toString().split('').reversed.join('');
+    body = parts.length > 1 ? '$formatted.${parts[1]}' : formatted;
   }
-  if (v >= 10000) return '${(v / 1000).toStringAsFixed(0)}K';
-  final whole = v.truncateToDouble() == v;
-  final s = whole ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-  final parts = s.split('.');
-  final intPart = parts[0];
-  final reversed = intPart.split('').reversed.toList();
-  final out = StringBuffer();
-  for (var i = 0; i < reversed.length; i++) {
-    if (i > 0 && i % 3 == 0) out.write(',');
-    out.write(reversed[i]);
-  }
-  final formatted = out.toString().split('').reversed.join('');
-  return parts.length > 1 ? '$formatted.${parts[1]}' : formatted;
+  return negative ? '−$body' : body;
 }

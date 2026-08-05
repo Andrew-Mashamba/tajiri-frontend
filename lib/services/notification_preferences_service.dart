@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../l10n/app_strings.dart';
 import 'local_storage_service.dart';
@@ -258,7 +259,7 @@ class NotificationPreferencesService {
       if (token == null) {
         return NotificationPreferencesResult(success: false, message: 'not_signed_in');
       }
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse(
           '${ApiConfig.baseUrl}/notification-preferences?user_id=$currentUserId',
         ),

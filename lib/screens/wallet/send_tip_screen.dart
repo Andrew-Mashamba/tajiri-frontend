@@ -14,12 +14,20 @@ class SendTipScreen extends StatefulWidget {
   final int creatorId;
   final int currentUserId;
   final String? creatorDisplayName;
+  /// When set, the tip is attributed to a live stream context. Backend
+  /// fires `live_tip·author` (streams.md §I row 7) instead of the
+  /// generic `tip·author` post-side metric.
+  final int? streamId;
+  /// When set, the tip is attributed to a post (already-existing flow).
+  final int? postId;
 
   const SendTipScreen({
     super.key,
     required this.creatorId,
     required this.currentUserId,
     this.creatorDisplayName,
+    this.streamId,
+    this.postId,
   });
 
   @override
@@ -138,6 +146,8 @@ class _SendTipScreenState extends State<SendTipScreen> {
           : _messageController.text.trim(),
       paymentMethod: 'wallet',
       pin: pin,
+      streamId: widget.streamId,
+      postId: widget.postId,
     );
 
     if (!mounted) return;

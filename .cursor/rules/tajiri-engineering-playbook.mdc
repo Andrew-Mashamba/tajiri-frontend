@@ -1,0 +1,27 @@
+---
+description: Engineering playbook (standing orders + workflow)
+alwaysApply: true
+---
+
+# TAJIRI Engineering Playbook (canonical)
+
+**Source of truth:** `docs/ENGINEERING_PLAYBOOK.md`
+
+This rule is a lightweight always-on summary to keep work aligned. When in doubt, defer to the playbook.
+
+## Standing orders (must follow)
+
+- **Architecture**: Follow repo conventions (screens → services → models). No surprise architectural migrations.
+- **State management**: Prefer `setState()` and existing `ValueNotifier` singletons. Do not introduce Provider/Bloc/Riverpod unless the user explicitly requests it.
+- **Routing**: Keep routes consistent with `lib/main.dart` `onGenerateRoute` and `/feature/:id` deep-link style.
+- **Design**: Follow `docs/DESIGN.md` (monochrome, SafeArea, 48dp touch targets, ellipsis on dynamic text). **No FABs**; prefer a top-right pill/action.
+- **Language**: Default user-facing text is **English**, with Swahili via `AppStringsScope`/`LanguageNotifier`. Avoid Swahili-only hardcoding.
+- **Verification**: After edits to `lib/`, run `flutter analyze` before claiming completion.
+- **Backend correctness**: Every service call must map to a real backend endpoint; verify the chain when adding/changing calls.
+
+## How to use the playbook
+
+- For **audits / bugfixes / new features**: follow **Part II — Audit & Fix Methodology** (deep crawl + issue types + backend verification + testing directives).
+- For **performance work**: follow **Part III — Performance Roadmap** (prioritized phases and quick wins).
+- For **storage/offline decisions**: follow **Part IV — Storage Strategy** (decision tree + SQLite patterns).
+

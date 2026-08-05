@@ -1,6 +1,7 @@
 // lib/maulid/services/maulid_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/maulid_models.dart';
 
@@ -18,7 +19,7 @@ class MaulidService {
 
       final uri = Uri.parse('$_baseUrl/maulid/events')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -52,7 +53,7 @@ class MaulidService {
 
       final uri = Uri.parse('$_baseUrl/maulid/qaswida')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -74,7 +75,7 @@ class MaulidService {
   // ─── Get Qaswida Groups ─────────────────────────────────────
   Future<PaginatedResult<QaswidaGroup>> getGroups() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/maulid/groups'),
       );
       if (response.statusCode == 200) {

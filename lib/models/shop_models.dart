@@ -1,5 +1,4 @@
-/// TAJIRI Marketplace Models
-/// Supports physical goods, digital products, and services
+// TAJIRI Marketplace Models — physical goods, digital products, and services.
 import '../config/api_config.dart';
 
 // ============================================================================
@@ -690,8 +689,13 @@ class Order {
   final DateTime? estimatedDelivery;
   final String? cancellationReason;
   final DateTime? cancelledAt;
+  final String paymentMethod; // 'wallet' | 'cod'
+  final String? paymentStatus;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // Escrow
+  final String? escrowStatus;
 
   // Relations
   final Product? product;
@@ -719,8 +723,11 @@ class Order {
     this.estimatedDelivery,
     this.cancellationReason,
     this.cancelledAt,
+    this.paymentMethod = 'wallet',
+    this.paymentStatus,
     required this.createdAt,
     required this.updatedAt,
+    this.escrowStatus,
     this.product,
     this.buyer,
     this.seller,
@@ -752,8 +759,11 @@ class Order {
       cancelledAt: json['cancelled_at'] != null
           ? DateTime.parse(json['cancelled_at'])
           : null,
+      paymentMethod: json['payment_method'] as String? ?? 'wallet',
+      paymentStatus: json['payment_status'] as String?,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
+      escrowStatus: json['escrow_status'] as String?,
       product: json['product'] != null
           ? Product.fromJson(json['product'])
           : null,
@@ -779,6 +789,9 @@ class Order {
   bool get canConfirm => status == OrderStatus.pending;
   bool get canShip => status == OrderStatus.confirmed || status == OrderStatus.processing;
   bool get canComplete => status == OrderStatus.delivered;
+
+  bool get isCod => paymentMethod == 'cod';
+  bool get isCodCollected => paymentStatus == 'cod_collected';
 }
 
 class OrderUser {

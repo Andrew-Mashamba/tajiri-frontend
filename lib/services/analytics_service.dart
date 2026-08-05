@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_analytics_service.dart';
 import '../models/analytics_models.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -11,10 +12,13 @@ class AnalyticsService {
     String? token,
     required int creatorId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAnalyticsService.getDashboard(creatorId: creatorId);
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/analytics/dashboard');
     if (kDebugMode) debugPrint('[AnalyticsService] getDashboard → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -38,10 +42,13 @@ class AnalyticsService {
     String? token,
     required int creatorId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAnalyticsService.getPostPerformance(creatorId: creatorId);
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/analytics/posts');
     if (kDebugMode) debugPrint('[AnalyticsService] getPostPerformance → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -64,10 +71,13 @@ class AnalyticsService {
     String? token,
     required int creatorId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAnalyticsService.getAudienceInsights(creatorId: creatorId);
+    }
     final url = Uri.parse('$_baseUrl/creators/$creatorId/analytics/audience');
     if (kDebugMode) debugPrint('[AnalyticsService] getAudienceInsights → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -92,10 +102,13 @@ class AnalyticsService {
     String? token,
     required int userId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAnalyticsService.getEngagementLevel(userId: userId);
+    }
     final url = Uri.parse('$_baseUrl/users/$userId/engagement-level');
     if (kDebugMode) debugPrint('[AnalyticsService] getEngagementLevel → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );

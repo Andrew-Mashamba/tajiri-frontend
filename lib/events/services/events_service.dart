@@ -1,6 +1,7 @@
 // lib/events/services/events_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/events_models.dart';
 
@@ -33,7 +34,7 @@ class EventsService {
 
       final uri = Uri.parse('$_baseUrl/events')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -55,7 +56,7 @@ class EventsService {
 
   Future<EventResult<Event>> getEvent(int eventId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/events/$eventId'),
       );
       if (response.statusCode == 200) {
@@ -167,7 +168,7 @@ class EventsService {
       };
       final uri = Uri.parse('$_baseUrl/events/tickets')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
@@ -29,7 +30,7 @@ class FoodService {
       if (openOnly == true) params['open'] = '1';
 
       final uri = Uri.parse('$_baseUrl/food/restaurants').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -48,7 +49,7 @@ class FoodService {
 
   Future<FoodResult<Restaurant>> getRestaurant(int restaurantId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/food/restaurants/$restaurantId'),
       );
       if (response.statusCode == 200) {
@@ -70,7 +71,7 @@ class FoodService {
       String url = '$_baseUrl/food/restaurants/$restaurantId/menu';
       if (category != null) url += '?category=$category';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -88,6 +89,8 @@ class FoodService {
 
   // ─── Orders ───────────────────────────────────────────────────
 
+  /// UN-015: when [originPostId] is set (buyer arrived from a tagged-business
+  /// post), the backend fires local_business_conversion·author on completion.
   Future<FoodResult<FoodOrder>> placeOrder({
     required int userId,
     required int restaurantId,
@@ -95,19 +98,22 @@ class FoodService {
     required String deliveryAddress,
     required String phone,
     required String paymentMethod,
+    int? originPostId,
   }) async {
     try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'restaurant_id': restaurantId,
+        'items': items.map((i) => i.toJson()).toList(),
+        'delivery_address': deliveryAddress,
+        'phone': phone,
+        'payment_method': paymentMethod,
+      };
+      if (originPostId != null) body['origin_post_id'] = originPostId;
       final response = await http.post(
         Uri.parse('$_baseUrl/food/orders'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'user_id': userId,
-          'restaurant_id': restaurantId,
-          'items': items.map((i) => i.toJson()).toList(),
-          'delivery_address': deliveryAddress,
-          'phone': phone,
-          'payment_method': paymentMethod,
-        }),
+        body: jsonEncode(body),
       );
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
@@ -145,7 +151,7 @@ class FoodService {
       String url = '$_baseUrl/food/orders?user_id=$userId&page=$page';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -163,7 +169,7 @@ class FoodService {
 
   Future<FoodResult<FoodOrder>> getOrder(int orderId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/food/orders/$orderId'),
       );
       if (response.statusCode == 200) {

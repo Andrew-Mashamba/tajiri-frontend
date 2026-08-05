@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/lawyer_models.dart';
 
@@ -27,7 +28,7 @@ class LawyerService {
       if (onlineOnly == true) params['online'] = '1';
 
       final uri = Uri.parse('$_baseUrl/lawyers').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -46,7 +47,7 @@ class LawyerService {
 
   Future<LawyerResult<Lawyer>> getLawyerProfile(int lawyerId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/lawyers/$lawyerId'),
       );
       if (response.statusCode == 200) {
@@ -102,7 +103,7 @@ class LawyerService {
 
   Future<LawyerResult<Lawyer>> getMyLawyerProfile(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/lawyers/me?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -163,7 +164,7 @@ class LawyerService {
       String url = '$_baseUrl/lawyers/consultations?user_id=$userId&page=$page';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -247,7 +248,7 @@ class LawyerService {
 
   Future<LawyerListResult<LawyerReview>> getLawyerReviews(int lawyerId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/lawyers/$lawyerId/reviews'),
       );
       if (response.statusCode == 200) {

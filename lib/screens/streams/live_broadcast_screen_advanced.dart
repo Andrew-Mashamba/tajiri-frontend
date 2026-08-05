@@ -53,6 +53,12 @@ class _LiveBroadcastScreenAdvancedState
   StreamSubscription? _commentSubscription;
   StreamSubscription? _viewerCountSubscription;
   StreamSubscription? _giftSubscription;
+  StreamSubscription? _tipSubscription;
+
+  // Real-time tip toaster (streams.md §I row 7).
+  // Holds the most recently received tip for 3s then clears.
+  TipEvent? _activeTipToast;
+  Timer? _tipToastDismissTimer;
 
   // Reactions system
   final List<ReactionBubble> _activeReactions = [];
@@ -87,6 +93,10 @@ class _LiveBroadcastScreenAdvancedState
   // Battle Mode (PK)
   bool _isInBattle = false;
 
+  // Phase F — host-side dwell heartbeat (mirrors viewer heartbeat).
+  // Fires every 60s while broadcasting → host_duration_heartbeat·author.
+  Timer? _hostHeartbeatTimer;
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +109,7 @@ class _LiveBroadcastScreenAdvancedState
     _startHealthMonitoring();
     _startAnalyticsTracking();
     _startReactionCleanup();
+    _startHostHeartbeat();
 
     // Lock orientation and keep screen on
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -111,9 +122,12 @@ class _LiveBroadcastScreenAdvancedState
     _healthUpdateTimer?.cancel();
     _analyticsTimer?.cancel();
     _reactionCleanupTimer?.cancel();
+    _hostHeartbeatTimer?.cancel();
     _commentSubscription?.cancel();
     _viewerCountSubscription?.cancel();
     _giftSubscription?.cancel();
+    _tipSubscription?.cancel();
+    _tipToastDismissTimer?.cancel();
     _webSocketService.disconnect();
     _tajiriSDK.stopStreaming();
     _tajiriSDK.dispose();
@@ -158,7 +172,7 @@ class _LiveBroadcastScreenAdvancedState
     print('[LiveBroadcast] ✅ TAJIRI SDK initialized successfully!');
 
     // Start livestreaming with RTMP push to backend
-    final rtmpBaseUrl = 'rtmp://zima-uat.site:8003/live';
+    final rtmpBaseUrl = 'rtmp://tajiri.zimasystems.com/live';
 
     final streamStarted = await _tajiriSDK.startStreaming(
       streamId: widget.stream.id,
@@ -246,6 +260,20 @@ class _LiveBroadcastScreenAdvancedState
         });
         _showGiftAnimation(giftEvent);
       }
+    });
+
+    // Real-time tips on this stream — update ticker + animate toaster.
+    _tipSubscription = _webSocketService.tipStream.listen((tipEvent) {
+      if (!mounted) return;
+      if (tipEvent.streamId != widget.stream.id) return;
+      setState(() {
+        _earnings += tipEvent.amount;
+        _activeTipToast = tipEvent;
+      });
+      _tipToastDismissTimer?.cancel();
+      _tipToastDismissTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _activeTipToast = null);
+      });
     });
   }
 
@@ -387,6 +415,420 @@ class _LiveBroadcastScreenAdvancedState
     // _webSocketService.sendReaction(widget.stream.id, type);
   }
 
+  // ==================== PHASE B — STREAMER TOOLS SHEET ====================
+  // Single bottom-sheet that surfaces every streamer-side action that
+  // emits a Phase 1+ earnings event. Wraps the existing Phase A backend
+  // endpoints (chat-pin, Q&A, raid, host, products, notify, ext-link,
+  // AI-avatar disclosure).
+
+  void _openStreamerTools() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            const Text(
+              'Streamer tools',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            _toolsTile(ctx, Icons.live_help_rounded,
+              'Q&A panel',
+              'Answer questions to credit askers',
+              () { Navigator.pop(ctx); _toggleQAMode(); }),
+            _toolsTile(ctx, Icons.poll_rounded,
+              'Create poll',
+              'Engage chat with a 60s poll',
+              () { Navigator.pop(ctx); _createPoll(); }),
+            _toolsTile(ctx, Icons.notifications_active_rounded,
+              'Notify followers',
+              'Alert followers you are live',
+              () { Navigator.pop(ctx); _notifyFollowers(); }),
+            _toolsTile(ctx, Icons.inventory_2_rounded,
+              'Pin product',
+              'Show a product overlay (live commerce)',
+              () { Navigator.pop(ctx); _pinProduct(); }),
+            _toolsTile(ctx, Icons.link_rounded,
+              'Pin external link',
+              'Drive outbound clicks',
+              () { Navigator.pop(ctx); _pinExternalLink(); }),
+            _toolsTile(ctx, Icons.compare_arrows_rounded,
+              'Raid another stream',
+              'Send your viewers to another live stream',
+              () { Navigator.pop(ctx); _raidPicker(); }),
+            _toolsTile(ctx, Icons.podcasts_rounded,
+              'Host another streamer',
+              'Broadcast another channel during downtime',
+              () { Navigator.pop(ctx); _hostPicker(); }),
+            _toolsTile(ctx, Icons.face_retouching_natural_rounded,
+              'AI avatar disclosure',
+              'Disclose synthetic avatar (earns full rate)',
+              () { Navigator.pop(ctx); _aiAvatarDisclose(); }),
+            // ─── Phase F — collaboration + AI provenance ──────────
+            _toolsTile(ctx, Icons.group_add_rounded,
+              'Invite co-host',
+              'Add a 2nd streamer to share tip pool',
+              () { Navigator.pop(ctx); _cohostInvitePicker(); }),
+            _toolsTile(ctx, Icons.person_add_alt_1_rounded,
+              'Add guest',
+              'Drop-in / panel / interview',
+              () { Navigator.pop(ctx); _guestPicker(); }),
+            _toolsTile(ctx, Icons.auto_awesome_rounded,
+              'Generate AI clip',
+              'Auto-clip current moment for posts',
+              () { Navigator.pop(ctx); _aiClipGenerate(); }),
+            _toolsTile(ctx, Icons.mic_rounded,
+              'Voice clone consent',
+              'Allow AI dubs of your voice (you earn)',
+              () { Navigator.pop(ctx); _aiVoiceCloneConsent(); }),
+            _toolsTile(ctx, Icons.shuffle_rounded,
+              'AI-assisted remix',
+              'Log derivative AI remix attestation',
+              () { Navigator.pop(ctx); _aiAssistedRemix(); }),
+            _toolsTile(ctx, Icons.movie_filter_rounded,
+              'Compile highlights (AI)',
+              'Trigger AI auto-clip pipeline for this stream',
+              () { Navigator.pop(ctx); _highlightCompilation(); }),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _toolsTile(BuildContext ctx, IconData icon, String label, String subtitle, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+      onTap: onTap,
+    );
+  }
+
+  Future<void> _notifyFollowers() async {
+    final ok = await _streamService.notifyFollowers(widget.stream.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? 'Notifying followers' : 'Failed')),
+      );
+    }
+  }
+
+  Future<void> _pinProduct() async {
+    final urlController = TextEditingController();
+    final labelController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pin product'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: urlController, decoration: const InputDecoration(labelText: 'External URL')),
+          TextField(controller: labelController, decoration: const InputDecoration(labelText: 'Label (optional)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Pin')),
+        ],
+      ),
+    );
+    if (result == true && urlController.text.isNotEmpty) {
+      // Wired to Phase 3d StreamCommerceController::pinProduct via direct HTTP.
+      await _streamService.pinStreamProduct(
+        streamId: widget.stream.id,
+        streamerUserId: widget.currentUserId,
+        externalUrl: urlController.text.trim(),
+        label: labelController.text.trim().isEmpty ? null : labelController.text.trim(),
+      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product pinned')),
+      );
+    }
+  }
+
+  Future<void> _pinExternalLink() async {
+    final urlCtl = TextEditingController();
+    final labelCtl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pin outbound link'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: urlCtl,
+            decoration: const InputDecoration(labelText: 'URL')),
+          TextField(controller: labelCtl,
+            decoration: const InputDecoration(labelText: 'Label (optional)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pin')),
+        ],
+      ),
+    );
+    if (result != true) return;
+    final url = urlCtl.text.trim();
+    if (url.isEmpty) return;
+    // Phase G — persist via /streams/{id}/pinned-link so the viewer's
+    // overlay shows it. Backend self-fires external_link_click·author.
+    final ok = await _streamService.setPinnedLink(
+      streamId: widget.stream.id,
+      streamerUserId: widget.currentUserId,
+      url: url,
+      label: labelCtl.text.trim().isEmpty ? null : labelCtl.text.trim(),
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? 'Link pinned — viewers will see the overlay'
+          : 'Pin failed'),
+    ));
+  }
+
+  Future<void> _raidPicker() async {
+    final controller = TextEditingController();
+    final id = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Raid target stream'),
+        content: TextField(controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Target stream ID')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text.trim())),
+            child: const Text('Raid'),
+          ),
+        ],
+      ),
+    );
+    if (id == null) return;
+    final ok = await _streamService.raidStream(
+      sourceStreamId: widget.stream.id,
+      raidStreamerId: widget.currentUserId,
+      targetStreamId: id,
+      viewerCount: 0,
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Raid sent' : 'Failed to raid')),
+    );
+  }
+
+  Future<void> _hostPicker() async {
+    final controller = TextEditingController();
+    final id = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Host another streamer'),
+        content: TextField(controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Stream to host')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text.trim())),
+            child: const Text('Host'),
+          ),
+        ],
+      ),
+    );
+    if (id == null) return;
+    final ok = await _streamService.hostStream(
+      hostStreamId: widget.stream.id,
+      hostStreamerId: widget.currentUserId,
+      hostedStreamId: id,
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Hosting started' : 'Failed to host')),
+    );
+  }
+
+  Future<void> _aiAvatarDisclose() async {
+    final ok = await _streamService.disclosesyntheticAvatar(
+      streamId: widget.stream.id,
+      subjectUserId: widget.currentUserId,
+      avatarProvider: 'manual_disclosure',
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'AI avatar disclosed — full rate active' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase F — host-side dwell heartbeat ═══════════════════
+  // Mirrors viewer-side heartbeat: every 60s while broadcasting, fire
+  // host_duration_heartbeat·author. Backend dedupes per minute-bucket.
+  void _startHostHeartbeat() {
+    _hostHeartbeatTimer?.cancel();
+    _hostHeartbeatTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_isEnding) return;
+      _streamService.hostHeartbeat(
+        streamId: widget.stream.id,
+        streamerUserId: widget.currentUserId,
+      );
+    });
+  }
+
+  // ═══════════ Phase F — co-host invite ════════════════════════════
+  Future<void> _cohostInvitePicker() async {
+    final controller = TextEditingController();
+    final id = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Invite co-host'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'User ID to invite'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text.trim())),
+            child: const Text('Invite'),
+          ),
+        ],
+      ),
+    );
+    if (id == null) return;
+    final ok = await _streamService.cohostInvite(
+      streamId: widget.stream.id, userId: id);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Co-host invitation sent' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase F — guest appearance ══════════════════════════
+  Future<void> _guestPicker() async {
+    final controller = TextEditingController();
+    String role = 'guest';
+    final result = await showDialog<({int id, String role})?>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Add guest'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Guest user ID'),
+            ),
+            const SizedBox(height: 8),
+            DropdownButton<String>(
+              value: role,
+              onChanged: (v) => setLocal(() => role = v ?? 'guest'),
+              items: const [
+                DropdownMenuItem(value: 'guest', child: Text('Guest')),
+                DropdownMenuItem(value: 'panelist', child: Text('Panelist')),
+                DropdownMenuItem(value: 'interview', child: Text('Interview')),
+              ],
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                final id = int.tryParse(controller.text.trim());
+                if (id != null) Navigator.pop(ctx, (id: id, role: role));
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    final ok = await _streamService.guestAppearance(
+      streamId: widget.stream.id,
+      guestUserId: result.id,
+      role: result.role,
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Guest appearance recorded' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase F — AI auto-clip generation ═══════════════════
+  Future<void> _aiClipGenerate() async {
+    // Fire ai_clip_generation·author. The actor (clipper) is the streamer
+    // themselves in the manual-trigger case; subject is the streamer.
+    final ok = await _streamService.aiClipGeneration(
+      streamId: widget.stream.id,
+      subjectUserId: widget.currentUserId,
+      actorUserId: widget.currentUserId,
+      modelId: 'manual_trigger',
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'AI clip generation logged' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase F — voice clone consent ═══════════════════════
+  Future<void> _aiVoiceCloneConsent() async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Voice clone consent'),
+        content: const Text(
+          'Allow AI services to use your voice in derivative content. '
+          'You will earn a share of any earnings from voice-clone-based work.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Decline')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('I consent')),
+        ],
+      ),
+    );
+    if (agreed != true) return;
+    final ok = await _streamService.aiVoiceCloneUsage(
+      streamId: widget.stream.id,
+      subjectUserId: widget.currentUserId,
+      actorUserId: widget.currentUserId,
+      licenseId: 'self_consent',
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Voice clone consent recorded' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase F — AI-assisted remix ═════════════════════════
+  Future<void> _aiAssistedRemix() async {
+    final ok = await _streamService.aiAssistedRemix(
+      streamId: widget.stream.id,
+      remixerUserId: widget.currentUserId,
+      modelId: 'manual_trigger',
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'AI remix logged' : 'Failed')),
+    );
+  }
+
+  // ═══════════ Phase G — AI highlight compilation ══════════════════
+  Future<void> _highlightCompilation() async {
+    final ok = await _streamService.highlightCompilation(
+      streamId: widget.stream.id,
+      editorUserId: widget.currentUserId,
+      modelId: 'manual_trigger',
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(
+        ok ? 'Highlight compilation queued' : 'Failed')),
+    );
+  }
+
   // ==================== LIVE POLL SYSTEM ====================
 
   void _createPoll() {
@@ -439,7 +881,11 @@ class _LiveBroadcastScreenAdvancedState
     setState(() {
       question.isAnswered = true;
     });
-    // TODO: Notify viewers
+    // G2 — fire q_and_a_answered·question_author. Backend credits the
+    // asker (postAuthorId = question.user_id) when the streamer marks
+    // their question answered.
+    _streamService.answerQuestion(
+      widget.stream.id, widget.currentUserId, question.id);
   }
 
   // ==================== SUPER CHAT ====================
@@ -469,7 +915,9 @@ class _LiveBroadcastScreenAdvancedState
 
   void _pinComment(StreamComment comment) {
     setState(() => _pinnedComment = comment);
-    // TODO: Send pin event to WebSocket
+    // G1 — fire chat_pin·author. Backend credits the streamer for
+    // pinning a community message; frequency-clamped server-side.
+    _streamService.pinComment(widget.stream.id, comment.id);
   }
 
   void _unpinComment() {
@@ -588,6 +1036,9 @@ class _LiveBroadcastScreenAdvancedState
             // Floating Reactions
             ..._activeReactions.map((r) => _buildReactionBubble(r)).toList(),
 
+            // Real-time tip toaster (auto-dismisses after 3s)
+            if (_activeTipToast != null) _buildTipToast(_activeTipToast!),
+
             // Loading overlay
             if (_isEnding) _buildLoadingOverlay(),
 
@@ -680,6 +1131,20 @@ class _LiveBroadcastScreenAdvancedState
               _buildDurationBadge(),
 
               const Spacer(),
+
+              // Phase B — Streamer tools sheet (Q&A, chat-pin, raid, host,
+              // products, notify-followers, AI-disclosure, external link).
+              IconButton(
+                onPressed: _openStreamerTools,
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+                ),
+              ),
 
               // Analytics toggle
               IconButton(
@@ -839,6 +1304,128 @@ class _LiveBroadcastScreenAdvancedState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 3-second animated banner shown when a viewer tips during the live
+  /// stream (subscribed to Reverb event `tip.received` on `stream.{id}`).
+  /// Slides in from the top, dwells, and fades out via the auto-dismiss
+  /// timer in [_tipSubscription].
+  Widget _buildTipToast(TipEvent tip) {
+    final sender = tip.sender;
+    final displayName = sender == null
+        ? 'Mtumiaji'
+        : '${sender.firstName} ${sender.lastName}'.trim();
+    final shownName = displayName.isEmpty ? 'Mtumiaji' : displayName;
+    final amountStr = 'TZS ${tip.amount.toStringAsFixed(0)}';
+
+    // L12 — safe-zone placement. The HUD packs widgets at known offsets:
+    //   top: 80  → stream-health monitor (when _showAnalytics)
+    //   top: 100 → analytics panel (when _showAnalytics)
+    //   top: 120 → pinned comment
+    //   top: 180 → super-chat overlay
+    //   top: 200 → poll overlay
+    // The tip toaster needs to sit BELOW all of those if any is visible.
+    // We probe each potential collider in priority order and pick the
+    // nearest safe slot below it. Default is top: 80 when the HUD is clean.
+    double topOffset = 80.0;
+    if (_showAnalytics) {
+      // Both health monitor + analytics panel can be on simultaneously;
+      // their stack extends roughly to top: 240. Drop below.
+      topOffset = 260.0;
+    } else if (_pinnedComment != null) {
+      // Pinned comment is ~50dp tall starting at top:120 → safe slot at 180.
+      // Super-chat starts at top:180+ so if there's also super chat, push
+      // further down.
+      topOffset = _superChats.isNotEmpty ? 260.0 : 200.0;
+    } else if (_superChats.isNotEmpty) {
+      // Super-chats already at top: 180+. Sit above the next free row.
+      topOffset = 80.0;
+    }
+
+    return Positioned(
+      top: topOffset,
+      left: 16,
+      right: 16,
+      child: SafeArea(
+        bottom: false,
+        // Key on tip_id so the slide-in animation re-runs for each new
+        // tip (TweenAnimationBuilder caches its tween otherwise — without
+        // a key, a back-to-back tip would not show the animation).
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey<int>(tip.tipId),
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, child) => Opacity(
+            opacity: t,
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * -12),
+              child: child,
+            ),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$shownName · $amountStr',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (tip.message != null && tip.message!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            tip.message!,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

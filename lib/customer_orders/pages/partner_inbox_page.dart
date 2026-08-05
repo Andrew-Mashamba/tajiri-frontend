@@ -4,7 +4,7 @@
 // long-press selection, checkboxes, and a floating action bar.
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/api_config.dart';
@@ -125,7 +125,7 @@ class _PartnerInboxPageState extends State<PartnerInboxPage> {
         'customer_user_id': '$buyerId',
         'partner_user_id': '${widget.userId}',
       });
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

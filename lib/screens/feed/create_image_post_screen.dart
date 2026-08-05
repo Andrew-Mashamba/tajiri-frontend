@@ -1,5 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../services/contributor_service.dart';
+import '../../services/post_tagged_product_service.dart';
+import '../../widgets/contributor_picker.dart';
+import '../../widgets/tagged_product_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/post_models.dart';
 import '../../models/draft_models.dart';
@@ -55,6 +60,25 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
   int? _draftId;
   String? _selectedCategory;
   final TextEditingController _locationController = TextEditingController();
+
+  /// AI provenance — strategy posts.md §XII / G-F-007.
+  /// Creator declares whether AI was used; posts to /posts/{id}/ai-provenance
+  /// after Post::create. Honest disclosure earns trust signals; false
+  /// declarations risk content_credentials_signed=false flag.
+  bool _declaredAiUsed = false;
+  String? _aiModelUsed;
+
+  /// Multi-author contributors — strategy posts.md §VIII / G-F-004.
+  /// Drafts collected at compose-time; attached via POST /posts/{id}/contributors
+  /// after Post::create.
+  List<ContributorDraft> _contributors = const [];
+  final ContributorService _contributorService = ContributorService();
+
+  /// UN-012 — tagged shop products. Attached after Post::create via
+  /// PostTaggedProductService. Unlocks product_expand·author and
+  /// wishlist_add·author downstream when buyers engage.
+  List<TaggedProductDraft> _taggedProducts = const [];
+  final PostTaggedProductService _taggedProductService = PostTaggedProductService();
 
   static const List<Map<String, dynamic>> _filters = [
     {'name': 'normal', 'label': 'Normal', 'matrix': null},
@@ -191,6 +215,36 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
       if (mounted) {
         setState(() => _isPosting = false);
         if (result.success) {
+          // AI provenance declaration (G-F-007). Fire-and-forget;
+          // doesn't block post-creation success path.
+          if (_declaredAiUsed && result.post?.id != null) {
+            unawaited(_postService.declareAiProvenance(
+              postId: result.post!.id,
+              declaredAiUsed: true,
+              aiModelUsed: _aiModelUsed,
+            ));
+          }
+          // Contributors (G-F-004). Fire-and-forget per draft; backend
+          // PostContributorController validates share_pct totals.
+          if (_contributors.isNotEmpty && result.post?.id != null) {
+            for (final c in _contributors) {
+              unawaited(_contributorService.add(
+                postId: result.post!.id,
+                ownerUserId: widget.currentUserId,
+                userId: c.userId,
+                role: c.role,
+                sharePct: c.sharePct,
+              ));
+            }
+          }
+          // UN-012 — attach tagged products. Fire-and-forget.
+          if (_taggedProducts.isNotEmpty && result.post?.id != null) {
+            unawaited(_taggedProductService.attach(
+              postId: result.post!.id,
+              ownerUserId: widget.currentUserId,
+              tags: _taggedProducts,
+            ));
+          }
           if (_draftId != null) await _draftService.deleteDraft(_draftId!);
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post created successfully')));
@@ -366,6 +420,105 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
       trailing: isSelected ? const Icon(Icons.check_circle, color: accent) : null,
       onTap: () { setState(() => _privacy = privacy); Navigator.pop(context); },
+    );
+  }
+
+  Widget _buildAiProvenanceSection() {
+    const primary = Color(0xFF1A1A1A);
+    const secondary = Color(0xFF666666);
+    const tertiary = Color(0xFF999999);
+    const border = Color(0xFFE5E5E5);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, size: 18, color: primary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'AI-generated content',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: primary,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _declaredAiUsed,
+                activeThumbColor: primary,
+                onChanged: (v) => setState(() {
+                  _declaredAiUsed = v;
+                  if (!v) _aiModelUsed = null;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Disclose if AI generated or modified this content. Honest disclosure builds trust.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: secondary),
+          ),
+          if (_declaredAiUsed) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: const ['Midjourney', 'DALL-E', 'Stable Diffusion', 'Other']
+                  .map((m) => _aiModelChip(m))
+                  .toList(),
+            ),
+          ],
+          if (_declaredAiUsed && _aiModelUsed == null) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Pick the model used (optional).',
+              style: TextStyle(fontSize: 11, color: tertiary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _aiModelChip(String model) {
+    final selected = _aiModelUsed == model;
+    const primary = Color(0xFF1A1A1A);
+    const border = Color(0xFFE5E5E5);
+    return InkWell(
+      onTap: () => setState(() => _aiModelUsed = selected ? null : model),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? primary : border),
+        ),
+        child: Text(
+          model,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: selected ? Colors.white : primary,
+          ),
+        ),
+      ),
     );
   }
 
@@ -572,6 +725,18 @@ class _CreateImagePostScreenState extends State<CreateImagePostScreen> {
                                   ),
                                 ),
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildAiProvenanceSection(),
+                            const SizedBox(height: 8),
+                            ContributorPicker(
+                              ownerUserId: widget.currentUserId,
+                              onChanged: (list) => setState(() => _contributors = list),
+                            ),
+                            const SizedBox(height: 8),
+                            TaggedProductPicker(
+                              currentUserId: widget.currentUserId,
+                              onChanged: (list) => setState(() => _taggedProducts = list),
                             ),
                           ],
                         ),

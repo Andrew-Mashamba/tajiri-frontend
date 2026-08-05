@@ -1,6 +1,7 @@
 // lib/skincare/services/skincare_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/skincare_models.dart';
 
@@ -11,7 +12,7 @@ class SkincareService {
 
   Future<SkincareResult<SkinProfile>> getSkinProfile(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/skincare/profile?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/skincare/profile?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -59,7 +60,7 @@ class SkincareService {
 
   Future<SkincareListResult<SkincareRoutine>> getRoutines(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/skincare/routines?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/skincare/routines?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -126,7 +127,7 @@ class SkincareService {
       if (year != null) params['year'] = '$year';
 
       final uri = Uri.parse('$_baseUrl/skincare/diary').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -191,7 +192,7 @@ class SkincareService {
       if (search != null && search.isNotEmpty) params['search'] = search;
 
       final uri = Uri.parse('$_baseUrl/skincare/products').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -209,7 +210,7 @@ class SkincareService {
 
   Future<SkincareResult<SkinProduct>> getProductDetail(int productId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/skincare/products/$productId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/skincare/products/$productId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -226,7 +227,7 @@ class SkincareService {
 
   Future<SkincareListResult<DangerousIngredient>> getDangerousIngredients() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/skincare/dangerous-ingredients'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/skincare/dangerous-ingredients'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -246,7 +247,7 @@ class SkincareService {
 
   Future<SkincareListResult<SkinProduct>> getRecommendations(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/skincare/recommendations?user_id=$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/skincare/recommendations?user_id=$userId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {

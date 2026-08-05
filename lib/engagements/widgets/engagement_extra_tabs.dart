@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,7 +52,7 @@ class _EngagementFilesTabState extends State<EngagementFilesTab> {
     final uri = Uri.parse('${ApiConfig.baseUrl}/engagements/${widget.engagementId}/files')
         .replace(queryParameters: {'user_id': '${widget.userId}'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {
@@ -226,7 +227,7 @@ class _EngagementInvoicesTabState extends State<EngagementInvoicesTab> {
     final uri = Uri.parse('${ApiConfig.baseUrl}/engagements/${widget.engagementId}/invoices')
         .replace(queryParameters: {'user_id': '${widget.userId}'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

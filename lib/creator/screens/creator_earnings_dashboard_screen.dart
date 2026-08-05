@@ -15,6 +15,7 @@ import '../widgets/attribution_layers_card.dart';
 import '../widgets/fund_period_card.dart';
 import '../widgets/revenue_source_mix_card.dart';
 import 'creator_revenue_report_screen.dart';
+import 'stream_type_earnings_screen.dart';
 
 const Color _kPrimary = Color(0xFF1A1A1A);
 const Color _kSecondary = Color(0xFF666666);
@@ -218,7 +219,23 @@ class _CreatorEarningsDashboardScreenState
               isSw: isSw,
               onTap: () {
                 HapticFeedback.selectionClick();
-                Navigator.pushNamed(context, '/earnings-provenance', arguments: {'stream': streams[i]});
+                // Live Gifts row routes to the dedicated streams
+                // strategy renderer; others fall through to the
+                // per-event provenance ledger.
+                if (streams[i] == 'live_gifts') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StreamTypeEarningsScreen(
+                        creatorId: widget.currentUserId,
+                        streamType: 'live_video',
+                      ),
+                    ),
+                  );
+                } else {
+                  Navigator.pushNamed(context, '/earnings-provenance',
+                      arguments: {'stream': streams[i]});
+                }
               },
             ),
             if (i < streams.length - 1)
@@ -363,7 +380,11 @@ class _StreamBreakdownRow extends StatelessWidget {
     'fan_funding': ('Fan Funding', 'Msaada wa Mashabiki'),
     'marketplace': ('Marketplace', 'Soko'),
     'brand_deal': ('Brand Deals', 'Mikataba ya Brand'),
-    'live_gifts': ('Live Gifts', 'Zawadi za Moja kwa Moja'),
+    // Tapping this row opens the full Streams.earnings strategy
+    // renderer — see streams.md §I-§XII (75 events). The amount on
+    // the card is the Live Gifts earnings-stream subtotal; the
+    // destination shows every stream-related metric.
+    'live_gifts': ('Streams', 'Mitiririko'),
     'affiliate': ('Affiliate', 'Mshauri'),
   };
 
@@ -372,7 +393,7 @@ class _StreamBreakdownRow extends StatelessWidget {
     'fan_funding': Icons.favorite_rounded,
     'marketplace': Icons.storefront_rounded,
     'brand_deal': Icons.handshake_rounded,
-    'live_gifts': Icons.card_giftcard_rounded,
+    'live_gifts': Icons.live_tv_rounded,
     'affiliate': Icons.share_rounded,
   };
 
@@ -383,6 +404,7 @@ class _StreamBreakdownRow extends StatelessWidget {
     final icon = _icons[streamKey] ?? Icons.attach_money_rounded;
     final cleared = data.clearedTsh;
     final pending = data.pendingTsh;
+    final isStreamsRow = streamKey == 'live_gifts';
 
     return InkWell(
       onTap: onTap,
@@ -403,14 +425,27 @@ class _StreamBreakdownRow extends StatelessWidget {
                   Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _kPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text(
-                    isSw ? '${_fmt(pending)} inangoja · ${_fmt(cleared)} imeisha' : '${_fmt(pending)} pending · ${_fmt(cleared)} cleared',
+                    isStreamsRow
+                        ? (isSw
+                            ? 'Mitiririko yote · ${_fmt(pending)} inangoja · ${_fmt(cleared)} imeisha'
+                            : 'All streams · ${_fmt(pending)} pending · ${_fmt(cleared)} cleared')
+                        : (isSw
+                            ? '${_fmt(pending)} inangoja · ${_fmt(cleared)} imeisha'
+                            : '${_fmt(pending)} pending · ${_fmt(cleared)} cleared'),
                     style: const TextStyle(fontSize: 12, color: _kSecondary),
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            Text('TZS ${_fmt(cleared + pending)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kPrimary)),
+            Text('TZS ${_fmt(cleared + pending)}',
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: _kPrimary)),
+            if (isStreamsRow) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: _kTertiary),
+            ],
           ],
         ),
       ),

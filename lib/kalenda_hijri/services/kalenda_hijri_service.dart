@@ -1,6 +1,7 @@
 // lib/kalenda_hijri/services/kalenda_hijri_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/kalenda_hijri_models.dart';
 
@@ -10,7 +11,7 @@ class KalendaHijriService {
   // ─── Get Today's Hijri Date ─────────────────────────────────
   Future<SingleResult<HijriDate>> getTodayHijri() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hijri/today'),
       );
       if (response.statusCode == 200) {
@@ -31,7 +32,7 @@ class KalendaHijriService {
   // ─── Convert Dates ──────────────────────────────────────────
   Future<SingleResult<HijriDate>> convertToHijri(String gregorianDate) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hijri/convert?date=$gregorianDate&to=hijri'),
       );
       if (response.statusCode == 200) {
@@ -60,7 +61,7 @@ class KalendaHijriService {
 
       final uri = Uri.parse('$_baseUrl/hijri/events')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -87,7 +88,7 @@ class KalendaHijriService {
     int page = 1,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/hijri/moon-sightings?page=$page'),
       );
       if (response.statusCode == 200) {

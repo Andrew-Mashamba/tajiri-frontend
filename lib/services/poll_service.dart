@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/poll_models.dart';
 import '../config/api_config.dart';
 
@@ -21,7 +22,7 @@ class PollService {
       if (pageId != null) url += '&page_id=$pageId';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -44,7 +45,7 @@ class PollService {
       String url = '$_baseUrl/polls/user?user_id=$userId';
       if (filter != null) url += '&filter=$filter';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -118,7 +119,7 @@ class PollService {
       String url = '$_baseUrl/polls/$identifier';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -213,7 +214,7 @@ class PollService {
   /// Get voters for an option
   Future<VoterListResult> getOptionVoters(int pollId, int optionId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/polls/$pollId/options/$optionId/voters'),
       );
 
@@ -235,7 +236,7 @@ class PollService {
   /// Get all voters for a poll
   Future<VoterListResult> getVoters(int pollId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/polls/$pollId/voters'),
       );
 

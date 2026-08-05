@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/file_models.dart';
 import '../config/api_config.dart';
 
@@ -54,7 +55,7 @@ class FileService {
       final uri = Uri.parse('$_baseUrl/files').replace(queryParameters: params);
       _log('GET $uri');
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       _log('Response status: ${response.statusCode}');
       _log('Response body: ${response.body.length > 1500 ? '${response.body.substring(0, 1500)}...' : response.body}');
 
@@ -104,7 +105,7 @@ class FileService {
       final uri = Uri.parse('$_baseUrl/files/recent?user_id=$userId&limit=$limit');
       _log('GET $uri');
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       _log('Recent files response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
@@ -150,7 +151,7 @@ class FileService {
       final uri = Uri.parse('$_baseUrl/files/quota?user_id=$userId');
       _log('GET $uri');
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       _log('Quota response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
@@ -477,7 +478,7 @@ class FileService {
   /// Get file details
   Future<FileResult> getFile(int fileId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/files/$fileId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/files/$fileId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

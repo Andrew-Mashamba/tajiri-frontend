@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/wallet_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_wallet_service.dart';
 import 'income_service.dart';
 import 'expenditure_service.dart';
 import 'local_storage_service.dart';
@@ -11,8 +13,11 @@ String get _baseUrl => ApiConfig.baseUrl;
 class WalletService {
   /// Get user's wallet (GET /api/wallet/{userId})
   Future<WalletResult> getWallet(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlWalletService.getWallet(userId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/wallet/$userId'),
       );
 
@@ -36,6 +41,13 @@ class WalletService {
     required int userId,
     required String pin,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.setPin(pin: pin);
+      return SimpleResult(
+        success: result.success,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/pin'),
@@ -65,12 +77,39 @@ class WalletService {
     String? type,
     String? status,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.getTransactions(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+      );
+      var transactions = result.transactions;
+      if (type != null) {
+        transactions = transactions.where((t) => t.type == type).toList();
+      }
+      if (status != null) {
+        transactions = transactions.where((t) => t.status == status).toList();
+      }
+      return TransactionListResult(
+        success: result.success,
+        transactions: transactions,
+        meta: result.success
+            ? WalletPaginationMeta(
+                currentPage: result.currentPage,
+                lastPage: result.lastPage,
+                perPage: result.perPage,
+                total: result.total,
+              )
+            : null,
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/wallet/$userId/transactions?page=$page&per_page=$perPage';
       if (type != null) url += '&type=$type';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -99,6 +138,34 @@ class WalletService {
     required String phoneNumber,
     String? pin,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.deposit(
+        userId: userId,
+        amount: amount,
+        provider: provider,
+        phoneNumber: phoneNumber,
+      );
+      if (result.success && result.transaction != null) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            IncomeService.recordIncome(
+              token: token,
+              amount: amount,
+              source: 'top_up',
+              description: 'Top up via $provider',
+              referenceId: 'wallet_deposit_${result.transaction!.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return TransactionResult(
+        success: result.success,
+        transaction: result.transaction,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/$userId/deposit'),
@@ -148,6 +215,35 @@ class WalletService {
     required String phoneNumber,
     required String pin,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.withdraw(
+        userId: userId,
+        amount: amount,
+        provider: provider,
+        phoneNumber: phoneNumber,
+        pin: pin,
+      );
+      if (result.success && result.transaction != null) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: 'withdrawal',
+              description: 'Withdraw to $provider',
+              referenceId: 'wallet_withdraw_${result.transaction!.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return TransactionResult(
+        success: result.success,
+        transaction: result.transaction,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/$userId/withdraw'),
@@ -204,6 +300,36 @@ class WalletService {
       (recipientId != null) != (recipientPhone != null && recipientPhone.isNotEmpty),
       'Provide either recipientId or recipientPhone',
     );
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.transfer(
+        userId: userId,
+        recipientId: recipientId,
+        recipientPhone: recipientPhone,
+        amount: amount,
+        pin: pin,
+        description: description,
+      );
+      if (result.success && result.transaction != null) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: budgetCategory ?? 'other',
+              description: description ?? 'Transfer',
+              referenceId: 'wallet_transfer_${result.transaction!.id}',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return TransactionResult(
+        success: result.success,
+        transaction: result.transaction,
+        message: result.message,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'amount': amount,
@@ -255,8 +381,16 @@ class WalletService {
 
   /// Get saved mobile money accounts
   Future<MobileAccountListResult> getMobileAccounts(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.getMobileAccounts(userId);
+      return MobileAccountListResult(
+        success: result.success,
+        accounts: result.accounts,
+        message: result.message,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/wallet/mobile-accounts?user_id=$userId'),
       );
 
@@ -282,6 +416,18 @@ class WalletService {
     required String phoneNumber,
     required String accountName,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.addMobileAccount(
+        provider: provider,
+        phoneNumber: phoneNumber,
+        accountName: accountName,
+      );
+      return MobileAccountResult(
+        success: result.success,
+        account: result.account,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/mobile-accounts'),
@@ -313,6 +459,9 @@ class WalletService {
     required int userId,
     required int accountId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlWalletService.deleteMobileAccount(accountId: accountId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/wallet/mobile-accounts/$accountId'),
@@ -332,6 +481,9 @@ class WalletService {
     required int userId,
     required int accountId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlWalletService.setPrimaryAccount(accountId: accountId);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/wallet/mobile-accounts/$accountId/primary'),
@@ -355,6 +507,18 @@ class WalletService {
     required double amount,
     String? description,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.createPaymentRequest(
+        payerId: payerId,
+        amount: amount,
+        description: description,
+      );
+      return PaymentRequestResult(
+        success: result.success,
+        request: result.request,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/payment-requests'),
@@ -388,8 +552,29 @@ class WalletService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.getPaymentRequests(
+        userId: userId,
+        direction: direction,
+        page: page,
+        perPage: perPage,
+      );
+      return PaymentRequestListResult(
+        success: result.success,
+        requests: result.requests,
+        meta: result.success
+            ? WalletPaginationMeta(
+                currentPage: result.currentPage,
+                lastPage: result.lastPage,
+                perPage: result.perPage,
+                total: result.total,
+              )
+            : null,
+        message: result.message,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/wallet/payment-requests?user_id=$userId&direction=$direction&page=$page&per_page=$perPage'),
       );
 
@@ -419,6 +604,33 @@ class WalletService {
     required String pin,
     String? budgetCategory,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.payRequest(
+        userId: userId,
+        requestId: requestId,
+        pin: pin,
+      );
+      if (result.success && result.transaction != null) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: result.transaction!.amount,
+              category: budgetCategory ?? 'other',
+              description: 'Payment request #$requestId',
+              referenceId: 'wallet_payreq_$requestId',
+              sourceModule: 'wallet',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return TransactionResult(
+        success: result.success,
+        transaction: result.transaction,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/payment-requests/$requestId/pay'),
@@ -463,6 +675,9 @@ class WalletService {
     required int userId,
     required String requestId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlWalletService.declineRequest(requestId: requestId);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/wallet/payment-requests/$requestId/decline'),
@@ -482,8 +697,17 @@ class WalletService {
     required double amount,
     required String type, // transfer, withdrawal
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlWalletService.calculateFee(amount: amount, type: type);
+      return FeeCalculationResult(
+        success: result.success,
+        fee: result.fee,
+        total: result.total,
+        message: result.message,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/wallet/calculate-fee?amount=$amount&type=$type'),
       );
 

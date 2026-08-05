@@ -49,6 +49,10 @@ class PostDetailScreen extends StatefulWidget {
   /// Starting index in [posts] list. Defaults to 0.
   final int initialIndex;
 
+  /// UN-003 — when arrived via shared link (`?share_uid=...`), this is
+  /// forwarded to FullScreenPostViewer for the entire §III sharer chain.
+  final String? shareUid;
+
   const PostDetailScreen({
     super.key,
     required this.postId,
@@ -56,6 +60,7 @@ class PostDetailScreen extends StatefulWidget {
     this.initialPost,
     this.posts,
     this.initialIndex = 0,
+    this.shareUid,
   });
 
   @override
@@ -107,6 +112,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   currentUserId: widget.currentUserId,
                   initialPost: post,
                   postService: _postService,
+                  shareUid: widget.shareUid,
                 );
               },
             ),
@@ -128,6 +134,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             currentUserId: widget.currentUserId,
             initialPost: widget.initialPost,
             postService: _postService,
+            shareUid: widget.shareUid,
           ),
         ),
       ),
@@ -144,6 +151,7 @@ class _PostDetailPage extends StatefulWidget {
   final int currentUserId;
   final Post? initialPost;
   final PostService postService;
+  final String? shareUid;
 
   const _PostDetailPage({
     super.key,
@@ -151,6 +159,7 @@ class _PostDetailPage extends StatefulWidget {
     required this.currentUserId,
     this.initialPost,
     required this.postService,
+    this.shareUid,
   });
 
   @override
@@ -220,6 +229,20 @@ class _PostDetailPageState extends State<_PostDetailPage>
         _loadPost();
       }
     });
+    // UN-001 row 1 — fire view·author for backend earnings.
+    // PostService.recordView is fire-and-forget.
+    unawaited(widget.postService.recordView(
+      postId: widget.postId,
+      userId: widget.currentUserId,
+      via: widget.shareUid,
+    ));
+    // UN-016 row 73 — PostDetailScreen is reached from non-feed surfaces
+    // (search, saved-posts, collections, profiles, deep links). All of
+    // these qualify as "reference revisit" per the spec.
+    unawaited(widget.postService.recordReferenceRevisit(
+      postId: widget.postId,
+      userId: widget.currentUserId,
+    ));
   }
 
   /// Layered hydrate for the post payload. Tries (in order):
@@ -438,6 +461,7 @@ class _PostDetailPageState extends State<_PostDetailPage>
       widget.currentUserId,
       content,
       parentId: parentId,
+      shareUid: widget.shareUid,
     );
 
     if (!mounted) return;
@@ -500,7 +524,7 @@ class _PostDetailPageState extends State<_PostDetailPage>
 
     final result = wasLiked
         ? await _postService.unlikePost(post.id, widget.currentUserId)
-        : await _postService.likePost(post.id, widget.currentUserId);
+        : await _postService.likePost(post.id, widget.currentUserId, shareUid: widget.shareUid);
 
     if (!mounted) return;
     if (!result.success) {
@@ -527,6 +551,7 @@ class _PostDetailPageState extends State<_PostDetailPage>
       post.id,
       widget.currentUserId,
       reactionType: reaction.name,
+      shareUid: widget.shareUid,
     );
 
     if (!mounted) return;
@@ -568,7 +593,7 @@ class _PostDetailPageState extends State<_PostDetailPage>
 
     final result = wasSaved
         ? await _postService.unsavePost(post.id, widget.currentUserId)
-        : await _postService.savePost(post.id, widget.currentUserId);
+        : await _postService.savePost(post.id, widget.currentUserId, shareUid: widget.shareUid);
 
     if (!mounted) return;
     if (!result.success) {

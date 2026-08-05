@@ -139,7 +139,9 @@ enum SkillCategory {
   // Business
   businessConsulting,
   hrConsulting,
-  careerCoaching;
+  careerCoaching,
+  // Tajiri Delivery
+  deliveryDriver;
 
   String get label {
     switch (this) {
@@ -187,6 +189,7 @@ enum SkillCategory {
       case SkillCategory.businessConsulting: return 'Business Consulting';
       case SkillCategory.hrConsulting: return 'HR Consulting';
       case SkillCategory.careerCoaching: return 'Career Coaching';
+      case SkillCategory.deliveryDriver: return 'Delivery Driver';
     }
   }
 
@@ -236,6 +239,7 @@ enum SkillCategory {
       case SkillCategory.businessConsulting: return 'Ushauri wa Biashara';
       case SkillCategory.hrConsulting: return 'Ushauri wa HR';
       case SkillCategory.careerCoaching: return 'Kocha wa Kazi';
+      case SkillCategory.deliveryDriver: return 'Dereva wa Usafirishaji';
     }
   }
 
@@ -285,6 +289,7 @@ enum SkillCategory {
       case SkillCategory.businessConsulting: return Icons.business_center_rounded;
       case SkillCategory.hrConsulting: return Icons.people_rounded;
       case SkillCategory.careerCoaching: return Icons.trending_up_rounded;
+      case SkillCategory.deliveryDriver: return Icons.local_shipping_rounded;
     }
   }
 
@@ -346,6 +351,8 @@ enum SkillCategory {
       case SkillCategory.travelAgent:
       case SkillCategory.safariOperator:
         return 'travel';
+      case SkillCategory.deliveryDriver:
+        return 'tajiri_delivery';
     }
   }
 

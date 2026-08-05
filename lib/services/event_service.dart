@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/event_models.dart';
 import '../config/api_config.dart';
 
@@ -19,7 +20,7 @@ class EventService {
       String url = '$_baseUrl/events?page=$page&per_page=$perPage&type=$type&group_id=$groupId';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -48,7 +49,7 @@ class EventService {
       if (category != null) url += '&category=$category';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -68,7 +69,7 @@ class EventService {
   /// Get event categories
   Future<List<EventCategory>> getCategories() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/events/categories'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/events/categories'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -87,7 +88,7 @@ class EventService {
   /// Get user's events
   Future<EventListResult> getUserEvents(int userId, {String filter = 'going'}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/events/user?user_id=$userId&filter=$filter'),
       );
 
@@ -182,7 +183,7 @@ class EventService {
       String url = '$_baseUrl/events/$identifier';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -241,7 +242,7 @@ class EventService {
   /// Get event attendees
   Future<AttendeeListResult> getAttendees(int eventId, {String type = 'going'}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/events/$eventId/attendees?type=$type'),
       );
 
@@ -263,7 +264,7 @@ class EventService {
   /// Get nearby events
   Future<EventListResult> getNearbyEvents(double latitude, double longitude, {double radius = 50}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/events/nearby?latitude=$latitude&longitude=$longitude&radius=$radius'),
       );
 
@@ -285,7 +286,7 @@ class EventService {
   /// Search events
   Future<EventListResult> searchEvents(String query) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/events/search?q=$query'),
       );
 

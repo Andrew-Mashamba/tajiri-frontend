@@ -133,6 +133,7 @@
 - `lib/l10n/app_strings.dart` — Localization updates
 
 ## Key Decisions
+- **Discovery order (2026-05-05, project-wide)**: Derive behavior and contracts from the **frontend + Laravel backend in-repo/SSH** first; use light **external research** only if still ambiguous; implement using **existing app patterns** (see `.cursor/memory/project/patterns.md` → “Project-wide: discover in-repo first”).
 - Platform foundation covers all 158 remaining items — each is bolt-on UI/wiring against existing helpers
 - No new infrastructure required for remaining enhancements
 - Notifications, wallet, calendar, chat, Firestore, analytics, JSS scoring, COA-backed money flows are the shared foundation
@@ -140,10 +141,9 @@
 ## Backend Access
 - **Production API**: `https://tajiri.zimasystems.com/api`
 - **Storage URL**: `https://tajiri.zimasystems.com/storage`
-- **Server IP**: `172.240.241.180`
-- **SSH Access**: `sshpass -p "ZimaBlueApps" ssh -o StrictHostKeyChecking=no root@172.240.241.180`
-- **Laravel Path**: `/var/www/tajiri.zimasystems.com`
-- **Old UAT** (deprecated, still in legacy docs): `zima-uat.site:8003` — not active
+- **SSH**: use local `.env` (`TAJIRI_BACKEND_SSH_*`, gitignored); see **`docs/BACKEND_SSH_ACCESS.md`**
+- **Laravel Path** (typical on host): `/var/www/tajiri.zimasystems.com`
+- **Old UAT** (deprecated): removed from repo references
 - **Config file**: `lib/config/api_config.dart`
 
 ## Blockers/Notes

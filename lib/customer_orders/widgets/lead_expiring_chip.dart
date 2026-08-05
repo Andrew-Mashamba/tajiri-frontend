@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// F3 #17 — countdown chip for quote-bid sources.
@@ -86,7 +86,7 @@ class LeadExpiringChipFetcher extends StatelessWidget {
         'source': sourceApiValue,
         'id': '$orderId',
       });
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

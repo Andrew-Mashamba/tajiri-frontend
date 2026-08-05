@@ -1,8 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../l10n/app_strings_scope.dart';
 
@@ -67,7 +66,7 @@ class _WorkDiaryPanelState extends State<WorkDiaryPanel> {
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagement-time-diary/${widget.engagementId}')!;
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       if (!mounted) return;
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);

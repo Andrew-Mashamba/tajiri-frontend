@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../reminders/models/reminder_models.dart';
 import '../../reminders/reminders_source_exception.dart';
@@ -29,7 +30,7 @@ class CrbService {
       final url = '$_baseUrl/business/$businessId/credit-report';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         return CrbResult(
@@ -50,7 +51,7 @@ class CrbService {
       final url = '$_baseUrl/business/$businessId/credit-score';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         return CrbResult(
@@ -93,7 +94,7 @@ class CrbService {
     try {
       final url = '$_baseUrl/business/reminders/crb?user_id=$userId';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = data['data'] is List ? data['data'] as List : [];

@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/post_models.dart';
+import '../../services/contributor_service.dart';
+import '../../widgets/ai_provenance_section.dart';
+import '../../widgets/contributor_picker.dart';
 import '../../models/draft_models.dart';
 import '../../services/post_service.dart';
 import '../../services/draft_service.dart';
@@ -52,6 +56,14 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
   String _uploadStatus = '';
   String? _selectedCategory;
   final TextEditingController _locationController = TextEditingController();
+
+  /// Multi-author contributors — strategy posts.md §VIII / G-F-004.
+  List<ContributorDraft> _contributors = const [];
+  final ContributorService _contributorService = ContributorService();
+
+  /// UW-005 — AI provenance declaration.
+  bool _declaredAiUsed = false;
+  String? _aiModelUsed;
 
   late AnimationController _recordingPulse;
 
@@ -261,6 +273,26 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
           _uploadStatus = '';
         });
         if (result.success) {
+          // UW-005: AI provenance declaration. Fire-and-forget.
+          if (_declaredAiUsed && result.post?.id != null) {
+            unawaited(_postService.declareAiProvenance(
+              postId: result.post!.id,
+              declaredAiUsed: true,
+              aiModelUsed: _aiModelUsed,
+            ));
+          }
+          // Contributors (G-F-004). Fire-and-forget per draft.
+          if (_contributors.isNotEmpty && result.post?.id != null) {
+            for (final c in _contributors) {
+              unawaited(_contributorService.add(
+                postId: result.post!.id,
+                ownerUserId: widget.currentUserId,
+                userId: c.userId,
+                role: c.role,
+                sharePct: c.sharePct,
+              ));
+            }
+          }
           if (_draftId != null) await _draftService.deleteDraft(_draftId!);
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video posted!')));
@@ -814,6 +846,19 @@ class _CreateShortVideoScreenState extends State<CreateShortVideoScreen> with Si
                   selectedCategory: _selectedCategory,
                   onCategoryChanged: (v) => setState(() => _selectedCategory = v),
                   locationController: _locationController,
+                ),
+                const SizedBox(height: 12),
+                ContributorPicker(
+                  ownerUserId: widget.currentUserId,
+                  onChanged: (list) => setState(() => _contributors = list),
+                ),
+                const SizedBox(height: 12),
+                AiProvenanceSection(
+                  declaredAiUsed: _declaredAiUsed,
+                  aiModelUsed: _aiModelUsed,
+                  onDeclaredChanged: (v) => setState(() => _declaredAiUsed = v),
+                  onModelChanged: (m) => setState(() => _aiModelUsed = m),
+                  models: const ['Sora', 'Runway', 'Pika', 'Other'],
                 ),
                 const SizedBox(height: 16),
                 Row(

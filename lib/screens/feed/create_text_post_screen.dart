@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/post_models.dart';
 import '../../models/draft_models.dart';
 import '../../services/post_service.dart';
 import '../../services/draft_service.dart';
+import '../../services/contributor_service.dart';
+import '../../widgets/ai_provenance_section.dart';
+import '../../widgets/contributor_picker.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/mention_text_field.dart';
 import '../../widgets/schedule_post_widget.dart';
@@ -45,6 +49,15 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
   bool _allowComments = true;
   String? _selectedCategory;
   final TextEditingController _locationController = TextEditingController();
+
+  /// Multi-author contributors — strategy posts.md §VIII / G-F-004.
+  List<ContributorDraft> _contributors = const [];
+  final ContributorService _contributorService = ContributorService();
+
+  /// UW-005 — AI provenance declaration. Posted to /posts/{id}/ai-provenance
+  /// after Post::create when `_declaredAiUsed=true`.
+  bool _declaredAiUsed = false;
+  String? _aiModelUsed;
 
   // Background color options
   static const List<String> _backgroundColors = [
@@ -124,6 +137,26 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
         setState(() => _isPosting = false);
 
         if (result.success) {
+          // UW-005: AI provenance declaration. Fire-and-forget.
+          if (_declaredAiUsed && result.post?.id != null) {
+            unawaited(_postService.declareAiProvenance(
+              postId: result.post!.id,
+              declaredAiUsed: true,
+              aiModelUsed: _aiModelUsed,
+            ));
+          }
+          // Contributors (G-F-004). Fire-and-forget per draft.
+          if (_contributors.isNotEmpty && result.post?.id != null) {
+            for (final c in _contributors) {
+              unawaited(_contributorService.add(
+                postId: result.post!.id,
+                ownerUserId: widget.currentUserId,
+                userId: c.userId,
+                role: c.role,
+                sharePct: c.sharePct,
+              ));
+            }
+          }
           // Delete draft if it exists
           if (_draftId != null) {
             await _draftService.deleteDraft(_draftId!);
@@ -593,6 +626,21 @@ class _CreateTextPostScreenState extends State<CreateTextPostScreen> {
                       selectedCategory: _selectedCategory,
                       onCategoryChanged: (v) => setState(() => _selectedCategory = v),
                       locationController: _locationController,
+                    ),
+
+                    const SizedBox(height: 12),
+                    ContributorPicker(
+                      ownerUserId: widget.currentUserId,
+                      onChanged: (list) => setState(() => _contributors = list),
+                    ),
+
+                    const SizedBox(height: 12),
+                    AiProvenanceSection(
+                      declaredAiUsed: _declaredAiUsed,
+                      aiModelUsed: _aiModelUsed,
+                      onDeclaredChanged: (v) => setState(() => _declaredAiUsed = v),
+                      onModelChanged: (m) => setState(() => _aiModelUsed = m),
+                      models: const ['ChatGPT', 'Claude', 'Gemini', 'Other'],
                     ),
 
                     const SizedBox(height: 24),

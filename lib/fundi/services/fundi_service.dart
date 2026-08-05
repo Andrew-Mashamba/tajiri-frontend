@@ -1,6 +1,7 @@
 // lib/fundi/services/fundi_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/fundi_models.dart';
 
@@ -26,7 +27,7 @@ class FundiService {
       if (availableOnly == true) params['available'] = '1';
 
       final uri = Uri.parse('$_baseUrl/fundis').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -45,7 +46,7 @@ class FundiService {
 
   Future<FundiResult<Fundi>> getFundiProfile(int fundiId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/fundis/$fundiId'),
       );
       if (response.statusCode == 200) {
@@ -87,7 +88,7 @@ class FundiService {
 
   Future<FundiResult<Fundi>> getMyFundiProfile(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/fundis/me?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -148,7 +149,7 @@ class FundiService {
       String url = '$_baseUrl/fundis/bookings?user_id=$userId&page=$page';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -214,7 +215,7 @@ class FundiService {
 
   Future<FundiListResult<FundiReview>> getFundiReviews(int fundiId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/fundis/$fundiId/reviews'),
       );
       if (response.statusCode == 200) {

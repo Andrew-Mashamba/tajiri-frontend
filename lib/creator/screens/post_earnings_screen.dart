@@ -16,6 +16,7 @@ import '../../l10n/app_strings_scope.dart';
 import '../../models/post_models.dart';
 import '../../services/post_service.dart';
 import '../../widgets/tajiri_app_bar.dart';
+import '../widgets/algorithm_transparency_card.dart';
 import '../widgets/attribution_layers_card.dart';
 
 const Color _kPrimary = Color(0xFF1A1A1A);
@@ -48,6 +49,7 @@ class _PostEarningsScreenState extends State<PostEarningsScreen> {
   final PostService _postService = PostService();
 
   PostEarningsResult? _earnings;
+  PostInsightsResult? _insights;
   bool _loading = true;
   String? _error;
 
@@ -66,11 +68,17 @@ class _PostEarningsScreenState extends State<PostEarningsScreen> {
       setState(() => _loading = true);
     }
     try {
-      final result =
-          await _postService.getPostEarnings(widget.postId);
+      // L7 — fetch earnings and insights in parallel. Insights endpoint is
+      // author-gated, so we pass the current user; if they're not the author
+      // the result is null and we degrade to the earnings-only card.
+      final results = await Future.wait<dynamic>([
+        _postService.getPostEarnings(widget.postId),
+        _postService.getPostInsights(widget.postId, currentUserId: widget.currentUserId),
+      ]);
       if (!mounted) return;
       setState(() {
-        _earnings = result;
+        _earnings = results[0] as PostEarningsResult;
+        _insights = results[1] as PostInsightsResult?;
         _loading = false;
         _error = null;
       });
@@ -130,6 +138,10 @@ class _PostEarningsScreenState extends State<PostEarningsScreen> {
                         _SectionLabel(isSw ? 'UTENDAJI' : 'PERFORMANCE'),
                         const SizedBox(height: 8),
                         _buildPerformanceRow(isSw),
+                        const SizedBox(height: 24),
+                        _SectionLabel(isSw ? 'KWA NINI?' : 'WHY THIS PERFORMED'),
+                        const SizedBox(height: 8),
+                        _buildAlgorithmCard(),
                         const SizedBox(height: 24),
                         _SectionLabel(
                             isSw ? 'MAPATO KWA SHUGHULI' : 'EARNINGS BY ACTIVITY'),
@@ -236,6 +248,64 @@ class _PostEarningsScreenState extends State<PostEarningsScreen> {
         ],
       ),
     );
+  }
+
+  // ── Algorithm transparency (Lever 8) ─────────────────────────────────
+  //
+  // Renders [AlgorithmTransparencyCard] using the real insights payload
+  // when /api/posts/{id}/insights returned, falling back to the
+  // earnings-only view if the insights endpoint failed.
+
+  Widget _buildAlgorithmCard() {
+    final e = _earnings!;
+    final ins = _insights;
+    final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
+
+    if (ins == null) {
+      // Fallback: derive what we can from the earnings breakdown.
+      return AlgorithmTransparencyCard(
+        reach: e.impressions,
+        reachChangePercent: 0,
+        topDriver: _deriveTopDriver(e),
+        predictedEarnings: e.estimatedEarnings,
+      );
+    }
+
+    // Average the three normalized score multipliers into one "community"
+    // figure for display, keep tier separate. The card only takes two so
+    // we present the most-actionable pair.
+    final avgScoreMult = ((ins.communityMultiplier + ins.qualityMultiplier + ins.consistencyMultiplier) / 3.0);
+
+    return AlgorithmTransparencyCard(
+      reach: ins.reach,
+      reachChangePercent: ins.reachChangePercent,
+      topDriver: ins.topDriverLabel(isSwahili: isSw),
+      watchTimeDecay: ins.watchTimeDecayLabel(isSwahili: isSw),
+      predictedEarnings: ins.predictedEarnings,
+      communityMultiplier: avgScoreMult,
+      viralityMultiplier: ins.tierMultiplier,
+    );
+  }
+
+  String? _deriveTopDriver(PostEarningsResult e) {
+    final s = AppStringsScope.of(context);
+    final isSw = s?.isSwahili ?? false;
+    final pairs = <(String labelEn, String labelSw, double amount, int count)>[
+      ('Views',   'Mionekano',  e.views.amount,    e.views.count),
+      ('Likes',   'Mapenzi',    e.likes.amount,    e.likes.count),
+      ('Comments','Maoni',      e.comments.amount, e.comments.count),
+      ('Shares',  'Mishirikishaji', e.shares.amount, e.shares.count),
+      ('Saves',   'Kuhifadhi',  e.saves.amount,    e.saves.count),
+      ('Watch',   'Muda wa kuangalia', e.watchTime.amount, e.watchTime.count),
+    ];
+    pairs.sort((a, b) => b.$3.compareTo(a.$3));
+    final top = pairs.first;
+    if (top.$3 <= 0) return null;
+    final label = isSw ? top.$2 : top.$1;
+    return isSw
+        ? '$label ndio chanzo kikuu cha mapato'
+        : '$label is your top earnings driver';
   }
 
   // ── Performance row (twin pills) ─────────────────────────────────────

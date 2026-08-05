@@ -39,6 +39,17 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   bool _isLoading = false;
   bool _isScheduling = false;
   DateTime? _scheduledAt;
+  /// Phase E — synthetic_avatar_disclosed·author. Streamer toggles this
+  /// on if they're using an AI-generated avatar. Disclosure earns the
+  /// full rate; undisclosed AI avatars are clamped via the integrity
+  /// framework's `synthetic_undisclosed_clamp` (0.5x).
+  bool _disclosesSyntheticAvatar = false;
+
+  /// Phase F — AI provenance attestations made at stream creation.
+  /// Each fires the corresponding §XI metric on stream-creation success.
+  bool _consentVoiceClone = false;
+  bool _consentAiClipGen = false;
+  bool _consentAiRemix = false;
 
   static const List<String> _categoryIds = [
     'music', 'sports', 'education', 'talk',
@@ -172,6 +183,41 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
       print('[GoLiveScreen] Stream creation result - success: ${result.success}');
       if (result.success && result.stream != null) {
         print('[GoLiveScreen] Stream created successfully - ID: ${result.stream!.id}');
+
+        // Phase E — fire synthetic_avatar_disclosed when streamer
+        // toggled the disclosure on. Backend records an attestation
+        // row + emits the earnings event.
+        if (_disclosesSyntheticAvatar) {
+          _streamService.disclosesyntheticAvatar(
+            streamId: result.stream!.id,
+            subjectUserId: widget.userId,
+            avatarProvider: 'manual_disclosure',
+          );
+        }
+        // Phase F — fire §XI AI provenance metrics on creation.
+        if (_consentVoiceClone) {
+          _streamService.aiVoiceCloneUsage(
+            streamId: result.stream!.id,
+            subjectUserId: widget.userId,
+            actorUserId: widget.userId,
+            licenseId: 'creator_consent',
+          );
+        }
+        if (_consentAiClipGen) {
+          _streamService.aiClipGeneration(
+            streamId: result.stream!.id,
+            subjectUserId: widget.userId,
+            actorUserId: widget.userId,
+            modelId: 'auto_clip_pipeline',
+          );
+        }
+        if (_consentAiRemix) {
+          _streamService.aiAssistedRemix(
+            streamId: result.stream!.id,
+            remixerUserId: widget.userId,
+            modelId: 'creator_consent',
+          );
+        }
       } else {
         print('[GoLiveScreen] Stream creation failed - message: ${result.message}');
       }
@@ -249,6 +295,22 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
                 ],
               ),
               actions: [
+                // G7 — surface notify_followers right after creation. Fires
+                // notify_live_optin·author + notify_followers_optin·author.
+                TextButton.icon(
+                  icon: const Icon(Icons.notifications_active_rounded),
+                  label: const Text('Notify followers now'),
+                  onPressed: () async {
+                    final ok = await _streamService.notifyFollowers(
+                      result.stream!.id);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(ok
+                          ? 'Followers notified'
+                          : 'Notification failed'),
+                    ));
+                  },
+                ),
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
@@ -707,6 +769,47 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
               subtitle: Text(s?.allowGiftsSubtitle ?? 'Viewers can send gifts'),
               value: _allowGifts,
               onChanged: (v) => setState(() => _allowGifts = v),
+            ),
+
+            // Phase E — AI avatar disclosure. Disclosed AI avatars earn
+            // full rate; undisclosed avatars are clamped 0.5x via the
+            // integrity framework. Default OFF to avoid accidental
+            // disclosure on real-camera streams.
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.face_retouching_natural_rounded),
+              title: const Text('AI avatar (disclose)'),
+              subtitle: const Text('Toggle on if your face/voice is AI-generated. Earns full rate when disclosed.'),
+              value: _disclosesSyntheticAvatar,
+              onChanged: (v) => setState(() => _disclosesSyntheticAvatar = v),
+            ),
+
+            // Phase F — §XI AI provenance attestations. Each toggle
+            // fires its metric once at stream creation; toggling these
+            // ON early lets you earn from any downstream AI use.
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.mic_rounded),
+              title: const Text('Voice clone consent'),
+              subtitle: const Text('Allow AI dubs of your voice. You earn a share of derivative work.'),
+              value: _consentVoiceClone,
+              onChanged: (v) => setState(() => _consentVoiceClone = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.auto_awesome_rounded),
+              title: const Text('Auto-clip moments (AI)'),
+              subtitle: const Text('Let the AI pipeline generate short clips from this stream.'),
+              value: _consentAiClipGen,
+              onChanged: (v) => setState(() => _consentAiClipGen = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.shuffle_rounded),
+              title: const Text('AI remix license'),
+              subtitle: const Text('Allow AI-assisted remixes of your stream content.'),
+              value: _consentAiRemix,
+              onChanged: (v) => setState(() => _consentAiRemix = v),
             ),
           ],
         ),

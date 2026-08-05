@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
@@ -192,7 +193,7 @@ class GroupCallService {
           'user_id': userId.toString(),
         },
       );
-      final response = await http.get(uri, headers: ApiConfig.headers);
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.headers);
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['success'] == true && data['active_speaker_id'] != null) {

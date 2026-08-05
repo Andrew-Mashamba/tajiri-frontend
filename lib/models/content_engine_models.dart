@@ -2,6 +2,7 @@
 // Wraps search/feed results from the backend Content Engine pipeline.
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'post_models.dart';
 import '../services/post_service.dart' show PaginationMeta;
 
@@ -48,8 +49,10 @@ class ContentEngineResult {
         if (raw is Map<String, dynamic>) {
           items.add(ContentDocumentResult.fromJson(raw));
         }
-      } catch (_) {
-        // Skip unparseable items
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[ContentEngineResult] item parse failed: $e');
+        }
       }
     }
     final metaJson = json['meta'] is Map<String, dynamic>
@@ -108,6 +111,33 @@ class ContentDocumentResult {
   });
 
   factory ContentDocumentResult.fromJson(Map<String, dynamic> json) {
+    // Backend may return either:
+    //  (a) wrapped: {document, source, context, scores}
+    //  (b) flat:    a Post object directly (legacy /v2/feed shape)
+    // Detect (b) by checking for a top-level `id` + `post_type` and no `document` key.
+    final hasWrapper = json['document'] is Map || json['source'] is Map;
+    if (!hasWrapper && json['id'] != null && json['post_type'] != null) {
+      Post? post;
+      try {
+        post = Post.fromJson(json);
+      } catch (e, st) {
+        if (kDebugMode) {
+          debugPrint('[ContentDocumentResult] flat-post hydrate FAILED for post id=${json['id']}: $e');
+          debugPrint(st.toString().split('\n').take(4).join('\n'));
+        }
+      }
+      return ContentDocumentResult(
+        documentId: 0,
+        sourceType: (json['is_short_video'] == true) ? 'clip' : 'post',
+        sourceId: _ceParseInt(json['id']),
+        title: json['content']?.toString(),
+        scores: ContentScores.fromJson(const <String, dynamic>{}),
+        context: ContentContext.fromJson(const <String, dynamic>{}),
+        post: post,
+        sourceJson: json,
+      );
+    }
+
     final docJson = json['document'] is Map<String, dynamic>
         ? json['document'] as Map<String, dynamic>
         : <String, dynamic>{};

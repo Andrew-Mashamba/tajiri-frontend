@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Service for real-time game communication.
@@ -92,7 +93,7 @@ class GameSocketService {
   Future<void> _poll() async {
     if (!_connected || _sessionId == null) return;
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/games/sessions/$_sessionId'),
         headers: ApiConfig.headers,
       );
@@ -150,7 +151,7 @@ class GameSocketService {
   /// Manually poll once (for use outside the automatic timer).
   Future<Map<String, dynamic>?> pollOnce(int sessionId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/games/sessions/$sessionId'),
         headers: ApiConfig.headers,
       );

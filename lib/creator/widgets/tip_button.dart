@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_strings_scope.dart';
+import '../../screens/wallet/send_tip_screen.dart';
 
-/// Compact "Buy me a chai" tipping button for posts (Lever 1).
+/// Compact "Buy me a chai" tipping button (Lever 1).
 ///
-/// Place on PostCard, profile header, or live stream overlay.
-/// Tapping opens a bottom sheet with preset tip amounts.
+/// Place on PostCard, profile header, or live stream overlay. Tapping pushes
+/// [SendTipScreen] with stream/post attribution propagated so the backend
+/// fires `live_tip·author` or `tip·author` correctly (streams.md §I row 7 /
+/// posts.md tip row). If neither [streamId] nor [postId] is set the tip is
+/// untagged — the creator still earns, but no source attribution is recorded.
 class TipButton extends StatelessWidget {
   final int creatorId;
+  final int currentUserId;
   final String? creatorName;
+  final int? postId;
+  final int? streamId;
   final VoidCallback? onTap;
   final bool compact;
 
   const TipButton({
     super.key,
     required this.creatorId,
+    required this.currentUserId,
     this.creatorName,
+    this.postId,
+    this.streamId,
     this.onTap,
     this.compact = false,
   });
@@ -28,7 +38,7 @@ class TipButton extends StatelessWidget {
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _openTipSheet(context),
+          onTap: () => _handleTap(context),
           borderRadius: BorderRadius.circular(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 32),
@@ -58,7 +68,7 @@ class TipButton extends StatelessWidget {
     return SizedBox(
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: () => _openTipSheet(context),
+        onPressed: () => _handleTap(context),
         icon: const Icon(Icons.favorite_rounded, size: 16, color: Color(0xFF1A1A1A)),
         label: Text(
           s?.sendTip ?? 'Send tip',
@@ -74,168 +84,23 @@ class TipButton extends StatelessWidget {
     );
   }
 
-  void _openTipSheet(BuildContext context) {
+  void _handleTap(BuildContext context) {
     HapticFeedback.selectionClick();
     if (onTap != null) {
       onTap!();
       return;
     }
-    _showTipBottomSheet(context);
-  }
-
-  void _showTipBottomSheet(BuildContext context) {
-    final s = AppStringsScope.of(context);
-    final name = creatorName ?? (s?.thisCreator ?? 'this creator');
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _TipAmountSheet(
-        creatorId: creatorId,
-        creatorName: name,
-        s: s,
-      ),
-    );
-  }
-}
-
-// ── Bottom Sheet ────────────────────────────────────────────────────────────
-
-class _TipAmountSheet extends StatefulWidget {
-  final int creatorId;
-  final String creatorName;
-  final AppStrings? s;
-
-  const _TipAmountSheet({
-    required this.creatorId,
-    required this.creatorName,
-    required this.s,
-  });
-
-  @override
-  State<_TipAmountSheet> createState() => _TipAmountSheetState();
-}
-
-class _TipAmountSheetState extends State<_TipAmountSheet> {
-  static const List<double> _amounts = [500, 1000, 2000, 5000, 10000];
-  double? _selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              (s?.isSwahili == true) ? 'Tuma Bahshishi' : 'Send a Tip',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              (s?.isSwahili == true)
-                  ? 'Msaada mwandishi ${widget.creatorName} kununua chai'
-                  : 'Support ${widget.creatorName} with a chai',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF666666)),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.center,
-              children: _amounts.map((a) => _buildAmountChip(a)).toList(),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: _selected != null ? _confirm : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A1A1A),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: Text(
-                  (s?.isSwahili == true) ? 'Thibitisha' : 'Confirm',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAmountChip(double amount) {
-    final selected = _selected == amount;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() => _selected = amount);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: selected ? const Color(0xFF1A1A1A) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: selected ? const Color(0xFF1A1A1A) : const Color(0xFFE5E5E5)),
-              boxShadow: [
-                if (!selected)
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),
-              ],
-            ),
-            child: Text(
-              'TSh ${amount.toStringAsFixed(0)}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _confirm() {
-    HapticFeedback.mediumImpact();
-    Navigator.pop(context);
-    // Navigate to full SendTipScreen with pre-selected amount
-    Navigator.pushNamed(
+    Navigator.push<bool>(
       context,
-      '/send-tip',
-      arguments: {
-        'creatorId': widget.creatorId,
-        'creatorName': widget.creatorName,
-        'amount': _selected,
-      },
+      MaterialPageRoute(
+        builder: (_) => SendTipScreen(
+          creatorId: creatorId,
+          currentUserId: currentUserId,
+          creatorDisplayName: creatorName,
+          postId: postId,
+          streamId: streamId,
+        ),
+      ),
     );
   }
 }

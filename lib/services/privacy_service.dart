@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/privacy_settings_model.dart';
 import 'local_storage_service.dart';
@@ -21,7 +22,7 @@ class PrivacyService {
 
   Future<PrivacySettingsResult> getPrivacySettings(int userId) async {
     try {
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/privacy-settings'),
         headers: await _headers(),
       );
@@ -64,7 +65,7 @@ class PrivacyService {
 
   Future<List<BlockedUserItem>> blockedUsers(int userId) async {
     try {
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/blocked?user_id=$userId'),
         headers: await _headers(),
       );
@@ -97,7 +98,7 @@ class PrivacyService {
 
   Future<List<CloseFriendItem>> closeFriends(int userId) async {
     try {
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/close-friends'),
         headers: await _headers(),
       );
@@ -159,7 +160,7 @@ class PrivacyService {
 
   Future<String?> dataExportJson(int userId) async {
     try {
-      final r = await http.get(
+      final r = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/data-export'),
         headers: await _headers(),
       );

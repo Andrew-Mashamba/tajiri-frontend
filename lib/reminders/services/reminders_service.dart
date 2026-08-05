@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config/api_config.dart';
@@ -107,7 +108,7 @@ class RemindersService {
     bool strict = false,
   }) async {
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('$_baseUrl/reminders?user_id=$userId'),
         headers: ApiConfig.authHeaders(token),
       );

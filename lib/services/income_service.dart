@@ -2,8 +2,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../budget/models/budget_models.dart';
+import 'graphql/graphql_budget_service.dart';
 
 /// Central service for all income (money in) across the platform.
 /// Static-method class — does not need instantiation.
@@ -29,6 +31,18 @@ class IncomeService {
     DateTime? date,
     bool isRecurring = false,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.recordIncome(
+        amount: amount,
+        source: source,
+        description: description,
+        sourceModule: sourceModule,
+        referenceId: referenceId,
+        metadata: metadata,
+        date: date,
+        isRecurring: isRecurring,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'amount': amount,
@@ -74,6 +88,16 @@ class IncomeService {
     int page = 1,
     int perPage = 50,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getIncome(
+        source: source,
+        sourceModule: sourceModule,
+        from: from,
+        to: to,
+        page: page,
+        perPage: perPage,
+      );
+    }
     try {
       final params = <String, String>{
         'page': page.toString(),
@@ -87,7 +111,7 @@ class IncomeService {
       final uri = Uri.parse('${ApiConfig.baseUrl}/income')
           .replace(queryParameters: params);
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -119,11 +143,14 @@ class IncomeService {
     required String token,
     required String period,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getIncomeSummary(period: period);
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/income/summary')
           .replace(queryParameters: {'period': period});
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -146,6 +173,9 @@ class IncomeService {
     required int year,
     required int month,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getIncomeBySource(year: year, month: month);
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/income/by-source')
           .replace(queryParameters: {
@@ -153,7 +183,7 @@ class IncomeService {
         'month': month.toString(),
       });
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -175,8 +205,11 @@ class IncomeService {
   static Future<List<RecurringIncome>> getRecurringIncome({
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getRecurringIncome();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/income/recurring'),
         headers: ApiConfig.authHeaders(token),
       );

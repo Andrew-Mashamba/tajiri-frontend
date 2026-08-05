@@ -2,9 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:dio/dio.dart';
 import '../models/post_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_backend_services.dart';
+import 'graphql/graphql_comments_service.dart';
+import 'graphql/graphql_create_post_service.dart';
+import 'graphql/graphql_social_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -105,6 +110,26 @@ class PostService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlPostService.fetchUserPosts(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+      );
+      return PostListResult(
+        success: result.success,
+        posts: result.posts,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          perPage: result.perPage,
+          total: result.lastPage > result.currentPage
+              ? result.currentPage * result.perPage + 1
+              : (result.currentPage - 1) * result.perPage + result.posts.length,
+          lastPage: result.lastPage,
+        ),
+        message: result.message,
+      );
+    }
     _log('=== GET USER POSTS ===');
     _log('userId: $userId, page: $page, perPage: $perPage');
 
@@ -112,7 +137,7 @@ class PostService {
       final url = '$_baseUrl/users/$userId/posts?page=$page&per_page=$perPage';
       _log('Request URL: $url');
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       _log('Response status: ${response.statusCode}');
       _log('Response body: ${response.body}');
@@ -155,7 +180,7 @@ class PostService {
       if (userId != null) url += '&user_id=$userId';
       if (profileUserId != null) url += '&profile_user_id=$profileUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -236,6 +261,33 @@ class PostService {
     _log('media count: ${media?.length ?? 0}');
     _log('audioFile: ${audioFile?.path ?? "(none)"}');
     _log('coverImage: ${coverImage?.path ?? "(none)"}');
+
+    if (ApiConfig.useGraphqlBackend) {
+      final hasAdvancedFields = audioFile != null ||
+          coverImage != null ||
+          musicTrackId != null ||
+          textOverlays != null ||
+          replyToPostId != null ||
+          stitchFromPostId != null ||
+          quoteFromPostId != null;
+      if (hasAdvancedFields) {
+        return PostResult(
+          success: false,
+          message: 'Advanced post types are not yet supported on the new backend.',
+        );
+      }
+      final post = await GraphqlCreatePostService.createPost(
+        content: content,
+        postType: postType,
+        privacy: privacy,
+        mediaFiles: media,
+        mediaType: postType == 'video' || postType == 'short_video' ? 'video' : 'image',
+      );
+      if (post == null) {
+        return PostResult(success: false, message: 'Failed to create post');
+      }
+      return PostResult(success: true, post: post);
+    }
 
     try {
       // Use multipart request if there are any files to upload (media, audio, or cover image)
@@ -701,11 +753,18 @@ class PostService {
 
   /// Get a single post
   Future<PostResult> getPost(int postId, {int? currentUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final post = await GraphqlPostService.fetchPost(postId);
+      if (post == null) {
+        return PostResult(success: false, message: 'Post not found');
+      }
+      return PostResult(success: true, post: post);
+    }
     try {
       String url = '$_baseUrl/posts/$postId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -756,6 +815,10 @@ class PostService {
 
   /// Delete a post
   Future<SimpleResult> deletePost(int postId, {int? userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlPostService.deletePost(postId);
+      return SimpleResult(success: ok, message: ok ? null : 'Failed to delete post');
+    }
     try {
       final uri = userId != null
           ? '$_baseUrl/posts/$postId?user_id=$userId'
@@ -774,16 +837,29 @@ class PostService {
     }
   }
 
-  /// Like a post
-  Future<LikeResult> likePost(int postId, int userId, {String reactionType = 'like'}) async {
+  /// Like a post.
+  /// [shareUid] (optional) — when the viewer arrived via a shared link,
+  /// passing it here credits the sharer (§III row 27 reaction·sharer).
+  Future<LikeResult> likePost(
+    int postId,
+    int userId, {
+    String reactionType = 'like',
+    String? shareUid,
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.likePost(postId);
+      return LikeResult(success: result.success, likesCount: result.likesCount);
+    }
     try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'reaction_type': reactionType,
+      };
+      if (shareUid != null && shareUid.isNotEmpty) body['via'] = shareUid;
       final response = await http.post(
         Uri.parse('$_baseUrl/posts/$postId/like'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'user_id': userId,
-          'reaction_type': reactionType,
-        }),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
@@ -802,6 +878,10 @@ class PostService {
 
   /// Unlike a post
   Future<LikeResult> unlikePost(int postId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.unlikePost(postId);
+      return LikeResult(success: result.success, likesCount: result.likesCount);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/posts/$postId/like'),
@@ -825,6 +905,24 @@ class PostService {
 
   /// Get comments for a post
   Future<CommentListResult> getComments(int postId, {int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.getComments(
+        postId: postId,
+        page: page,
+        perPage: perPage,
+      );
+      return CommentListResult(
+        success: result.success,
+        comments: result.comments,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: result.perPage,
+          total: result.total,
+        ),
+        message: result.message,
+      );
+    }
     final url = '$_baseUrl/posts/$postId/comments?page=$page&per_page=$perPage';
     _log('getComments: request postId=$postId page=$page url=$url');
     try {
@@ -893,13 +991,27 @@ class PostService {
     String content, {
     int? parentId,
     List<int>? mentionIds,
+    String? shareUid,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.addComment(
+        postId: postId,
+        content: content,
+        parentId: parentId,
+      );
+      return CommentResult(
+        success: result.success,
+        comment: result.comment,
+        message: result.message,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'user_id': userId,
         'content': content,
         if (parentId != null) 'parent_id': parentId,
         if (mentionIds != null && mentionIds.isNotEmpty) 'mention_ids': mentionIds,
+        if (shareUid != null && shareUid.isNotEmpty) 'via': shareUid,
       };
       final response = await http.post(
         Uri.parse('$_baseUrl/posts/$postId/comments'),
@@ -923,6 +1035,9 @@ class PostService {
 
   /// Delete a comment
   Future<bool> deleteComment(int commentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCommentsService.deleteComment(commentId);
+    }
     try {
       final response = await http.delete(Uri.parse('$_baseUrl/comments/$commentId'));
       return response.statusCode == 200;
@@ -933,6 +1048,14 @@ class PostService {
 
   /// Like a comment
   Future<CommentLikeResult> likeComment(int commentId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.likeComment(commentId);
+      return CommentLikeResult(
+        success: result.success,
+        likesCount: result.likesCount ?? 0,
+        isLiked: result.isLiked,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/comments/$commentId/like'),
@@ -954,6 +1077,14 @@ class PostService {
 
   /// Unlike a comment
   Future<CommentLikeResult> unlikeComment(int commentId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.unlikeComment(commentId);
+      return CommentLikeResult(
+        success: result.success,
+        likesCount: result.likesCount ?? 0,
+        isLiked: result.isLiked,
+      );
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/comments/$commentId/like'),
@@ -975,6 +1106,17 @@ class PostService {
 
   /// Update (edit) a comment
   Future<CommentResult> updateComment(int commentId, String content, {List<int>? mentionIds}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.editComment(
+        commentId: commentId,
+        content: content,
+      );
+      return CommentResult(
+        success: result.success,
+        comment: result.comment,
+        message: result.message,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'content': content,
@@ -997,6 +1139,17 @@ class PostService {
 
   /// Pin a comment (post author only). Only one comment per post can be pinned.
   Future<CommentResult> pinComment(int postId, int commentId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.pinComment(
+        postId: postId,
+        commentId: commentId,
+      );
+      return CommentResult(
+        success: result.success,
+        comment: result.comment,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/posts/$postId/comments/$commentId/pin'),
@@ -1015,10 +1168,105 @@ class PostService {
 
   /// Unpin the pinned comment for a post
   Future<bool> unpinComment(int postId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlCommentsService.unpinComment(postId);
+    }
     try {
       final response = await http.delete(Uri.parse('$_baseUrl/posts/$postId/comments/pin'));
       return response.statusCode == 200;
     } catch (e) {
+      return false;
+    }
+  }
+
+  /// Record a post view — strategy posts.md row 1 (`view·author`) +
+  /// row 2 (`watch_second·author`). Fire-and-forget. Backend also
+  /// derives `revisit_post·author` when a prior chargeable view
+  /// exists > 24h ago. Pass `via=share_uid` to credit a sharer.
+  Future<bool> recordView({
+    required int postId,
+    required int userId,
+    int? watchSeconds,
+    double? watchPercentage,
+    String? via,
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSocialService.recordPostView(
+        postId: postId,
+        watchSeconds: watchSeconds,
+        watchPercentage: watchPercentage,
+        via: via,
+      );
+    }
+    try {
+      final body = <String, dynamic>{'user_id': userId};
+      if (watchSeconds != null) body['watch_seconds'] = watchSeconds;
+      if (watchPercentage != null) body['watch_percentage'] = watchPercentage;
+      if (via != null && via.isNotEmpty) body['via'] = via;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/view'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Record an outbound link click on a post — strategy posts.md
+  /// row 13 (`external_link_click·author`). Fire-and-forget; the
+  /// caller doesn't wait for the response.
+  Future<bool> recordExternalLinkClick({
+    required int postId,
+    required int userId,
+    String? url,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        if (url != null) 'url': url,
+      };
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/external-click'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Record a screenshot of a post — strategy posts.md row 15.
+  /// Fire-and-forget. Front end fires this when the platform's
+  /// screenshot listener triggers (iOS UIApplicationUserDidTakeScreenshotNotification,
+  /// Android FileObserver, or a Flutter plugin like flutter_screenshot_callback).
+  Future<bool> recordScreenshot({required int postId, required int userId}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/screenshot'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Record a copy-text event — strategy posts.md row 17.
+  /// Front end fires this when the user copies post body text via
+  /// SelectionArea / context menu.
+  Future<bool> recordCopyText({required int postId, required int userId}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/copy-text'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
       return false;
     }
   }
@@ -1116,9 +1364,28 @@ class PostService {
 
   /// Get replies for a comment (paginated). Backend may support ?parent_id= or /comments/{id}/replies.
   Future<CommentListResult> getReplies(int postId, int parentCommentId, {int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlCommentsService.getComments(
+        postId: postId,
+        parentId: parentCommentId,
+        page: page,
+        perPage: perPage,
+      );
+      return CommentListResult(
+        success: result.success,
+        comments: result.comments,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: result.perPage,
+          total: result.total,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final url = '$_baseUrl/posts/$postId/comments?parent_id=$parentCommentId&page=$page&per_page=$perPage';
-      final response = await http.get(Uri.parse(url)).timeout(
+      final response = await httpGetWithRetry(Uri.parse(url)).timeout(
         const Duration(seconds: 8),
         onTimeout: () => throw Exception('Connection timed out'),
       );
@@ -1171,7 +1438,7 @@ class PostService {
       String url = '$_baseUrl/posts/hashtag/$hashtag?page=$page&per_page=$perPage';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1192,17 +1459,27 @@ class PostService {
     }
   }
 
-  /// Share a post
-  Future<PostResult> sharePost(int postId, int userId, {String? content, String privacy = 'public'}) async {
+  /// Share a post.
+  /// [shareUid] (optional) — when the user is re-sharing a shared post,
+  /// passing it credits the original sharer (§III row 28 share·sharer).
+  Future<PostResult> sharePost(
+    int postId,
+    int userId, {
+    String? content,
+    String privacy = 'public',
+    String? shareUid,
+  }) async {
     try {
+      final body = <String, dynamic>{
+        'user_id': userId,
+        'content': content,
+        'privacy': privacy,
+      };
+      if (shareUid != null && shareUid.isNotEmpty) body['via'] = shareUid;
       final response = await http.post(
         Uri.parse('$_baseUrl/posts/$postId/share'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'user_id': userId,
-          'content': content,
-          'privacy': privacy,
-        }),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
@@ -1221,12 +1498,23 @@ class PostService {
   }
 
   /// Save (bookmark) a post for the user. Story 25.
-  Future<SavePostResult> savePost(int postId, int userId) async {
+  /// [shareUid] credits the sharer (§III save·sharer) when arrived via share.
+  Future<SavePostResult> savePost(int postId, int userId, {String? shareUid}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.savePost(postId);
+      return SavePostResult(
+        success: result.success,
+        isSaved: result.isSaved,
+        savesCount: result.savesCount ?? 0,
+      );
+    }
     try {
+      final body = <String, dynamic>{'user_id': userId};
+      if (shareUid != null && shareUid.isNotEmpty) body['via'] = shareUid;
       final response = await http.post(
         Uri.parse('$_baseUrl/posts/$postId/save'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId}),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
@@ -1249,6 +1537,14 @@ class PostService {
 
   /// Remove a saved (bookmarked) post for the user. Story 25.
   Future<SavePostResult> unsavePost(int postId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.unsavePost(postId);
+      return SavePostResult(
+        success: result.success,
+        isSaved: result.isSaved,
+        savesCount: result.savesCount ?? 0,
+      );
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/posts/$postId/save'),
@@ -1280,9 +1576,23 @@ class PostService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSocialService.getSavedPosts(page: page, perPage: perPage);
+      return PostListResult(
+        success: result.success,
+        posts: result.posts,
+        meta: PaginationMeta(
+          currentPage: result.currentPage,
+          lastPage: result.lastPage,
+          perPage: perPage,
+          total: result.posts.length,
+        ),
+        message: result.message,
+      );
+    }
     try {
       final url = '$_baseUrl/posts/saved?user_id=$userId&page=$page&per_page=$perPage';
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1379,7 +1689,7 @@ class PostService {
   /// Get estimated earnings for a post (creator analytics).
   Future<PostEarningsResult> getPostEarnings(int postId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/posts/$postId/earnings'),
       );
 
@@ -1391,6 +1701,77 @@ class PostService {
       return PostEarningsResult.empty();
     } catch (e) {
       return PostEarningsResult.empty();
+    }
+  }
+
+  /// Phase 1.5 / L7 — algorithm transparency insights for a single post.
+  /// Backed by [PostInsightsController]. The endpoint is gated to the post
+  /// author so callers MUST pass [currentUserId]; if it doesn't match
+  /// `posts.user_id` the server returns 403 and we return null.
+  Future<PostInsightsResult?> getPostInsights(int postId, {required int currentUserId}) async {
+    try {
+      final response = await httpGetWithRetry(
+        Uri.parse('$_baseUrl/posts/$postId/insights?user_id=$currentUserId'),
+      );
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) return null;
+      return PostInsightsResult.fromJson(data['data'] as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Educational completion (G-F-005). Fires when viewer finishes all
+  // slides of a carousel post (instructional_completion·author).
+  Future<bool> recordInstructionalCompletion({required int postId, required int userId}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/instructional-completion'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Reference revisit (G-F-005, posts.md row 73). Fires when viewer
+  // revisits a post via search/saved/collection (not via feed).
+  Future<bool> recordReferenceRevisit({required int postId, required int userId}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/reference-revisit'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // AI provenance declaration (G-F-007). Honest disclosure earns trust signals;
+  // false declarations risk content_credentials_signed=false flag.
+  Future<bool> declareAiProvenance({
+    required int postId,
+    required bool declaredAiUsed,
+    String? aiModelUsed,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/posts/$postId/ai-provenance'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'declared_ai_used': declaredAiUsed,
+          if (aiModelUsed != null && aiModelUsed.isNotEmpty) 'ai_model_used': aiModelUsed,
+        }),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      _log('declareAiProvenance error: $e');
+      return false;
     }
   }
 }
@@ -1600,4 +1981,98 @@ class PostEarningsResult {
   );
 
   bool get isEmpty => estimatedEarnings == 0 && impressions == 0;
+}
+
+class PostInsightsResult {
+  final int reach;
+  final int reachChangePercent;
+  final int avgReach30d;
+  final double engagementScore;
+  final List<({String source, int count})> topDrivers;
+  final List<({int secondBucket, double retentionPct})> watchTimeDecay;
+  final double predictedEarnings;
+  final String currency;
+  final double communityMultiplier;
+  final double qualityMultiplier;
+  final double consistencyMultiplier;
+  final double tierMultiplier;
+
+  const PostInsightsResult({
+    required this.reach,
+    required this.reachChangePercent,
+    required this.avgReach30d,
+    required this.engagementScore,
+    required this.topDrivers,
+    required this.watchTimeDecay,
+    required this.predictedEarnings,
+    required this.currency,
+    required this.communityMultiplier,
+    required this.qualityMultiplier,
+    required this.consistencyMultiplier,
+    required this.tierMultiplier,
+  });
+
+  factory PostInsightsResult.fromJson(Map<String, dynamic> json) {
+    final mult = (json['multipliers'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return PostInsightsResult(
+      reach: (json['reach'] as num?)?.toInt() ?? 0,
+      reachChangePercent: (json['reach_change_percent'] as num?)?.toInt() ?? 0,
+      avgReach30d: (json['avg_reach_30d'] as num?)?.toInt() ?? 0,
+      engagementScore: (json['engagement_score'] as num?)?.toDouble() ?? 0,
+      topDrivers: ((json['top_drivers'] as List?) ?? const [])
+          .map<({String source, int count})>((e) {
+            final m = e as Map;
+            return (source: m['source']?.toString() ?? '', count: (m['count'] as num?)?.toInt() ?? 0);
+          })
+          .toList(),
+      watchTimeDecay: ((json['watch_time_decay'] as List?) ?? const [])
+          .map<({int secondBucket, double retentionPct})>((e) {
+            final m = e as Map;
+            return (
+              secondBucket: (m['second_bucket'] as num?)?.toInt() ?? 0,
+              retentionPct: (m['retention_pct'] as num?)?.toDouble() ?? 0,
+            );
+          })
+          .toList(),
+      predictedEarnings: (json['predicted_earnings'] as num?)?.toDouble() ?? 0,
+      currency: (json['currency'] ?? 'TSh').toString(),
+      communityMultiplier: (mult['community'] as num?)?.toDouble() ?? 1.0,
+      qualityMultiplier: (mult['quality'] as num?)?.toDouble() ?? 1.0,
+      consistencyMultiplier: (mult['consistency'] as num?)?.toDouble() ?? 1.0,
+      tierMultiplier: (mult['tier'] as num?)?.toDouble() ?? 1.0,
+    );
+  }
+
+  /// Top driver formatted as "Feed · 124 views" (English) or "Mlisho · 124 mionekano" (Swahili).
+  String? topDriverLabel({bool isSwahili = false}) {
+    if (topDrivers.isEmpty) return null;
+    final top = topDrivers.first;
+    final translated = switch (top.source) {
+      'feed' => isSwahili ? 'Mlisho' : 'Feed',
+      'profile' => isSwahili ? 'Wasifu' : 'Profile',
+      'hashtag' => isSwahili ? 'Lebo' : 'Hashtag',
+      'group' => isSwahili ? 'Kikundi' : 'Group',
+      'discovery' => isSwahili ? 'Gundua' : 'Discovery',
+      'search' => isSwahili ? 'Tafuta' : 'Search',
+      _ => top.source,
+    };
+    final unit = isSwahili ? 'mionekano' : 'views';
+    return '$translated · ${top.count} $unit';
+  }
+
+  /// Decay description for the card — e.g. "Viewers drop at 30%".
+  String? watchTimeDecayLabel({bool isSwahili = false}) {
+    if (watchTimeDecay.isEmpty) return null;
+    // Find the first bucket where retention drops below 50%.
+    for (final b in watchTimeDecay) {
+      if (b.retentionPct < 50.0 && b.secondBucket > 0) {
+        return isSwahili
+            ? 'Watazamaji wanaondoka kwenye ${b.secondBucket}%'
+            : 'Viewers drop off at ${b.secondBucket}%';
+      }
+    }
+    return isSwahili
+        ? 'Watazamaji walikamilisha ${watchTimeDecay.last.retentionPct.toStringAsFixed(0)}%'
+        : '${watchTimeDecay.last.retentionPct.toStringAsFixed(0)}% watched to the end';
+  }
 }

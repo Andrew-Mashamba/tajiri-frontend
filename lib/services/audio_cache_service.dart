@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
-
+import 'http_retry.dart';
 /// Professional Audio Caching Service
 /// Implements Spotify-style audio prefetching and caching:
 /// - Multi-tier caching (memory + disk)
@@ -244,7 +243,7 @@ class AudioCacheService {
     _activeDownloads[cacheKey] = task;
 
     try {
-      final response = await http.get(Uri.parse(url)).timeout(
+      final response = await httpGetWithRetry(Uri.parse(url)).timeout(
         const Duration(minutes: 5),
         onTimeout: () => throw TimeoutException('Download timeout'),
       );

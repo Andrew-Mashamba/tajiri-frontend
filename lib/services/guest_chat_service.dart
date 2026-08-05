@@ -1,6 +1,7 @@
 // Guest Chat Service — invite links for conversations (MESSAGES.md: guest chats).
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import 'local_storage_service.dart';
 
@@ -96,7 +97,7 @@ class GuestChatService {
       final token = await _getToken();
       if (token == null) return [];
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '${ApiConfig.baseUrl}/conversations/$conversationId/invite-links'),
         headers: ApiConfig.authHeaders(token),

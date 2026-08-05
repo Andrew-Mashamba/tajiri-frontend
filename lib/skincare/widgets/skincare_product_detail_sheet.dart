@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../doctor/models/doctor_models.dart';
 import '../../doctor/pages/find_doctor_page.dart';
-import '../../screens/shop/shop_screen.dart';
+import '../../shop/buyer/screens/shop_screen.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
 import '../models/skincare_models.dart';

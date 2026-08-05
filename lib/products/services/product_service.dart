@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../config/api_config.dart';
 import '../../services/shop_service.dart';
@@ -26,7 +27,7 @@ class ProductService {
         }
         return [];
       } else {
-        final res = await http.get(
+        final res = await httpGetWithRetry(
           Uri.parse('$_baseUrl/business/$businessId/catalog/products'),
           headers: ApiConfig.authHeaders(token),
         );

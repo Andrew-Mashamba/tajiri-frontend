@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec F7 #61 — Pay-per-question legal Q&A.
@@ -114,7 +115,7 @@ class LegalQnaService {
   static Future<List<LegalQnaThread>> myThreads({required int userId}) async {
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/legal-qna/mine?user_id=$userId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['threads'] is List) {
@@ -129,7 +130,7 @@ class LegalQnaService {
   static Future<List<LegalQnaThread>> partnerInbox({required int userId}) async {
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/legal-qna/inbox?user_id=$userId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['threads'] is List) {

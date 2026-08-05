@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'http_retry.dart';
 import '../config/api_config.dart';
 
 class _Api {
@@ -16,7 +17,7 @@ class _Api {
       {Map<String, String>? query}) async {
     var uri = _u(path);
     if (query != null && query.isNotEmpty) uri = uri.replace(queryParameters: query);
-    final res = await http.get(uri);
+    final res = await httpGetWithRetry(uri);
     if (res.statusCode != 200) return null;
     final body = jsonDecode(res.body);
     return body is Map<String, dynamic> ? body : null;

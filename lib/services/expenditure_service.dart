@@ -2,8 +2,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../budget/models/budget_models.dart';
+import 'graphql/graphql_budget_service.dart';
 
 /// Central service for all expenditures (money out) across the platform.
 /// Static-method class — does not need instantiation.
@@ -32,6 +34,19 @@ class ExpenditureService {
     DateTime? date,
     bool isRecurring = false,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.recordExpenditure(
+        amount: amount,
+        category: category,
+        description: description,
+        sourceModule: sourceModule,
+        referenceId: referenceId,
+        envelopeTag: envelopeTag,
+        metadata: metadata,
+        date: date,
+        isRecurring: isRecurring,
+      );
+    }
     try {
       final body = <String, dynamic>{
         'amount': amount,
@@ -78,6 +93,16 @@ class ExpenditureService {
     int page = 1,
     int perPage = 50,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getExpenditures(
+        category: category,
+        sourceModule: sourceModule,
+        from: from,
+        to: to,
+        page: page,
+        perPage: perPage,
+      );
+    }
     try {
       final params = <String, String>{
         'page': page.toString(),
@@ -91,7 +116,7 @@ class ExpenditureService {
       final uri = Uri.parse('${ApiConfig.baseUrl}/expenditures')
           .replace(queryParameters: params);
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -123,11 +148,14 @@ class ExpenditureService {
     required String token,
     required String period,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getExpenditureSummary(period: period);
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/expenditures/summary')
           .replace(queryParameters: {'period': period});
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -150,6 +178,9 @@ class ExpenditureService {
     required int year,
     required int month,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getExpenditureByCategory(year: year, month: month);
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/expenditures/by-category')
           .replace(queryParameters: {
@@ -157,7 +188,7 @@ class ExpenditureService {
         'month': month.toString(),
       });
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -180,8 +211,11 @@ class ExpenditureService {
   static Future<List<RecurringExpense>> getRecurringExpenses({
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getRecurringExpenses();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/expenditures/recurring'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -203,6 +237,9 @@ class ExpenditureService {
   ///
   /// Called from: RecurringExpensesPage._confirmExpense()
   static Future<bool> confirmRecurringExpense(String token, int expenseId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.confirmRecurringExpense(expenseId);
+    }
     try {
       final response = await http.put(
         Uri.parse('${ApiConfig.baseUrl}/expenditures/recurring/$expenseId/confirm'),
@@ -220,6 +257,9 @@ class ExpenditureService {
   ///
   /// Called from: RecurringExpensesPage._dismissExpense()
   static Future<bool> dismissRecurringExpense(String token, int expenseId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.dismissRecurringExpense(expenseId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/expenditures/recurring/$expenseId/dismiss'),
@@ -239,8 +279,11 @@ class ExpenditureService {
   static Future<List<UpcomingExpense>> getUpcomingExpenses({
     required String token,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getUpcomingExpenses();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/expenditures/upcoming'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -266,6 +309,9 @@ class ExpenditureService {
     int expenditureId,
     String newCategory,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.recategorizeExpenditure(expenditureId, newCategory);
+    }
     try {
       final response = await http.put(
         Uri.parse('${ApiConfig.baseUrl}/expenditures/$expenditureId/recategorize'),
@@ -296,6 +342,13 @@ class ExpenditureService {
     required int year,
     required int month,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getSpendingPace(
+        category: category,
+        year: year,
+        month: month,
+      );
+    }
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/expenditures/spending-pace')
           .replace(queryParameters: {
@@ -304,7 +357,7 @@ class ExpenditureService {
         'month': month.toString(),
       });
 
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {

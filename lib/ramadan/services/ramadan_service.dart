@@ -1,6 +1,7 @@
 // lib/ramadan/services/ramadan_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/ramadan_models.dart';
 
@@ -14,7 +15,7 @@ class RamadanService {
     required double longitude,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/ramadan/overview'
             '?latitude=$latitude&longitude=$longitude'),
         headers: ApiConfig.authHeaders(token),
@@ -41,7 +42,7 @@ class RamadanService {
     required double longitude,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/ramadan/calendar'
             '?latitude=$latitude&longitude=$longitude'),
         headers: ApiConfig.authHeaders(token),
@@ -95,7 +96,7 @@ class RamadanService {
     required String token,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/ramadan/goals'),
         headers: ApiConfig.authHeaders(token),
       );

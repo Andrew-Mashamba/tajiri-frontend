@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tajiri/models/flywheel_models.dart';
-import 'package:tajiri/services/creator_service.dart';
+import 'package:tajiri/creator/models/flywheel_models.dart';
+import 'package:tajiri/creator/services/creator_service.dart';
 
 void main() {
   group('CreatorService', () {

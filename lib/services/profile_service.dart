@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/profile_models.dart';
 import '../config/api_config.dart';
 import 'perf_logger.dart';
@@ -36,6 +37,33 @@ class ProfileService {
     _cache.clear();
   }
 
+  /// UN-002 / posts.md row 10 — profile_visit_from_post·author.
+  /// Fire when a user opens a creator's profile from a post / share.
+  /// Backend also derives row 31 (profile_visit_from_share·sharer) when
+  /// share_uid maps to an active sharer attribution.
+  Future<bool> recordProfileVisit({
+    required int targetUserId,
+    required int viewerUserId,
+    int? originPostId,
+    int? originStreamId,
+    String? shareUid,
+  }) async {
+    try {
+      final body = <String, dynamic>{'user_id': viewerUserId};
+      if (originPostId != null) body['origin_post_id'] = originPostId;
+      if (originStreamId != null) body['origin_stream_id'] = originStreamId;
+      if (shareUid != null && shareUid.isNotEmpty) body['share_uid'] = shareUid;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/users/$targetUserId/profile-visit'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Get full profile for a user
   Future<ProfileResult> getProfile({
     required int userId,
@@ -65,7 +93,7 @@ class ProfileService {
       }
 
       print('[ProfileService] Fetching profile from: $url');
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       print('[ProfileService] Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
@@ -200,7 +228,7 @@ class ProfileService {
         if (excludeUserId != null) 'exclude_user_id': '$excludeUserId',
       };
       final uri = Uri.parse('$_baseUrl/users/search').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
       if (data['success'] != true) return [];

@@ -7,6 +7,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
@@ -27,7 +28,7 @@ class PharmacyService {
       if (category != null) params['category'] = category;
 
       final uri = Uri.parse('$_baseUrl/pharmacy/medicines').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -44,7 +45,7 @@ class PharmacyService {
 
   Future<PharmacyListResult<Medicine>> getFeaturedMedicines() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pharmacy/medicines/featured'),
       );
       if (response.statusCode == 200) {
@@ -112,7 +113,7 @@ class PharmacyService {
 
   Future<PharmacyListResult<PharmacyOrder>> getMyOrders(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pharmacy/orders?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -150,7 +151,7 @@ class PharmacyService {
 
   Future<PharmacyListResult<PharmacyOrder>> getDoctorPrescribedOrders(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pharmacy/orders/doctor-prescribed?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -217,7 +218,7 @@ class PharmacyService {
 
   Future<PharmacyResult<int>> getPharmacistUserId() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/pharmacy/pharmacist'),
       );
       if (response.statusCode == 200) {

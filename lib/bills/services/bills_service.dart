@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
@@ -19,7 +20,7 @@ class BillsService {
       if (type != null) params['type'] = type;
       final uri = Uri.parse('$_baseUrl/bills/payments')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -242,7 +243,7 @@ class BillsService {
 
   Future<BillsListResult<SavedAccount>> getSavedAccounts(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/bills/saved-accounts?user_id=$userId'),
       );
       if (response.statusCode == 200) {

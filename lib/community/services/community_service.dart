@@ -1,6 +1,7 @@
 // lib/community/services/community_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/community_models.dart';
 
@@ -27,7 +28,7 @@ class CommunityService {
 
       final uri = Uri.parse('$_baseUrl/community/posts')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -119,7 +120,7 @@ class CommunityService {
 
       final uri = Uri.parse('$_baseUrl/community/services')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

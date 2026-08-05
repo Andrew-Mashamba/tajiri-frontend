@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec F7 #69 — Engagement dispute mediation thread.
@@ -60,7 +61,7 @@ class DisputeService {
   static Future<DisputeThread> thread(int engagementId) async {
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/engagements/$engagementId/dispute/thread')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const DisputeThread(messages: []);
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic>) {

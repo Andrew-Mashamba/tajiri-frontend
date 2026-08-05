@@ -2,7 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:intl/intl.dart';
 import 'DataStore.dart';
 import 'appColor.dart';
@@ -34,7 +34,7 @@ class _AccountState extends State<lipaAda> {
     //var thenumber = "12345";
     print("AAAAAA NAMBA$thenumber");
     String link = "${HttpService.baseUrl}ada-info";
-    var res = await http.get(Uri.parse(link), headers: {"Accept": "application/json"});
+    var res = await httpGetWithRetry(Uri.parse(link), headers: {"Accept": "application/json"});
 
     //print("AAAAAA "+res.body);
 

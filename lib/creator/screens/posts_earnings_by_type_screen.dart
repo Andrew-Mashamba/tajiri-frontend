@@ -31,6 +31,7 @@ import '../../widgets/tajiri_app_bar.dart';
 import '../services/creator_earnings_service.dart';
 import 'my_posts_earnings_list_screen.dart';
 import 'photo_earnings_screen.dart';
+import 'post_type_earnings_screens.dart';
 
 const Color _kPrimary = Color(0xFF1A1A1A);
 const Color _kSecondary = Color(0xFF666666);
@@ -180,16 +181,39 @@ class _PostsEarningsByTypeScreenState
 
   void _openType(String type) {
     HapticFeedback.selectionClick();
-    // Photo has its own dedicated rate-card screen showing the
-    // per-event payout schedule. Other types currently route to
-    // the per-post list filtered by type. As each type gets its
-    // own rate card defined, route it to its dedicated screen here.
+    // Each post type has a dedicated strategy-renderer screen that
+    // surfaces its applicable money-in events (taxonomy-filtered per
+    // post type). Falls through to the per-post list for any future
+    // type not yet wired here.
     Widget destination;
     switch (type) {
       case 'photo':
         destination = PhotoEarningsScreen(creatorId: widget.creatorId);
         break;
+      case 'text':
+        destination = TextEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'image_text':
+        destination = ImageTextEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'audio':
+        destination = AudioEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'audio_text':
+        destination = AudioTextEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'video':
+        destination = VideoEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'short_video':
+        destination = ShortVideoEarningsScreen(creatorId: widget.creatorId);
+        break;
+      case 'poll':
+        destination = PollEarningsScreen(creatorId: widget.creatorId);
+        break;
       default:
+        // 'shared' or any future type — fall through to the list view
+        // since shared posts have no direct earnings of their own.
         destination = MyPostsEarningsListScreen(
           creatorId: widget.creatorId,
           postTypeFilter: type,

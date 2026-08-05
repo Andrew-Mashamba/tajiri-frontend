@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../config/api_config.dart';
@@ -100,7 +101,7 @@ class ServiceRequestPositionStream {
     try {
       final url = ApiConfig.sanitizeUrl(
           '${ApiConfig.baseUrl}/api/service-requests/$serviceRequestId/partner-position')!;
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       if (res.statusCode != 200) return;
       final body = jsonDecode(res.body);
       if (body is! Map<String, dynamic>) return;

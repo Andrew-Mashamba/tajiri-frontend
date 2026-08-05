@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/customer_vehicle.dart';
 
@@ -43,7 +44,7 @@ class CustomerVehicleService {
         .replace(queryParameters: {'user_id': '$userId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {
@@ -172,7 +173,7 @@ class CustomerVehicleService {
     final uri = Uri.parse('$_baseUrl/customer-vehicles/$vehicleId/service-history')
         .replace(queryParameters: {'user_id': '$userId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final r = jsonDecode(res.body);
       if (res.statusCode == 200 && r['success'] == true) {
         final data = (r['data'] as Map).cast<String, dynamic>();

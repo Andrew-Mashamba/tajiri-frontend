@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/payment_models.dart';
 
@@ -14,7 +15,7 @@ class PaymentService {
     final url = Uri.parse('$_baseUrl/fund-pool/current');
     if (kDebugMode) debugPrint('[PaymentService] getCurrentPool → $url');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -40,7 +41,7 @@ class PaymentService {
     final url = Uri.parse('$_baseUrl/creators/$creatorId/payouts');
     if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory → $url');
     try {
-      final response = await http.get(url, headers: ApiConfig.authHeaders(token));
+      final response = await httpGetWithRetry(url, headers: ApiConfig.authHeaders(token));
       if (kDebugMode) debugPrint('[PaymentService] getPayoutHistory ← ${response.statusCode}');
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);

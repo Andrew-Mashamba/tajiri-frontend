@@ -9,8 +9,7 @@
 
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:http/http.dart' as http;
-
+import 'http_retry.dart';
 /// Quality presets for adaptive streaming
 class StreamQuality {
   final String name;
@@ -241,7 +240,7 @@ class AdaptiveBitrateService {
 
       // Download a small file from your backend
       // You can create a static file like: /public/speedtest-100kb.bin
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$backendUrl/speedtest-100kb.bin'),
         headers: {'Cache-Control': 'no-cache'},
       ).timeout(const Duration(seconds: 5));
@@ -277,7 +276,7 @@ class AdaptiveBitrateService {
 
       // Use a public, fast CDN with small test file
       // jsdelivr CDN is free and reliable
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js'),
         headers: {'Cache-Control': 'no-cache'},
       ).timeout(const Duration(seconds: 5));

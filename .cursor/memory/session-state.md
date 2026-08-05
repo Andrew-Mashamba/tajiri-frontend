@@ -20,7 +20,7 @@ Setting up TAJIRI platform with Cursor agent skills and memory management
 - [x] Built standby screen with smooth countdown animations
 - [x] Built backstage screen with system checks
 - [x] Documented complete Laravel backend requirements
-- [x] Found correct backend base URL (zima-uat.site:8003)
+- [x] Identified and documented backend base URL
 - [x] Replaced "Trending" tab with "Live" tab in feed screen
 - [x] Created live streams grid widget with live/upcoming views
 - [x] Verified stream viewer screen exists with chat & gifts
@@ -108,6 +108,7 @@ Setting up TAJIRI platform with Cursor agent skills and memory management
 - [x] Updated both immediate and scheduled stream flows to use LiveBroadcastScreenAdvanced
 
 ## Key Decisions Made
+- **Discovery order (2026-05-05)**: For **any** substantial work, answer from **in-repo frontend + backend (SSH)** first; optional **external research** if still unclear; follow **existing patterns** — see `.cursor/memory/project/patterns.md` (“Project-wide: discover in-repo first”).
 - **Skills architecture**: Created tajiri-platform skill incorporating best practices from major social platforms without naming them
 - **Memory storage**: File-based in `.cursor/memory/` with project knowledge
 - **Platform approach**: Build TAJIRI using proven social media patterns

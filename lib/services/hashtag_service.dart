@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/post_models.dart';
 
@@ -12,7 +12,7 @@ class HashtagService {
   Future<TrendingHashtagsResult> getTrendingHashtags({int limit = 20}) async {
     try {
       final url = '$_baseUrl/hashtags/trending?limit=$limit';
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -46,7 +46,7 @@ class HashtagService {
     try {
       final encoded = Uri.encodeComponent(query.trim());
       final url = '$_baseUrl/hashtags/search?q=$encoded&limit=$limit';
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

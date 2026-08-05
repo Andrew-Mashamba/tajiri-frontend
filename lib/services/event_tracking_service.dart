@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'graphql/graphql_tracking_service.dart';
 import '../creator/models/flywheel_models.dart';
 import 'local_storage_service.dart';
 
@@ -220,6 +221,19 @@ class EventTrackingService with WidgetsBindingObserver {
     if (mappedEvents.isEmpty) {
       if (kDebugMode) debugPrint('[EventTracking] All ${events.length} events filtered (unsupported types)');
       return _PostResult.success;
+    }
+
+    if (ApiConfig.useGraphqlBackend) {
+      try {
+        final ok = await GraphqlTrackingService.postEvents(mappedEvents);
+        if (kDebugMode) {
+          debugPrint('[EventTracking] GraphQL flushed ${mappedEvents.length} events — $ok');
+        }
+        return ok ? _PostResult.success : _PostResult.serverError;
+      } catch (e) {
+        if (kDebugMode) debugPrint('[EventTracking] GraphQL POST failed: $e');
+        return _PostResult.networkError;
+      }
     }
 
     try {

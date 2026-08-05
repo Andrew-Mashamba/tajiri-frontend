@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/property_listing.dart';
 
@@ -166,7 +167,7 @@ class PropertyListingService {
     final uri = Uri.parse('$_baseUrl/property-listings').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -194,7 +195,7 @@ class PropertyListingService {
         .replace(queryParameters: params.isEmpty ? null : params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       return _decodeOne(res);
     } catch (e, s) {
       _log('get error: $e\n$s');

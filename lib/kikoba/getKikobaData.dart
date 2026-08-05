@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:logger/logger.dart';
 import 'tabshome.dart';
 import 'HttpService.dart';
@@ -176,7 +177,7 @@ class SplashState extends State<getKikobaData>
 
       _logger.i('🌐 Making API request to: $url');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {"Accept": "application/json"},
       ).timeout(const Duration(seconds: 30));

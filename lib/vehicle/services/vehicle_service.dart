@@ -1,6 +1,7 @@
 // lib/vehicle/services/vehicle_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/vehicle_models.dart';
 
@@ -11,7 +12,7 @@ class VehicleService {
 
   Future<VehicleListResult<Vehicle>> getMyVehicles(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/vehicles?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -31,7 +32,7 @@ class VehicleService {
 
   Future<VehicleResult<Vehicle>> getVehicleDetail(int vehicleId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/vehicles/$vehicleId'),
       );
       if (response.statusCode == 200) {
@@ -88,7 +89,7 @@ class VehicleService {
 
   Future<VehicleListResult<FuelLog>> getFuelLogs(int vehicleId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/vehicles/$vehicleId/fuel-logs'),
       );
       if (response.statusCode == 200) {
@@ -141,7 +142,7 @@ class VehicleService {
   Future<VehicleListResult<VehicleServiceRecord>> getServiceRecords(
       int vehicleId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/vehicles/$vehicleId/services'),
       );
       if (response.statusCode == 200) {

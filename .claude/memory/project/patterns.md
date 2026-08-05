@@ -173,3 +173,27 @@
 **Key lesson**: Always compress images before upload. Show upload progress. Support cancellation. Generate thumbnails for better UX.
 **Expected files**: `lib/services/media_service.dart`
 **Tags**: #media #upload #pattern
+
+---
+
+## Backend SSH Access (safe) #procedural
+**Date**: 2026-05-05
+**Context**: Running Laravel commands on the backend server.
+
+**What happened**: SSH to the Tajiri Laravel host using credentials in **local** `.env` (`TAJIRI_BACKEND_SSH_*`, gitignored). Laravel root on the server: `/var/www/tajiri.zimasystems.com`. Verified with interactive/key-only attempt, then `sshpass` + `SSHPASS` for non-interactive checks.
+**Key lesson**: Do **not** store plaintext SSH passwords in the repo. Use `.env` locally or SSH keys; full steps are in `docs/BACKEND_SSH_ACCESS.md`.
+**How to connect**: See **canonical doc** `docs/BACKEND_SSH_ACCESS.md` (interactive SSH, `sshpass -e` pattern, remote Artisan examples).
+**Common ops** (after connecting): `cd /var/www/tajiri.zimasystems.com` → `php artisan route:list`, `php artisan tinker`, `php artisan cache:clear && php artisan config:clear`, `php artisan queue:work`.
+**DB**: `sudo -u postgres psql -d tajiri`
+**Notes**: `php artisan migrate` may be broken due to legacy migration conflicts; use the “drop-in PHP script + scp + ssh” pattern when needed.
+**Files**: `docs/BACKEND_SSH_ACCESS.md`, `docs/ENGINEERING_PLAYBOOK.md`
+**Tags**: #backend #ssh #laravel #procedural
+
+---
+
+## Project-wide: discover in-repo first #operating
+**Date**: 2026-05-05 (updated: applies to **whole project**, not shop only)
+**Context**: Any substantial feature, refactor, or roadmap (shop, feed, messages, streams, wallet, etc.).
+
+**Key lesson**: Treat the **Flutter codebase + Laravel backend** as the primary source of truth. Search Dart (`lib/services/`, feature folders under `lib/`, `lib/models/`, `main.dart` routing) and the backend over SSH when needed (`routes/api.php`, controllers, validation, migrations) before asking the user open questions. If something is still underspecified after that, **brief** external research on how comparable social / marketplace apps solve the same problem is acceptable — then **adapt to existing TAJIRI patterns** (`setState`, `ValueNotifier` singletons where used, Hive/`LocalStorageService`, service classes, `ApiConfig`), and avoid introducing new state-management frameworks unless the user explicitly requests them (`CLAUDE.md` / engineering playbook).
+**Tags**: #research #architecture #operating #procedural #discovery

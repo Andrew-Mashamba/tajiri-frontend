@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
@@ -85,7 +86,7 @@ class _KikobaProfilePageState extends State<KikobaProfilePage> {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {"Accept": "application/json"},
       ).timeout(const Duration(seconds: 10));

@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../reminders/models/reminder_models.dart';
 import '../../reminders/reminders_source_exception.dart';
@@ -35,7 +36,7 @@ class TeamService {
       final url = '$_baseUrl/business/$businessId/employees';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -120,7 +121,7 @@ class TeamService {
       final url = '$_baseUrl/users/search?q=$encoded&limit=20';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -143,7 +144,7 @@ class TeamService {
       final url = '$_baseUrl/business/employees/$employeeId';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return TeamResult(
@@ -164,7 +165,7 @@ class TeamService {
       final url = '$_baseUrl/business/employees/$employeeId/hr-actions';
       _log('GET $url');
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = (data['data'] as List? ?? [])
@@ -226,7 +227,7 @@ class TeamService {
     try {
       final url = '$_baseUrl/business/reminders/employees?user_id=$userId';
       final res =
-          await http.get(Uri.parse(url), headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = data['data'] is List ? data['data'] as List : [];

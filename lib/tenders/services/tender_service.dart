@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../reminders/models/reminder_models.dart' show ReminderItem;
 import '../../services/local_storage_service.dart';
 import '../models/tender_models.dart';
@@ -86,7 +87,7 @@ class TenderService {
       final url = Uri.parse('$_tendersBaseUrl/stats');
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -122,7 +123,7 @@ class TenderService {
       final url = Uri.parse('$_tendersBaseUrl/tenders').replace(queryParameters: params.isNotEmpty ? params : null);
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -143,7 +144,7 @@ class TenderService {
       final url = Uri.parse('$_tendersBaseUrl/tenders/$tenderId');
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -175,7 +176,7 @@ class TenderService {
       );
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -196,7 +197,7 @@ class TenderService {
       final url = Uri.parse('$_tendersBaseUrl/institutions/$slug');
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -262,7 +263,7 @@ class TenderService {
       );
       _log('GET $url');
 
-      final response = await http.get(url, headers: _headers(token));
+      final response = await httpGetWithRetry(url, headers: _headers(token));
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {

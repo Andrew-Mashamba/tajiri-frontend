@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 class HealthProfile {
@@ -65,7 +66,7 @@ class HealthProfile {
 class HealthProfileService {
   static Future<HealthProfile> show(int userId) async {
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/customer-health-profiles/$userId'),
       );
       if (res.statusCode == 200) {

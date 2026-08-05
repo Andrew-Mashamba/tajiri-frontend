@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:heroicons/heroicons.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../models/post_models.dart';
+import 'post_tagged_products_strip.dart';
 import 'user_avatar.dart';
 import 'audio_player_widget.dart';
 import 'cached_media_image.dart';
@@ -11,10 +13,12 @@ import 'poll_vote_widget.dart';
 import '../l10n/app_strings_scope.dart';
 import '../services/event_tracking_service.dart';
 import '../services/engagement_level_service.dart';
+import '../services/post_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'thread_badge.dart';
 import 'sponsored_badge.dart';
 import 'adaptive_media_zone.dart';
+import '../screens/wallet/send_tip_screen.dart';
 
 // DESIGN.md tokens for PostCard (monochrome, §1–3, §6–7)
 const Color _kSurface = Color(0xFFFFFFFF);
@@ -213,7 +217,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             );
           }).catchError((_) {});
         } else {
-          // Quick scroll past — emit scroll_past
+          // Quick scroll past — emit scroll_past for analytics
           EventTrackingService.getInstance().then((tracker) {
             tracker.trackEvent(
               eventType: 'scroll_past',
@@ -222,6 +226,16 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               durationMs: dwellMs,
             );
           }).catchError((_) {});
+          // Integrity §II — rapid_scroll_past (low). Fires on dwell <500ms
+          // when post leaves viewport. Skips if the user is the post owner.
+          if (dwellMs < 500 && widget.post.userId != widget.currentUserId) {
+            unawaited(PostService().postFeedback(
+              postId: widget.post.id,
+              userId: widget.currentUserId,
+              signalType: 'rapid_scroll_past',
+              metadata: {'dwell_ms': dwellMs},
+            ));
+          }
         }
         _visibleSince = null;
       }
@@ -245,6 +259,18 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     });
   }
 
+  // G-F-005 educational completion guard — fire once per session per post.
+  bool _instructionalFired = false;
+
+  void _maybeFireInstructionalCompletion(int slideCount) {
+    if (_instructionalFired || slideCount < 2) return;
+    _instructionalFired = true;
+    unawaited(PostService().recordInstructionalCompletion(
+      postId: widget.post.id,
+      userId: widget.currentUserId,
+    ));
+  }
+
   void _selectReaction(ReactionType reaction) {
     _markActed();
     widget.onReaction?.call(reaction);
@@ -252,6 +278,31 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
       _showReactionPicker = false;
     });
     reactionController.reverse();
+  }
+
+  // Thumbs-down (G-Q-008). Fires a one-shot negative_reaction feedback
+  // signal — backend NegativeEventService applies severity 'low' which
+  // clamps future earnings on this post via QualityFilter.
+  void _onThumbsDown() {
+    _markActed();
+    setState(() => _showReactionPicker = false);
+    reactionController.reverse();
+    unawaited(PostService().postFeedback(
+      postId: widget.post.id,
+      userId: widget.currentUserId,
+      signalType: 'negative_reaction',
+    ));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          AppStringsScope.of(context)?.isSwahili == true
+              ? 'Asante kwa maoni'
+              : 'Thanks for the feedback',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   Post get post => widget.post;
@@ -293,6 +344,11 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           _buildActionRow(context),
           _buildLikesCount(context),
           _buildCaption(context),
+          // UN-012: tagged-product chips (lazily fetched).
+          PostTaggedProductsStrip(
+            postId: post.id,
+            currentUserId: widget.currentUserId,
+          ),
           _buildViewComments(context),
           _buildCommentPreview(context),
         ],
@@ -396,6 +452,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           dominantColor: _postDominantColor(),
           onTap: widget.onTap,
           onImageTap: (images, tapped) => widget.onTap?.call(),
+          onLastSlideReached: () => _maybeFireInstructionalCompletion(visualMedia.length),
         );
       } else {
         // Only documents/audio — fall through to document/audio handling
@@ -561,7 +618,11 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   /// Build rich text content with clickable hashtags and @mentions
   Widget _buildRichContent(BuildContext context, String content) {
     final spans = <InlineSpan>[];
-    final regex = RegExp(r'(#[\w\u0621-\u064A]+)|(@[\w\u0621-\u064A]+)');
+    // URLs (https?://...) + hashtags + @mentions, in priority order so URL
+    // is detected as a single token and not chopped up by # / @ inside it.
+    final regex = RegExp(
+      r'(https?:\/\/[^\s]+)|(#[\w\u0621-\u064A]+)|(@[\w\u0621-\u064A]+)',
+    );
     int lastMatchEnd = 0;
 
     for (final match in regex.allMatches(content)) {
@@ -573,19 +634,30 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
         ));
       }
 
-      // Add the hashtag or mention (DESIGN.md: monochrome, tappable)
       final matchText = match.group(0)!;
-      final isHashtag = matchText.startsWith('#');
+      final isUrl = matchText.startsWith('http');
+      final isHashtag = !isUrl && matchText.startsWith('#');
 
       spans.add(TextSpan(
         text: matchText,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           color: _kPrimaryText,
-          fontWeight: FontWeight.w500,
+          fontWeight: isUrl ? FontWeight.normal : FontWeight.w500,
+          decoration: isUrl ? TextDecoration.underline : TextDecoration.none,
         ),
         recognizer: _createTapRecognizer(() {
-            if (isHashtag) {
+            if (isUrl) {
+              // G-Q-002: fire external_link_click before launching URL.
+              unawaited(PostService().recordExternalLinkClick(
+                postId: widget.post.id,
+                userId: widget.currentUserId,
+              ));
+              final uri = Uri.tryParse(matchText);
+              if (uri != null) {
+                unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+              }
+            } else if (isHashtag) {
               widget.onHashtagTap?.call(matchText.substring(1));
             } else {
               widget.onMentionTap?.call(matchText.substring(1));
@@ -830,6 +902,13 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 final url = Uri.parse(media.fileUrl);
                 if (await canLaunchUrl(url)) {
                   await launchUrl(url, mode: LaunchMode.externalApplication);
+                  // Integrity layer — strategy posts.md row 13.
+                  // Fire-and-forget so the launch isn't blocked.
+                  unawaited(PostService().recordExternalLinkClick(
+                    postId: post.id,
+                    userId: widget.currentUserId,
+                    url: media.fileUrl,
+                  ));
                 }
               } catch (_) {
                 // Malformed URL or launch failure — silently ignore
@@ -1013,34 +1092,65 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: ReactionType.values.map((reaction) {
-                  final isSelected = post.userReaction == reaction;
-                  return GestureDetector(
-                    onTap: () => _selectReaction(reaction),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isSelected ? _kPrimaryText.withValues(alpha: 0.08) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
+                children: [
+                  ...ReactionType.values.map((reaction) {
+                    final isSelected = post.userReaction == reaction;
+                    return GestureDetector(
+                      onTap: () => _selectReaction(reaction),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSelected ? _kPrimaryText.withValues(alpha: 0.08) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(reaction.emoji, style: TextStyle(fontSize: isSelected ? 28 : 24)),
+                            Text(
+                              AppStringsScope.of(context)?.reactionLabel(reaction.value) ?? reaction.label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSelected ? _kPrimaryText : _kSecondaryText,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    );
+                  }),
+                  // Thumbs-down — strategy framework §II signal #1
+                  // (negative_reaction). G-Q-008. Doesn't toggle a reaction
+                  // state; fires a one-shot feedback signal so QualityFilter
+                  // can clamp future earnings on this post.
+                  GestureDetector(
+                    onTap: _onThumbsDown,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(reaction.emoji, style: TextStyle(fontSize: isSelected ? 28 : 24)),
+                          const Text('👎', style: TextStyle(fontSize: 24)),
                           Text(
-                            AppStringsScope.of(context)?.reactionLabel(reaction.value) ?? reaction.label,
-                            style: TextStyle(
+                            AppStringsScope.of(context)?.isSwahili == true
+                                ? 'Si vyema'
+                                : 'Dislike',
+                            style: const TextStyle(
                               fontSize: 10,
-                              color: isSelected ? _kPrimaryText : _kSecondaryText,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: _kSecondaryText,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1107,6 +1217,36 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                 padding: const EdgeInsets.all(8),
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               ),
+              // Tip — Lever 1. Hidden on user's own posts (no self-tipping).
+              if (widget.post.userId != widget.currentUserId)
+                IconButton(
+                  onPressed: () {
+                    _markActed();
+                    HapticFeedback.selectionClick();
+                    final u = widget.post.user;
+                    final displayName = u == null
+                        ? null
+                        : '${u.firstName} ${u.lastName}'.trim();
+                    Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute<bool>(
+                        builder: (_) => SendTipScreen(
+                          creatorId: widget.post.userId,
+                          currentUserId: widget.currentUserId,
+                          creatorDisplayName: displayName?.isEmpty == true ? null : displayName,
+                          postId: widget.post.id,
+                        ),
+                      ),
+                    );
+                    EventTrackingService.getInstance().then((tracker) {
+                      tracker.trackEvent(eventType: 'tip_intent', postId: widget.post.id, creatorId: widget.post.userId);
+                    }).catchError((_) {});
+                  },
+                  icon: const Icon(Icons.favorite_rounded, size: 26, color: _kPrimaryText),
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  tooltip: AppStringsScope.of(context)?.sendTip ?? 'Send tip',
+                ),
               const Spacer(),
               // Save / Bookmark
               IconButton(
@@ -1159,6 +1299,25 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
             onTap: isLong && !_captionExpanded
                 ? () => setState(() => _captionExpanded = true)
                 : null,
+            // Long-press → copy caption + fire copy_text event
+            // (strategy posts.md row 17). SelectionArea would
+            // conflict with the RichText hashtag/mention recognizers,
+            // so we use a discrete long-press shortcut instead.
+            onLongPress: () {
+              final messenger = ScaffoldMessenger.of(context);
+              Clipboard.setData(ClipboardData(text: content));
+              unawaited(PostService().recordCopyText(
+                postId: post.id,
+                userId: widget.currentUserId,
+              ));
+              messenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Copied to clipboard'),
+                  duration: Duration(milliseconds: 1500),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
             child: RichText(
               maxLines: _captionExpanded ? 100 : 3,
               overflow: TextOverflow.ellipsis,

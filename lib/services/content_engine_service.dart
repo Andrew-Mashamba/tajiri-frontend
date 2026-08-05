@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/content_engine_models.dart';
+import 'graphql/graphql_backend_services.dart';
 import 'local_storage_service.dart';
 import 'etag_cache_service.dart';
 import 'perf_logger.dart';
@@ -19,6 +21,14 @@ class ContentEngineService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlFeedService.feed(
+        feedType: feedType,
+        page: page,
+        perPage: perPage,
+      );
+    }
+
     final token = await _getToken();
     if (token == null) return _emptyResult();
 
@@ -40,7 +50,7 @@ class ContentEngineService {
         }
       } catch (_) {}
 
-      final response = await http.get(uri, headers: headers)
+      final response = await httpGetWithRetry(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
 
       // 304 Not Modified — use cached body
@@ -109,7 +119,7 @@ class ContentEngineService {
       if (region != null) params['region'] = region;
 
       final uri = Uri.parse('$_baseUrl/v2/search').replace(queryParameters: params);
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token))
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token))
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -134,7 +144,7 @@ class ContentEngineService {
       // Try v2 first (Content Engine AI digest)
       final uri = Uri.parse('$_baseUrl/v2/trending-digest');
       final headers = token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers;
-      final response = await http.get(uri, headers: headers)
+      final response = await httpGetWithRetry(uri, headers: headers)
           .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
@@ -166,7 +176,7 @@ class ContentEngineService {
         'user_id': userId.toString(),
         'limit': limit.toString(),
       });
-      final response = await http.get(uri, headers: ApiConfig.authHeaders(token))
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token))
           .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {

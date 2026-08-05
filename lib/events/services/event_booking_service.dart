@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/event_booking.dart';
 
@@ -103,7 +104,7 @@ class EventBookingService {
     final uri = Uri.parse('$_baseUrl/event-bookings').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
         final items = (body['data'] as List)
@@ -128,7 +129,7 @@ class EventBookingService {
         .replace(queryParameters: {'user_id': '$userId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       return _decodeOne(res);
     } catch (e, s) {
       _log('get error: $e\n$s');

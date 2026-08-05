@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import AVFoundation
 import HaishinKit
+import GoogleMaps
 
 // RTMP Streaming Service
 class RTMPStreamingService: NSObject {
@@ -41,6 +42,7 @@ class RTMPStreamingService: NSObject {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    GMSServices.provideAPIKey("AIzaSyDToDgxzDtGb3ubCiLMmwRmyWNuR8972Hc")
     GeneratedPluginRegistrant.register(with: self)
 
     let controller = window?.rootViewController as! FlutterViewController

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:http_parser/http_parser.dart';
 import '../models/clip_models.dart';
 import '../config/api_config.dart';
@@ -18,7 +19,7 @@ class ClipService {
       String url = '$_baseUrl/clips?page=$page&per_page=$perPage';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -30,6 +31,48 @@ class ClipService {
       return ClipListResult(success: false, message: 'Failed to load clips');
     } catch (e) {
       return ClipListResult(success: false, message: 'Error: $e');
+    }
+  }
+
+  /// Sourced clip — strategy posts.md §V (G-F-002). Snip a range from an
+  /// existing video post and create a clips row that fires clip_create·clipper.
+  /// Returns the new clips.id, or null on failure. No upload — backend already
+  /// has the source video tied to source_post_id.
+  Future<int?> createSourcedClip({
+    int? sourcePostId,
+    int? sourceStreamId,
+    required int clipperUserId,
+    required int startMs,
+    required int endMs,
+    String? title,
+    int? generatedPostId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/clips'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          if (sourcePostId != null) 'source_post_id': sourcePostId,
+          // streams.md §IV row 35 — clip_from_stream·clipper.
+          if (sourceStreamId != null) 'source_stream_id': sourceStreamId,
+          'clipper_user_id': clipperUserId,
+          'start_ms': startMs,
+          'end_ms': endMs,
+          if (title != null && title.isNotEmpty) 'title': title,
+          if (generatedPostId != null) 'generated_post_id': generatedPostId,
+        }),
+      );
+      if (response.statusCode != 200 && response.statusCode != 201) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) return null;
+      final inner = data['data'];
+      if (inner is Map && inner['id'] is num) {
+        return (inner['id'] as num).toInt();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ClipService] createSourcedClip error: $e');
+      return null;
     }
   }
 
@@ -94,7 +137,7 @@ class ClipService {
       String url = '$_baseUrl/clips/$clipId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -119,7 +162,7 @@ class ClipService {
 
   Future<ClipListResult> getUserClips(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/clips/user/$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/clips/user/$userId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -270,7 +313,7 @@ class ClipService {
   /// Check if a clip is in user's videos collection
   Future<bool> isInMyVideos(int clipId, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/clips/$clipId/in-collection?user_id=$userId'),
       );
 
@@ -286,7 +329,7 @@ class ClipService {
 
   Future<CommentsResult> getComments(int clipId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/clips/$clipId/comments'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/clips/$clipId/comments'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -338,7 +381,7 @@ class ClipService {
 
   Future<HashtagsResult> getTrendingHashtags() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/clips/trending'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/clips/trending'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -355,7 +398,7 @@ class ClipService {
 
   Future<ClipListResult> getClipsByHashtag(String tag) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/clips/hashtag/$tag'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/clips/hashtag/$tag'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -372,7 +415,7 @@ class ClipService {
 
   Future<ClipListResult> getClipsByMusic(int musicId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/clips/music/$musicId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/clips/music/$musicId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -593,7 +636,7 @@ class ClipService {
       }
 
       final uri = Uri.parse('$_baseUrl/clips/search').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -642,7 +685,7 @@ class ClipService {
     if (query.length < 2) return [];
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/clips/search/suggestions?q=$query'),
       );
 
@@ -663,7 +706,7 @@ class ClipService {
   /// Get recent searches for user
   Future<List<String>> getRecentSearches(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/users/$userId/recent-searches?type=clips'),
       );
 

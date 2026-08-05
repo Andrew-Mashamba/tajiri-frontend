@@ -1,12 +1,11 @@
-import 'package:http/http.dart' as http;
-
+import 'http_retry.dart';
 class LinkPreviewService {
   static final Map<String, LinkPreviewData?> _cache = {};
 
   static Future<LinkPreviewData?> fetchPreview(String url) async {
     if (_cache.containsKey(url)) return _cache[url];
     try {
-      final resp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      final resp = await httpGetWithRetry(Uri.parse(url)).timeout(const Duration(seconds: 5));
       if (resp.statusCode != 200) return null;
       final body = resp.body;
       final title = _extractMeta(body, 'og:title') ?? _extractTitle(body);

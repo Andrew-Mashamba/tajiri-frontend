@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/post_models.dart';
 import '../config/api_config.dart';
 import 'post_service.dart';
@@ -112,7 +112,7 @@ class FeedService {
   }) async {
     try {
       final headers = await _authHeaders();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
           '$_baseUrl/posts/feed/shorts?user_id=$userId&page=$page&per_page=$perPage',
         ),
@@ -149,7 +149,7 @@ class FeedService {
   }) async {
     try {
       final headers = await _authHeaders();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
           '$_baseUrl/posts/feed/following?user_id=$userId&page=$page&per_page=$perPage',
         ),
@@ -187,7 +187,7 @@ class FeedService {
   }) async {
     try {
       final headers = await _authHeaders();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
           '$_baseUrl/posts/feed/for-you?user_id=$userId&page=$page&per_page=$perPage',
         ),
@@ -231,7 +231,7 @@ class FeedService {
         return getForYouFeed(userId: userId, page: page, perPage: perPage);
       }
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
           '$_baseUrl/feed/personalized?page=$page&per_page=$perPage',
         ),
@@ -267,7 +267,7 @@ class FeedService {
   }) async {
     try {
       final headers = await _authHeaders();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/feed?user_id=$userId&page=$page&per_page=$perPage'),
         headers: headers,
       );
@@ -297,7 +297,7 @@ class FeedService {
   }) async {
     try {
       final headers = await _authHeaders();
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/feed/friends?user_id=$userId&page=$page&per_page=$perPage'),
         headers: headers,
       );
@@ -331,7 +331,7 @@ class FeedService {
       if (userId != null) url += '&user_id=$userId';
 
       final headers = await _authHeaders();
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await httpGetWithRetry(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -361,7 +361,7 @@ class FeedService {
       if (userId != null) url += '&user_id=$userId';
 
       final headers = await _authHeaders();
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await httpGetWithRetry(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -393,7 +393,7 @@ class FeedService {
       if (regionId != null) url += '&region_id=$regionId';
 
       final headers = await _authHeaders();
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await httpGetWithRetry(Uri.parse(url), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

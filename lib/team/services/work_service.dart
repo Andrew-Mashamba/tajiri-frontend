@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/work_models.dart';
 import '../models/task_models.dart';
@@ -33,7 +34,7 @@ class WorkService {
     final url = '${ApiConfig.baseUrl}/business/employees/$employeeId/job-description';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final d = body['data'];
       if (res.statusCode == 200 && d != null) {
@@ -70,7 +71,7 @@ class WorkService {
     final url = '${ApiConfig.baseUrl}/business/employees/$employeeId/kpis';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])
@@ -136,7 +137,7 @@ class WorkService {
     final url = '${ApiConfig.baseUrl}/business/kpis/$kpiId/entries';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])
@@ -188,7 +189,7 @@ class WorkService {
     final url = '${ApiConfig.baseUrl}/business/employees/$employeeId/tasks';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])
@@ -213,7 +214,7 @@ class WorkService {
     );
     _log('GET $uri');
     try {
-      final res = await http.get(uri, headers: _h(token));
+      final res = await httpGetWithRetry(uri, headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])
@@ -301,7 +302,7 @@ class WorkService {
     final url = '${ApiConfig.baseUrl}/business/work-tasks/$taskId/updates';
     _log('GET $url');
     try {
-      final res = await http.get(Uri.parse(url), headers: _h(token));
+      final res = await httpGetWithRetry(Uri.parse(url), headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         final list = (body['data'] as List? ?? [])

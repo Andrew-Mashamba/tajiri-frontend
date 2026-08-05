@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/post_models.dart';
@@ -169,6 +170,10 @@ void _showShareToWallDialog(
 }) {
   final controller = TextEditingController();
   bool isSharing = false;
+  // Integrity §II — negative_share (high). User-explicit toggle: when on,
+  // a successful share also fires postFeedback(negative_share) so the
+  // creator's earnings get clamped via QualityFilter.
+  bool withCritique = false;
 
   showModalBottomSheet(
     context: context,
@@ -231,6 +236,59 @@ void _showShareToWallDialog(
                 // Original post preview
                 _SharePostPreview(post: post),
                 const SizedBox(height: 12),
+                // negative_share opt-in (G-Q-009 §II). Skipped on own posts.
+                if (post.userId != userId)
+                  InkWell(
+                    onTap: () => setSheetState(() => withCritique = !withCritique),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: withCritique,
+                              onChanged: (v) =>
+                                  setSheetState(() => withCritique = v ?? false),
+                              activeColor: const Color(0xFF1A1A1A),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s?.isSwahili == true
+                                      ? 'Tuma na ukosoaji'
+                                      : 'Share with criticism',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                                Text(
+                                  s?.isSwahili == true
+                                      ? 'Onyesha kuwa hupendi maudhui haya'
+                                      : 'Mark this share as negative feedback',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF666666),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (post.userId != userId) const SizedBox(height: 12),
                 // Share button
                 SizedBox(
                   height: 48,
@@ -246,6 +304,15 @@ void _showShareToWallDialog(
                                   ? controller.text.trim()
                                   : null,
                             );
+                            // Integrity §II — fire negative_share AFTER
+                            // share success. Backend dedup handles repeats.
+                            if (result.success && withCritique && post.userId != userId) {
+                              unawaited(postService.postFeedback(
+                                postId: post.id,
+                                userId: userId,
+                                signalType: 'negative_share',
+                              ));
+                            }
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
                               final s2 = AppStringsScope.of(context);
@@ -331,7 +398,7 @@ Future<void> _shareToSocialMedia(BuildContext context, Post post, {Rect? origin}
 
     for (var i = 0; i < mediaUrls.length; i++) {
       try {
-        final response = await http.get(Uri.parse(mediaUrls[i]));
+        final response = await httpGetWithRetry(Uri.parse(mediaUrls[i]));
         if (response.statusCode == 200) {
           final ext = mediaUrls[i].contains('.png') ? '.png' : '.jpg';
           final file = File('${tempDir.path}/tajiri_share_${post.id}_$i$ext');

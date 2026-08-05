@@ -20,6 +20,8 @@ import 'message_database.dart';
 import '../services/conversation_cache_service.dart';
 import '../services/people_cache_service.dart';
 import '../screens/login/login_screen.dart';
+import 'graphql/graphql_backend_services.dart';
+import 'graphql/tajiri_realtime_service.dart';
 
 class AuthService {
   static final AuthService instance = AuthService._();
@@ -59,6 +61,11 @@ class AuthService {
       _cachedRefreshExpiry = DateTime.tryParse(refreshExpiryStr);
     }
     _fetchPinningConfig();
+    if (ApiConfig.useGraphqlBackend &&
+        _cachedAccessToken != null &&
+        _cachedAccessToken!.isNotEmpty) {
+      unawaited(TajiriRealtimeService.instance.connect());
+    }
   }
 
   // --- device ID ---
@@ -125,6 +132,30 @@ class AuthService {
         return false;
       }
       final deviceId = await getDeviceId();
+
+      if (ApiConfig.useGraphqlBackend) {
+        final gql = await GraphqlAuthService.refresh(
+          refreshToken: refreshToken,
+          deviceId: deviceId,
+        );
+        if (gql.success && gql.payload != null) {
+          final payload = gql.payload!;
+          await _storeTokens(
+            accessToken: payload['accessToken'] as String,
+            refreshToken: payload['refreshToken'] as String,
+            accessExpiresIn: payload['accessExpiresIn'] as int? ?? 86400,
+            refreshExpiresIn: payload['refreshExpiresIn'] as int? ?? 7776000,
+          );
+          _refreshLock!.complete(true);
+          return true;
+        }
+        if (gql.error != null) {
+          await _clearTokens();
+        }
+        _refreshLock!.complete(false);
+        return false;
+      }
+
       final response = await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}/auth/refresh'),
@@ -212,6 +243,45 @@ class AuthService {
         normalized = '+$phone';
       }
       final deviceId = await getDeviceId();
+
+      if (ApiConfig.useGraphqlBackend) {
+        final gql = await GraphqlAuthService.login(
+          phone: normalized,
+          pin: pin,
+          deviceId: deviceId,
+        );
+        if (!gql.success || gql.payload == null) {
+          return AuthLoginResult(
+            success: false,
+            error: gql.error ?? 'Imeshindwa kuingia',
+          );
+        }
+        final payload = gql.payload!;
+        await _storeTokens(
+          accessToken: payload['accessToken'] as String,
+          refreshToken: payload['refreshToken'] as String,
+          accessExpiresIn: payload['accessExpiresIn'] as int? ?? 86400,
+          refreshExpiresIn: payload['refreshExpiresIn'] as int? ?? 7776000,
+        );
+        final userData = GraphqlAuthService.userToLegacyMap(
+          payload['user'] as Map<String, dynamic>,
+        );
+        RegistrationState? user;
+        user = _mapServerResponseToRegistrationState(userData);
+        final storage = await LocalStorageService.getInstance();
+        await storage.saveUser(user);
+        final userId = user.userId ?? userData['id'] as int?;
+        if (userId != null) {
+          try {
+            FcmService.instance.sendTokenToBackend(userId);
+          } catch (_) {}
+        }
+        if (ApiConfig.useGraphqlBackend) {
+          unawaited(TajiriRealtimeService.instance.connect());
+        }
+        return AuthLoginResult(success: true, user: user, userId: userId);
+      }
+
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/users/login-by-phone'),
         headers: {
@@ -521,6 +591,9 @@ class AuthService {
 
   // --- _performLocalLogout ---
   Future<void> _performLocalLogout(BuildContext context) async {
+    try {
+      await TajiriRealtimeService.instance.disconnect();
+    } catch (_) {}
     try {
       LiveUpdateService.instance.stop();
     } catch (_) {}

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 
 /// A single sticker within a pack.
@@ -57,7 +57,7 @@ class StickerPack {
 class StickerService {
   static Future<List<StickerPack>> getPacks() async {
     try {
-      final resp = await http.get(
+      final resp = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/stickers/packs'),
         headers: ApiConfig.headers,
       );

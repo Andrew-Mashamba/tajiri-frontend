@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/tea_models.dart';
 
@@ -89,7 +90,7 @@ class TeaService {
     int limit = 20,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/tea/conversations?limit=$limit'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -113,7 +114,7 @@ class TeaService {
     String conversationId,
   ) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/tea/conversations/$conversationId'),
         headers: ApiConfig.authHeaders(token),
       );

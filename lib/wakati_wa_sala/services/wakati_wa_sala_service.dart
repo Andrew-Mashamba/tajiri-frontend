@@ -1,6 +1,7 @@
 // lib/wakati_wa_sala/services/wakati_wa_sala_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/wakati_wa_sala_models.dart';
 
@@ -24,7 +25,7 @@ class WakatiWaSalaService {
 
       final uri = Uri.parse('$_baseUrl/prayer-times/daily')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -60,7 +61,7 @@ class WakatiWaSalaService {
       };
       final uri = Uri.parse('$_baseUrl/prayer-times/monthly')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -113,7 +114,7 @@ class WakatiWaSalaService {
     String period = 'weekly',
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/prayer-times/stats?period=$period'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -139,7 +140,7 @@ class WakatiWaSalaService {
     int perPage = 30,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/prayer-times/logs?page=$page&per_page=$perPage'),
         headers: ApiConfig.authHeaders(token),
       );

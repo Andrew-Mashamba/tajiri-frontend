@@ -215,8 +215,7 @@ lib/
 ```
 
 ### API Endpoint
-- Base URL: `https://zima-uat.site:8003/api`
-- Environment: UAT (User Acceptance Testing)
+- Base URL: `https://tajiri.zimasystems.com/api`
 
 ## Memory System
 

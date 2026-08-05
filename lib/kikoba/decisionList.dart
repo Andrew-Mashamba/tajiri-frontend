@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'HttpService.dart';
 import 'DataStore.dart';
 
@@ -29,7 +29,7 @@ class _NewsListPageState extends State<majukumu> {
     //var thenumber = "12345";
     print("AAAAAA NAMBA$thenumber");
     String link = "${HttpService.baseUrl}majukumu?currentKikobaId=${DataStore.currentKikobaId}";
-    var res = await http.get(Uri.parse(link), headers: {"Accept": "application/json"});
+    var res = await httpGetWithRetry(Uri.parse(link), headers: {"Accept": "application/json"});
 
     //print("AAAAAA "+res.body);
 

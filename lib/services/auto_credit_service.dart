@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'graphql/graphql_auto_credit_service.dart';
 
 /// Spec F2 #11 — Auto-credit on detected partner error.
 class AutoCreditResult {
@@ -31,6 +32,14 @@ class AutoCreditService {
     required String reason,
     required int amountTzs,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAutoCreditService.selfReport(
+        orderId: orderId,
+        orderKind: orderKind,
+        reason: reason,
+        amountTzs: amountTzs,
+      );
+    }
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/auto-credit/self-report')!;
     final res = await http.post(

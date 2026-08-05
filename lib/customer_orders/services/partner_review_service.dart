@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/customer_order.dart';
 import '../models/partner_review.dart';
@@ -150,7 +151,7 @@ class PartnerReviewService {
     final uri = Uri.parse('$_baseUrl/partner-reviews').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -197,7 +198,7 @@ class PartnerReviewService {
     final uri = Uri.parse('$_baseUrl/partner-reviews').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
         final list = body['data'] as List;

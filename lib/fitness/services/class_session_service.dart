@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/class_session.dart';
 
@@ -17,7 +18,7 @@ class ClassSessionService {
     final uri = Uri.parse('${ApiConfig.baseUrl}/class-sessions')
         .replace(queryParameters: params);
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec line 627 — appointment waitlist for full slots.
@@ -64,7 +65,7 @@ class AppointmentWaitlistService {
     final uri = Uri.parse('$_baseUrl/appointments/waitlist').replace(queryParameters: params);
     debugPrint('[AppointmentWaitlistService] GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

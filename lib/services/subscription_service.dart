@@ -1,18 +1,23 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/subscription_models.dart';
 import '../config/api_config.dart';
 import 'expenditure_service.dart';
 import 'income_service.dart';
 import 'local_storage_service.dart';
+import 'graphql/graphql_subscription_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
 class SubscriptionService {
   /// Get subscription tiers for a creator
   Future<TierListResult> getCreatorTiers(int creatorId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getCreatorTiers(creatorId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/subscriptions/tiers/$creatorId'),
       );
 
@@ -40,6 +45,16 @@ class SubscriptionService {
     String billingPeriod = 'monthly',
     List<String>? benefits,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.createTier(
+        userId: userId,
+        name: name,
+        description: description,
+        price: price,
+        billingPeriod: billingPeriod,
+        benefits: benefits,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/tiers'),
@@ -78,6 +93,17 @@ class SubscriptionService {
     List<String>? benefits,
     bool? isActive,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.updateTier(
+        userId: userId,
+        tierId: tierId,
+        name: name,
+        description: description,
+        price: price,
+        benefits: benefits,
+        isActive: isActive,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/subscriptions/tiers/$tierId'),
@@ -111,6 +137,9 @@ class SubscriptionService {
     required int userId,
     required int tierId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.deleteTier(userId: userId, tierId: tierId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/subscriptions/tiers/$tierId'),
@@ -133,7 +162,40 @@ class SubscriptionService {
     String? provider, // for mobile money
     String? phoneNumber,
     String? pin, // for wallet
+    int? originPostId,
+    int? originStreamId,
+    String? shareUid,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSubscriptionService.subscribe(
+        userId: userId,
+        tierId: tierId,
+        paymentMethod: paymentMethod,
+        provider: provider,
+        phoneNumber: phoneNumber,
+        pin: pin,
+        originPostId: originPostId,
+        originStreamId: originStreamId,
+        shareUid: shareUid,
+      );
+      if (result.success && result.subscription != null) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: result.subscription!.amountPaid,
+              category: 'burudani',
+              description: 'Subscription: ${result.subscription!.tier?.name ?? "Tier #$tierId"}',
+              referenceId: 'sub_${result.subscription!.id}',
+              sourceModule: 'subscription',
+              isRecurring: true,
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return result;
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/subscribe'),
@@ -145,6 +207,11 @@ class SubscriptionService {
           if (provider != null) 'provider': provider,
           if (phoneNumber != null) 'phone_number': phoneNumber,
           if (pin != null) 'pin': pin,
+          // Stream/post attribution — backend fires subscribe_from_live·author
+          // (origin_stream_id) and subscribe_from_share·sharer (share_uid).
+          if (originPostId != null) 'origin_post_id': originPostId,
+          if (originStreamId != null) 'origin_stream_id': originStreamId,
+          if (shareUid != null && shareUid.isNotEmpty) 'share_uid': shareUid,
         }),
       );
 
@@ -183,6 +250,12 @@ class SubscriptionService {
     required int userId,
     required int subscriptionId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.cancelSubscription(
+        userId: userId,
+        subscriptionId: subscriptionId,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/$subscriptionId/cancel'),
@@ -206,6 +279,13 @@ class SubscriptionService {
     required int subscriptionId,
     required bool autoRenew,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.toggleAutoRenew(
+        userId: userId,
+        subscriptionId: subscriptionId,
+        autoRenew: autoRenew,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/$subscriptionId/auto-renew'),
@@ -233,11 +313,19 @@ class SubscriptionService {
     int perPage = 20,
     String? status,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getMySubscriptions(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+        status: status,
+      );
+    }
     try {
       String url = '$_baseUrl/subscriptions/my?user_id=$userId&page=$page&per_page=$perPage';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -265,11 +353,19 @@ class SubscriptionService {
     int perPage = 20,
     int? tierId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getSubscribers(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+        tierId: tierId,
+      );
+    }
     try {
       String url = '$_baseUrl/subscriptions/subscribers?user_id=$userId&page=$page&per_page=$perPage';
       if (tierId != null) url += '&tier_id=$tierId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -300,7 +396,51 @@ class SubscriptionService {
     String? provider,
     String? phoneNumber,
     String? pin,
+    /// streams.md §I row 7 — when set, backend fires `live_tip·author`
+    /// instead of generic `tip·author`.
+    int? streamId,
+    /// Posts-side tip context.
+    int? postId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlSubscriptionService.sendTip(
+        userId: userId,
+        creatorId: creatorId,
+        amount: amount,
+        message: message,
+        paymentMethod: paymentMethod,
+        provider: provider,
+        phoneNumber: phoneNumber,
+        pin: pin,
+        streamId: streamId,
+        postId: postId,
+      );
+      if (result.success && result.idempotentReplay != true) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            final tipId = DateTime.now().millisecondsSinceEpoch;
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: amount,
+              category: 'burudani',
+              description: 'Tip to creator',
+              referenceId: 'tip_$tipId',
+              sourceModule: 'subscription',
+            ).catchError((_) => null);
+            IncomeService.recordIncome(
+              token: token,
+              amount: amount,
+              source: 'creator_tip',
+              description: 'Tip received',
+              referenceId: 'tip_income_$tipId',
+              sourceModule: 'subscription',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return result;
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/tips'),
@@ -314,10 +454,25 @@ class SubscriptionService {
           if (provider != null) 'provider': provider,
           if (phoneNumber != null) 'phone_number': phoneNumber,
           if (pin != null) 'pin': pin,
+          if (streamId != null) 'stream_id': streamId,
+          if (postId != null) 'post_id': postId,
         }),
       );
 
       final data = jsonDecode(response.body);
+
+      // L9 — backend short-circuits a replay with HTTP 200 + idempotent_replay
+      // when the same transaction_id has already been processed. We surface a
+      // distinct message and skip the side-effect recording (expenditure /
+      // income) so they don't double-count.
+      final isReplay = data['idempotent_replay'] == true;
+      if (isReplay && data['success'] == true) {
+        return TipResult(
+          success: true,
+          message: 'Tuzo ilishatumwa',
+          idempotentReplay: true,
+        );
+      }
 
       if (response.statusCode == 201 && data['success'] == true) {
         // Fire-and-forget: record expenditure for budget tracking (tipper side)
@@ -367,12 +522,21 @@ class SubscriptionService {
     String? type, // subscription, tip, gift
     String? status, // pending, paid
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getEarnings(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+        type: type,
+        status: status,
+      );
+    }
     try {
       String url = '$_baseUrl/subscriptions/earnings?user_id=$userId&page=$page&per_page=$perPage';
       if (type != null) url += '&type=$type';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -395,8 +559,11 @@ class SubscriptionService {
 
   /// Get earnings summary
   Future<EarningsSummaryResult> getEarningsSummary(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getEarningsSummary(userId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/subscriptions/earnings/summary?user_id=$userId'),
       );
 
@@ -426,6 +593,16 @@ class SubscriptionService {
     required String accountName,
     String? provider,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.requestPayout(
+        userId: userId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        accountNumber: accountNumber,
+        accountName: accountName,
+        provider: provider,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/subscriptions/payouts'),
@@ -461,11 +638,19 @@ class SubscriptionService {
     int perPage = 20,
     String? status,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.getPayouts(
+        userId: userId,
+        page: page,
+        perPage: perPage,
+        status: status,
+      );
+    }
     try {
       String url = '$_baseUrl/subscriptions/payouts?user_id=$userId&page=$page&per_page=$perPage';
       if (status != null) url += '&status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -491,8 +676,14 @@ class SubscriptionService {
     required int userId,
     required int creatorId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlSubscriptionService.isSubscribed(
+        userId: userId,
+        creatorId: creatorId,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/subscriptions/check/$creatorId?user_id=$userId'),
       );
 
@@ -504,118 +695,5 @@ class SubscriptionService {
     } catch (e) {
       return false;
     }
-  }
-}
-
-// Result classes
-class TierListResult {
-  final bool success;
-  final List<SubscriptionTier> tiers;
-  final String? message;
-
-  TierListResult({required this.success, this.tiers = const [], this.message});
-}
-
-class TierResult {
-  final bool success;
-  final SubscriptionTier? tier;
-  final String? message;
-
-  TierResult({required this.success, this.tier, this.message});
-}
-
-class SubscriptionResult {
-  final bool success;
-  final Subscription? subscription;
-  final String? message;
-
-  SubscriptionResult({required this.success, this.subscription, this.message});
-}
-
-class SubscriptionListResult {
-  final bool success;
-  final List<Subscription> subscriptions;
-  final SubscriptionPaginationMeta? meta;
-  final String? message;
-
-  SubscriptionListResult({
-    required this.success,
-    this.subscriptions = const [],
-    this.meta,
-    this.message,
-  });
-}
-
-class TipResult {
-  final bool success;
-  final String? message;
-
-  TipResult({required this.success, this.message});
-}
-
-class EarningsListResult {
-  final bool success;
-  final List<CreatorEarning> earnings;
-  final SubscriptionPaginationMeta? meta;
-  final String? message;
-
-  EarningsListResult({
-    required this.success,
-    this.earnings = const [],
-    this.meta,
-    this.message,
-  });
-}
-
-class EarningsSummaryResult {
-  final bool success;
-  final EarningsSummary? summary;
-  final String? message;
-
-  EarningsSummaryResult({required this.success, this.summary, this.message});
-}
-
-class PayoutResult {
-  final bool success;
-  final CreatorPayout? payout;
-  final String? message;
-
-  PayoutResult({required this.success, this.payout, this.message});
-}
-
-class PayoutListResult {
-  final bool success;
-  final List<CreatorPayout> payouts;
-  final SubscriptionPaginationMeta? meta;
-  final String? message;
-
-  PayoutListResult({
-    required this.success,
-    this.payouts = const [],
-    this.meta,
-    this.message,
-  });
-}
-
-class SubscriptionPaginationMeta {
-  final int currentPage;
-  final int lastPage;
-  final int perPage;
-  final int total;
-
-  SubscriptionPaginationMeta({
-    required this.currentPage,
-    required this.lastPage,
-    required this.perPage,
-    required this.total,
-  });
-
-  factory SubscriptionPaginationMeta.fromJson(Map<String, dynamic> json) {
-    return SubscriptionPaginationMeta(
-      currentPage: json['current_page'] ?? 1,
-      lastPage: json['last_page'] ?? 1,
-      perPage: json['per_page'] ?? 20,
-      total: json['total'] ?? 0,
-    );
   }
 }

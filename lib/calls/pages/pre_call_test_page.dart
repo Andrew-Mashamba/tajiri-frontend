@@ -6,7 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -185,7 +185,7 @@ class _PreCallTestPageState extends State<PreCallTestPage> {
       final testUrl =
           '${ApiConfig.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/favicon.png?cb=${Random().nextInt(999999)}';
       final start = DateTime.now();
-      final res = await http.get(Uri.parse(testUrl)).timeout(
+      final res = await httpGetWithRetry(Uri.parse(testUrl)).timeout(
         const Duration(seconds: 15),
       );
       final elapsedMs = DateTime.now().difference(start).inMilliseconds;

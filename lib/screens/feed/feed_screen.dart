@@ -10,7 +10,9 @@ import '../../l10n/app_strings.dart';
 import '../../l10n/app_strings_scope.dart';
 import '../../models/story_models.dart';
 import '../../services/gossip_service.dart';
+import '../../services/friend_service.dart';
 import '../../services/post_service.dart';
+import '../../services/profile_service.dart';
 import '../../services/media_cache_service.dart';
 import '../../services/story_service.dart';
 import '../../services/local_storage_service.dart';
@@ -67,6 +69,7 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateMixin {
 
   final PostService _postService = PostService();
+  final FriendService _friendService = FriendService();
   final MediaCacheService _cacheService = MediaCacheService();
   late TabController _tabController;
 
@@ -689,6 +692,15 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         .where((item) => item.post != null)
         .map((item) => item.post!)
         .toList();
+    if (kDebugMode) {
+      final missing = engineResult.items.where((i) => i.post == null).toList();
+      if (missing.isNotEmpty) {
+        debugPrint('[FeedScreen] ${missing.length}/${engineResult.items.length} items had post==null');
+        for (final m in missing.take(3)) {
+          debugPrint('[FeedScreen]   missing item: sourceType=${m.sourceType} id=${m.sourceId} sourceJson keys=${m.sourceJson?.keys.take(5).toList() ?? "null"}');
+        }
+      }
+    }
 
     // Step 3: Cache the fresh posts
     if (freshPosts.isNotEmpty) {
@@ -959,12 +971,19 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   }
 
   void _onUserTap(Post post) {
+    // UN-002 row 10: fire profile_visit_from_post·author with origin_post_id.
+    unawaited(ProfileService().recordProfileVisit(
+      targetUserId: post.userId,
+      viewerUserId: widget.currentUserId,
+      originPostId: post.id,
+    ));
     Navigator.pushNamed(context, '/profile/${post.userId}');
   }
 
   void _onMenuTap(Post post) {
     final isOwner = post.userId == widget.currentUserId;
     final s = AppStringsScope.of(context);
+    final isSwahili = s?.isSwahili == true;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -973,7 +992,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
           children: [
             if (isOwner) ...[
               ListTile(
-                leading: const Icon(Icons.edit),
+                leading: const Icon(Icons.edit_rounded),
                 title: Text(s?.edit ?? 'Edit'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -995,7 +1014,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
+                leading: const Icon(Icons.delete_rounded, color: Colors.red),
                 title: Text(s?.delete ?? 'Delete', style: const TextStyle(color: Colors.red)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1003,22 +1022,55 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
                 },
               ),
             ] else ...[
+              // not_interested (medium) — fires both feedback signal and hide
               ListTile(
-                leading: const Icon(Icons.flag_rounded),
-                title: const Text('Report'),
+                leading: const Icon(Icons.visibility_off_rounded, color: Color(0xFF1A1A1A)),
+                title: Text(isSwahili ? 'Sipendi hii' : 'Not interested'),
+                subtitle: Text(
+                  isSwahili ? 'Hutaona machapisho kama haya' : "You won't see posts like this",
+                  style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _notInterested(post);
+                },
+              ),
+              // mute_creator (high)
+              ListTile(
+                leading: const Icon(Icons.volume_off_rounded, color: Color(0xFF1A1A1A)),
+                title: Text(isSwahili ? 'Nyamazisha mtumiaji' : 'Mute creator'),
+                subtitle: Text(
+                  isSwahili ? 'Hutaona machapisho yake tena' : "You won't see their posts",
+                  style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _muteCreator(post);
+                },
+              ),
+              // block_creator (very_high)
+              ListTile(
+                leading: const Icon(Icons.block_rounded, color: Color(0xFF1A1A1A)),
+                title: Text(isSwahili ? 'Zuia mtumiaji' : 'Block user'),
+                subtitle: Text(
+                  isSwahili ? 'Hatakuona wala kukutumia ujumbe' : "They can't see you or message you",
+                  style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _blockCreator(post);
+                },
+              ),
+              // report_content (severe)
+              ListTile(
+                leading: Icon(Icons.flag_rounded, color: Colors.red.shade700),
+                title: Text(
+                  isSwahili ? 'Ripoti' : 'Report',
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _reportPost(post);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.visibility_off_rounded),
-                title: const Text('Not interested'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _postService.hidePost(post.id, widget.currentUserId);
-                  setState(() => _posts.removeWhere((p) => p.id == post.id));
-                  _buildFeedItems();
                 },
               ),
             ],
@@ -1028,31 +1080,119 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     );
   }
 
-  void _reportPost(Post post) {
-    final s = AppStringsScope.of(context);
-    showDialog(
+  /// Integrity §II — fire `not_interested` (medium) AND record `hide_post`
+  /// (medium) via /posts/{id}/hide so QualityFilter can clamp earnings.
+  void _notInterested(Post post) {
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'not_interested',
+    );
+    _postService.hidePost(post.id, widget.currentUserId);
+    setState(() => _posts.removeWhere((p) => p.id == post.id));
+    _buildFeedItems();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isSwahili
+            ? 'Hutaona chapisho kama hili tena'
+            : "You won't see posts like this anymore"),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _muteCreator(Post post) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'mute_creator',
+    );
+    final ok = await _friendService.muteUser(
+      userId: widget.currentUserId,
+      mutedUserId: post.userId,
+    );
+    if (!mounted) return;
+    setState(() => _posts.removeWhere((p) => p.userId == post.userId));
+    _buildFeedItems();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (isSwahili ? 'Mtumiaji amenyamazishwa' : 'Creator muted')
+            : (isSwahili ? 'Imeshindikana kunyamazisha' : 'Failed to mute')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _blockCreator(Post post) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Report'),
-        content: const Text('Report this post?'),
+      builder: (ctx) => AlertDialog(
+        title: Text(isSwahili ? 'Zuia mtumiaji?' : 'Block this user?'),
+        content: Text(isSwahili
+            ? 'Hutaona machapisho yake tena na hawezi kukutumia ujumbe.'
+            : "You won't see their posts and they can't message you."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(s?.cancel ?? 'Cancel'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await _postService.reportPost(post.id, widget.currentUserId);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(s?.reportSubmitted ?? 'Report submitted')),
-                );
-              }
-            },
-            child: const Text('Report'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              isSwahili ? 'Zuia' : 'Block',
+              style: const TextStyle(color: Color(0xFF1A1A1A)),
+            ),
           ),
         ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'block_creator',
+    );
+    final ok = await _friendService.blockUser(widget.currentUserId, post.userId);
+    if (!mounted) return;
+    setState(() => _posts.removeWhere((p) => p.userId == post.userId));
+    _buildFeedItems();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (isSwahili ? 'Mtumiaji amezuiwa' : 'User blocked')
+            : (isSwahili ? 'Imeshindikana kuzuia' : 'Failed to block')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _reportPost(Post post) async {
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final picked = await showDialog<_FeedReportReason>(
+      context: context,
+      builder: (ctx) => const _FeedReportReasonDialog(),
+    );
+    if (picked == null || !mounted) return;
+    final result = await _postService.reportPost(
+      post.id,
+      widget.currentUserId,
+      reason: picked.label(isSwahili),
+      category: picked.code,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.success
+            ? (isSwahili ? 'Ripoti imetumwa. Asante!' : 'Report submitted. Thank you!')
+            : (result.message ??
+                (isSwahili ? 'Imeshindikana kutuma ripoti' : 'Failed to send report'))),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -1803,4 +1943,89 @@ class _FeedItem {
 
   factory _FeedItem.ad(int adIndex) =>
       _FeedItem._(type: _FeedItemType.ad, adIndex: adIndex);
+}
+
+enum _FeedReportReason {
+  inappropriate('inappropriate'),
+  hateSpeech('hate_speech'),
+  spamScam('spam_scam'),
+  harassment('harassment'),
+  adultContent('adult_content'),
+  misinformation('misinformation'),
+  other('other');
+
+  const _FeedReportReason(this.code);
+  final String code;
+
+  String label(bool isSwahili) {
+    switch (this) {
+      case _FeedReportReason.inappropriate:
+        return isSwahili ? 'Maudhui yasiyofaa' : 'Inappropriate content';
+      case _FeedReportReason.hateSpeech:
+        return isSwahili ? 'Uchochezi' : 'Hate speech';
+      case _FeedReportReason.spamScam:
+        return isSwahili ? 'Udanganyifu' : 'Spam / Scam';
+      case _FeedReportReason.harassment:
+        return isSwahili ? 'Unyanyasaji' : 'Harassment';
+      case _FeedReportReason.adultContent:
+        return isSwahili ? 'Maudhui ya watu wazima' : 'Adult content';
+      case _FeedReportReason.misinformation:
+        return isSwahili ? 'Habari za uongo' : 'Misinformation';
+      case _FeedReportReason.other:
+        return isSwahili ? 'Sababu nyingine' : 'Other';
+    }
+  }
+}
+
+class _FeedReportReasonDialog extends StatelessWidget {
+  const _FeedReportReasonDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final reasons = _FeedReportReason.values;
+    return AlertDialog(
+      backgroundColor: const Color(0xFFFAFAFA),
+      title: Text(
+        isSwahili ? 'Ripoti chapisho' : 'Report post',
+        style: const TextStyle(
+          color: Color(0xFF1A1A1A),
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: reasons.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (ctx, i) => Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => Navigator.pop(ctx, reasons[i]),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                child: Text(
+                  reasons[i].label(isSwahili),
+                  style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            isSwahili ? 'Ghairi' : 'Cancel',
+            style: const TextStyle(color: Color(0xFF666666)),
+          ),
+        ),
+      ],
+    );
+  }
 }

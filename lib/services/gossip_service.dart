@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/gossip_models.dart';
 
@@ -20,7 +20,7 @@ class GossipService {
       if (category != null && category.isNotEmpty) {
         url += '&category=$category';
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.authHeaders(token),
       );
@@ -52,7 +52,7 @@ class GossipService {
     required int threadId,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/gossip/threads/$threadId'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -72,7 +72,7 @@ class GossipService {
   /// Get personalized digest with top threads and proverb.
   Future<DigestResponse?> getDigest({required String token}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/gossip/digest'),
         headers: ApiConfig.authHeaders(token),
       );

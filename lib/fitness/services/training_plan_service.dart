@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/training_plan.dart';
 
@@ -10,7 +11,7 @@ class TrainingPlanService {
     final uri = Uri.parse('${ApiConfig.baseUrl}/training-plans')
         .replace(queryParameters: {'customer_user_id': '$customerUserId'});
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];
@@ -88,7 +89,7 @@ class TrainingPlanService {
 
   static Future<List<TrainingPlanCheckin>> listCheckins(int planId) async {
     try {
-      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/training-plans/$planId/checkins'));
+      final res = await httpGetWithRetry(Uri.parse('${ApiConfig.baseUrl}/training-plans/$planId/checkins'));
       if (res.statusCode != 200) return const [];
       final body = jsonDecode(res.body);
       if (body['success'] != true) return const [];

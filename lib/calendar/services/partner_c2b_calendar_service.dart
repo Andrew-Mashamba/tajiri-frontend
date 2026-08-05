@@ -1,8 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec — generic calendar layer for partner_c2b verticals (F2/F4/F5/F6/F7/F8/F9/F10/F12).
@@ -82,7 +81,7 @@ class PartnerC2BCalendarService {
         .replace(queryParameters: params);
     debugPrint('[PartnerC2BCalendarService] GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {

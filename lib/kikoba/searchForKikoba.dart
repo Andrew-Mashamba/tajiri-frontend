@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:logger/logger.dart';
 import 'DataStore.dart';
 
@@ -66,7 +66,7 @@ class _SearchBarxState extends State<SearchBarx> {
         'fields': 'name,location,description',
       });
 
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await httpGetWithRetry(uri).timeout(const Duration(seconds: 10));
 
       _logger.d('Response status: ${response.statusCode}');
 

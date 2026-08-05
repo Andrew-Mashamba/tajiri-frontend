@@ -2,10 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:dio/dio.dart';
 import '../models/message_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_messaging_service.dart';
+import 'message_api_results.dart';
 import 'post_service.dart';
+
+export 'message_api_results.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -33,6 +38,13 @@ class MessageService {
     int perPage = 20,
     String? type,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.getConversations(
+        page: page,
+        perPage: perPage,
+        type: type,
+      );
+    }
     try {
       var url = '$_baseUrl/conversations?user_id=$userId&page=$page&per_page=$perPage';
       if (type == 'group' || type == 'private') {
@@ -41,7 +53,7 @@ class MessageService {
         url += '&include_groups=1';
       }
       if (kDebugMode) debugPrint('[Messages API] GET $url');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: ApiConfig.headers,
       );
@@ -98,8 +110,11 @@ class MessageService {
 
   /// Get or create a private conversation with another user
   Future<ConversationResult> getPrivateConversation(int userId, int otherUserId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.getPrivateConversation(otherUserId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/conversations/private/$otherUserId?user_id=$userId'),
       );
 
@@ -124,6 +139,12 @@ class MessageService {
     required String name,
     required List<int> participantIds,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.createGroup(
+        name: name,
+        participantIds: participantIds,
+      );
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/conversations'),
@@ -152,8 +173,11 @@ class MessageService {
 
   /// Get a single conversation
   Future<ConversationResult> getConversation(int conversationId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.getConversation(conversationId);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/conversations/$conversationId?user_id=$userId'),
       );
 
@@ -180,11 +204,19 @@ class MessageService {
     int perPage = 50,
     int? before,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.getMessages(
+        conversationId: conversationId,
+        page: page,
+        perPage: perPage,
+        before: before,
+      );
+    }
     try {
       String url = '$_baseUrl/conversations/$conversationId/messages?user_id=$userId&page=$page&per_page=$perPage';
       if (before != null) url += '&before=$before';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -222,7 +254,24 @@ class MessageService {
     String? linkPreviewDescription,
     String? linkPreviewImage,
     String? linkPreviewDomain,
+    String? clientMessageId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      if (videoMedia != null) {
+        return MessageResult(
+          success: false,
+          errorMessage: 'Dual media messages are not yet supported on the new backend.',
+        );
+      }
+      return GraphqlMessagingService.sendMessage(
+        conversationId: conversationId,
+        content: content,
+        messageType: messageType,
+        replyToId: replyToId,
+        clientMessageId: clientMessageId,
+        media: media,
+      );
+    }
     try {
       if (media != null) {
         if (!media.existsSync()) {
@@ -462,6 +511,9 @@ class MessageService {
 
   /// Mark conversation as read
   Future<bool> markAsRead(int conversationId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.markAsRead(conversationId);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/conversations/$conversationId/read'),
@@ -494,8 +546,11 @@ class MessageService {
 
   /// Get total unread message count
   Future<int> getUnreadCount(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlMessagingService.getUnreadCount();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/conversations/unread-count?user_id=$userId'),
       );
 
@@ -547,7 +602,7 @@ class MessageService {
   /// Backend can optionally include recording_users (same shape as typing_users) in data.
   Future<TypingStatusResult> getTypingStatus(int conversationId, int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/conversations/$conversationId/typing?user_id=$userId'),
       );
 
@@ -674,7 +729,7 @@ class MessageService {
       var url = '$_baseUrl/conversations/search-messages?user_id=$userId&q=${Uri.encodeComponent(query)}';
       if (conversationId != null) url += '&conversation_id=$conversationId';
       if (messageType != null && messageType.isNotEmpty) url += '&type=$messageType';
-      final resp = await http.get(Uri.parse(url), headers: ApiConfig.headers);
+      final resp = await httpGetWithRetry(Uri.parse(url), headers: ApiConfig.headers);
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         final messages = (data['messages'] as List? ?? [])
@@ -732,7 +787,7 @@ class MessageService {
   /// Get starred messages for a user
   static Future<MessageListResult> getStarredMessages(int userId, {int page = 1}) async {
     try {
-      final resp = await http.get(
+      final resp = await httpGetWithRetry(
         Uri.parse('$_baseUrl/messages/starred?user_id=$userId&page=$page'),
         headers: ApiConfig.headers,
       );
@@ -763,7 +818,7 @@ class MessageService {
   /// Get delivery/read receipts for a message
   static Future<List<MessageReceipt>> getMessageReceipts(int conversationId, int messageId, int userId) async {
     try {
-      final resp = await http.get(
+      final resp = await httpGetWithRetry(
         Uri.parse('$_baseUrl/conversations/$conversationId/messages/$messageId/receipts?user_id=$userId'),
         headers: ApiConfig.headers,
       );
@@ -802,79 +857,4 @@ class MessageService {
       return MessageResult(success: false, errorMessage: 'Error: $e');
     }
   }
-}
-
-// Result classes
-class ConversationListResult {
-  final bool success;
-  final List<Conversation> conversations;
-  final PaginationMeta? meta;
-  final String? message;
-
-  ConversationListResult({
-    required this.success,
-    this.conversations = const [],
-    this.meta,
-    this.message,
-  });
-}
-
-class ConversationResult {
-  final bool success;
-  final Conversation? conversation;
-  final String? message;
-
-  ConversationResult({required this.success, this.conversation, this.message});
-}
-
-class MessageListResult {
-  final bool success;
-  final List<Message> messages;
-  final PaginationMeta? meta;
-  final String? message;
-
-  MessageListResult({
-    required this.success,
-    this.messages = const [],
-    this.meta,
-    this.message,
-  });
-}
-
-class MessageResult {
-  final bool success;
-  final Message? message;
-  final String? errorMessage;
-
-  MessageResult({required this.success, this.message, this.errorMessage});
-}
-
-class TypingStatusResult {
-  final bool success;
-  final List<TypingUser> typingUsers;
-  final List<TypingUser> recordingUsers;
-
-  TypingStatusResult({
-    required this.success,
-    this.typingUsers = const [],
-    this.recordingUsers = const [],
-  });
-}
-
-class TypingUser {
-  final int id;
-  final String firstName;
-  final String lastName;
-
-  TypingUser({required this.id, required this.firstName, required this.lastName});
-
-  factory TypingUser.fromJson(Map<String, dynamic> json) {
-    return TypingUser(
-      id: json['id'],
-      firstName: json['first_name'] ?? '',
-      lastName: json['last_name'] ?? '',
-    );
-  }
-
-  String get fullName => '$firstName $lastName';
 }

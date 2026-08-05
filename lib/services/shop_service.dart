@@ -7,11 +7,13 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../models/shop_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_shop_service.dart';
 import 'shop_database.dart';
 import 'perf_logger.dart';
 import 'expenditure_service.dart';
 import 'income_service.dart';
 import 'local_storage_service.dart';
+import 'http_retry.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -140,6 +142,26 @@ class ShopService {
     int? sellerId,
     int? currentUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getProducts(
+        page: page,
+        perPage: perPage,
+        categoryId: categoryId,
+        search: search,
+        sortBy: sortBy,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        condition: condition,
+        type: type,
+        sellerId: sellerId,
+      );
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     final stopwatch = Stopwatch()..start();
     final params = <String, String>{
       'page': page.toString(),
@@ -160,7 +182,7 @@ class ShopService {
     _logRequest('GET', uri.toString(), params: params);
 
     try {
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -207,11 +229,20 @@ class ShopService {
 
   /// Get featured products
   Future<ProductListResult> getFeaturedProducts({int? currentUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getFeaturedProducts();
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/shop/products/featured';
       if (currentUserId != null) url += '?user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -233,11 +264,20 @@ class ShopService {
 
   /// Get trending products
   Future<ProductListResult> getTrendingProducts({int? currentUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getTrendingProducts();
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
       String url = '$_baseUrl/shop/products/trending';
       if (currentUserId != null) url += '?user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -259,8 +299,17 @@ class ShopService {
 
   /// Get recommended products for user
   Future<ProductListResult> getRecommendedProducts(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getRecommendedProducts();
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/shop/products/recommended?user_id=$userId'),
       );
 
@@ -284,10 +333,22 @@ class ShopService {
 
   /// Get flash deals
   Future<ProductListResult> getFlashDeals({int page = 1, int perPage = 20}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getFlashDeals(
+        page: page,
+        perPage: perPage,
+      );
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
       final url = '$_baseUrl/shop/flash-deals?page=$page&per_page=$perPage';
       _logRequest('GET', url);
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       _logResponse(response.statusCode, data);
       if (response.statusCode == 200 && data['success'] == true) {
@@ -317,6 +378,21 @@ class ShopService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getNearbyProducts(
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radius,
+        page: page,
+        perPage: perPage,
+      );
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
       final params = <String, String>{
         'lat': latitude.toString(),
@@ -329,7 +405,7 @@ class ShopService {
 
       final uri = Uri.parse('$_baseUrl/shop/products/nearby')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -357,6 +433,18 @@ class ShopService {
 
   /// Get all categories
   Future<CategoryListResult> getCategories({bool includeChildren = true}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getCategories(includeChildren: includeChildren);
+      if (result.success) {
+        _categoriesCache = result.categories;
+        _categoriesFetchedAt = DateTime.now();
+      }
+      return CategoryListResult(
+        success: result.success,
+        categories: result.categories,
+        message: result.message,
+      );
+    }
     // Return cached categories if fresh
     if (_categoriesCache != null && _categoriesFetchedAt != null &&
         DateTime.now().difference(_categoriesFetchedAt!) < _categoriesTtl) {
@@ -366,7 +454,7 @@ class ShopService {
     }
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/shop/categories?include_children=$includeChildren'),
       );
 
@@ -398,13 +486,21 @@ class ShopService {
 
   /// Get single product details
   Future<ProductResult> getProduct(int productId, {int? currentUserId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getProduct(productId);
+      return ProductResult(
+        success: result.success,
+        product: result.product,
+        message: result.message,
+      );
+    }
     final stopwatch = Stopwatch()..start();
     String url = '$_baseUrl/shop/products/$productId';
     if (currentUserId != null) url += '?user_id=$currentUserId';
     _logRequest('GET', url, params: {'product_id': productId, 'user_id': currentUserId});
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -459,6 +555,36 @@ class ShopService {
     String? serviceLocation,
     List<File>? images,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.createProduct(
+        title: title,
+        description: description,
+        type: type,
+        price: price,
+        compareAtPrice: compareAtPrice,
+        currency: currency,
+        stockQuantity: stockQuantity,
+        categoryId: categoryId,
+        tags: tags,
+        condition: condition,
+        locationName: locationName,
+        latitude: latitude,
+        longitude: longitude,
+        allowPickup: allowPickup,
+        allowDelivery: allowDelivery,
+        allowShipping: allowShipping,
+        deliveryFee: deliveryFee,
+        deliveryNotes: deliveryNotes,
+        pickupAddress: pickupAddress,
+        images: images,
+      );
+      return ProductResult(
+        success: result.success,
+        product: result.product,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kuunda bidhaa'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/products';
     _logRequest('POST', url, body: {
@@ -595,6 +721,37 @@ class ShopService {
     List<File>? newImages,
     List<String>? removeImages,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.updateProduct(
+        productId: productId,
+        title: title,
+        description: description,
+        price: price,
+        compareAtPrice: compareAtPrice,
+        stockQuantity: stockQuantity,
+        status: status,
+        categoryId: categoryId,
+        tags: tags,
+        condition: condition,
+        locationName: locationName,
+        latitude: latitude,
+        longitude: longitude,
+        allowPickup: allowPickup,
+        allowDelivery: allowDelivery,
+        allowShipping: allowShipping,
+        deliveryFee: deliveryFee,
+        deliveryNotes: deliveryNotes,
+        pickupAddress: pickupAddress,
+        newImages: newImages,
+        removeImages: removeImages,
+      );
+      return ProductResult(
+        success: result.success,
+        product: result.product,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kubadilisha bidhaa'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/products/$productId';
     final updateFields = <String, dynamic>{
@@ -708,6 +865,10 @@ class ShopService {
 
   /// Delete a product
   Future<bool> deleteProduct(int productId, int sellerId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlShopService.deleteProduct(productId);
+    }
+
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/products/$productId';
     final body = {'seller_id': sellerId};
@@ -745,6 +906,20 @@ class ShopService {
     int perPage = 20,
     int? currentUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getSellerProducts(
+        status: status,
+        page: page,
+        perPage: perPage,
+      );
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kupakia bidhaa za muuzaji'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final params = <String, String>{
       'user_id': sellerId.toString(),
@@ -760,7 +935,7 @@ class ShopService {
     _logRequest('GET', uri.toString(), params: params);
 
     try {
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -810,12 +985,29 @@ class ShopService {
   // ============================================================================
 
   /// Toggle favorite status for a product
-  Future<FavoriteResult> toggleFavorite(int userId, int productId) async {
+  /// UN-013 / posts.md row 78 — when [originPostId] is supplied, the
+  /// backend fires wishlist_add·author so the originating post creator
+  /// earns from the favorite.
+  Future<FavoriteResult> toggleFavorite(
+    int userId,
+    int productId, {
+    int? originPostId,
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.toggleFavorite(productId);
+      return FavoriteResult(
+        success: result.success,
+        isFavorited: result.isFavorited,
+        message: result.message,
+      );
+    }
     try {
+      final body = <String, dynamic>{'user_id': userId};
+      if (originPostId != null) body['origin_post_id'] = originPostId;
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/products/$productId/favorite'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId}),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
@@ -841,8 +1033,17 @@ class ShopService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getFavorites(page: page, perPage: perPage);
+      return ProductListResult(
+        success: result.success,
+        products: result.products,
+        meta: result.meta,
+        message: result.message,
+      );
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
           '$_baseUrl/shop/favorites?user_id=$userId&page=$page&per_page=$perPage',
         ),
@@ -878,12 +1079,20 @@ class ShopService {
 
   /// Get user's cart
   Future<CartResult> getCart(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getCart();
+      return CartResult(
+        success: result.success,
+        cart: result.cart,
+        message: result.message,
+      );
+    }
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/cart?user_id=$userId';
     _logRequest('GET', url, params: {'user_id': userId});
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -912,6 +1121,14 @@ class ShopService {
 
   /// Add item to cart
   Future<CartResult> addToCart(int userId, int productId, {int quantity = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.addToCart(productId, quantity: quantity);
+      return CartResult(
+        success: result.success,
+        cart: result.cart,
+        message: result.message ?? (result.success ? 'Imeongezwa kwenye kikapu' : null),
+      );
+    }
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/cart/items';
     final body = {
@@ -958,6 +1175,14 @@ class ShopService {
     int productId,
     int quantity,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.updateCartItem(productId, quantity);
+      return CartResult(
+        success: result.success,
+        cart: result.cart,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/shop/cart/items/$productId'),
@@ -987,6 +1212,14 @@ class ShopService {
 
   /// Remove item from cart
   Future<CartResult> removeFromCart(int userId, int productId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.removeFromCart(productId);
+      return CartResult(
+        success: result.success,
+        cart: result.cart,
+        message: result.message,
+      );
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/shop/cart/items/$productId'),
@@ -1013,6 +1246,9 @@ class ShopService {
 
   /// Clear entire cart
   Future<bool> clearCart(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlShopService.clearCart();
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/shop/cart'),
@@ -1041,9 +1277,43 @@ class ShopService {
     String? deliveryNotes,
     String? pin, // TAJIRI Wallet PIN for payment
     String paymentMethod = 'wallet',
-    String? mpesaPhone,
     String? promoCode,
+    int? originPostId,
+    int? affiliateUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.createOrder(
+        productId: productId,
+        quantity: quantity,
+        deliveryMethod: deliveryMethod,
+        deliveryAddress: deliveryAddress,
+        deliveryNotes: deliveryNotes,
+        pin: pin,
+        paymentMethod: paymentMethod,
+      );
+      if (result.success && result.order != null) {
+        final order = result.order!;
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            ExpenditureService.recordExpenditure(
+              token: token,
+              amount: order.totalAmount,
+              category: _shopCategoryToBudget(order.product?.category?.name),
+              description: 'Shop: ${order.product?.title ?? "Order #${order.id}"}',
+              referenceId: 'shop_order_${order.id}',
+              sourceModule: 'shop',
+            ).catchError((_) => null);
+          }
+        }).catchError((_) => null);
+      }
+      return OrderResult(
+        success: result.success,
+        order: result.order,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kuunda oda'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/orders';
     final body = {
@@ -1054,8 +1324,10 @@ class ShopService {
       if (deliveryAddress != null) 'delivery_address': deliveryAddress,
       if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
       'payment_method': paymentMethod,
-      if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
       if (promoCode != null) 'promo_code': promoCode,
+      // UN-014 — affiliate + UN-012 — origin post chain.
+      if (originPostId != null) 'origin_post_id': originPostId,
+      if (affiliateUserId != null) 'affiliate_user_id': affiliateUserId,
       // Note: PIN not logged for security
     };
     _logRequest('POST', url, body: {...body, 'pin': pin != null ? '***' : null});
@@ -1114,9 +1386,48 @@ class ShopService {
     required List<CheckoutItem> items,
     String? pin, // TAJIRI Wallet PIN for payment
     String paymentMethod = 'wallet',
-    String? mpesaPhone,
     String? promoCode,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.checkout(
+        items: items
+            .map(
+              (i) => {
+                'productId': i.productId.toString(),
+                'quantity': i.quantity,
+                'deliveryMethod': i.deliveryMethod.value,
+                if (i.deliveryAddress != null) 'deliveryAddress': i.deliveryAddress,
+                if (i.deliveryNotes != null) 'deliveryNotes': i.deliveryNotes,
+              },
+            )
+            .toList(),
+        pin: pin,
+        paymentMethod: paymentMethod,
+      );
+      if (result.success) {
+        LocalStorageService.getInstance().then((storage) {
+          final token = storage.getAuthToken();
+          if (token != null) {
+            for (final order in result.orders) {
+              ExpenditureService.recordExpenditure(
+                token: token,
+                amount: order.totalAmount,
+                category: _shopCategoryToBudget(order.product?.category?.name),
+                description: 'Shop: ${order.product?.title ?? "Order #${order.id}"}',
+                referenceId: 'shop_order_${order.id}',
+                sourceModule: 'shop',
+              ).catchError((_) => null);
+            }
+          }
+        }).catchError((_) => null);
+      }
+      return OrderListResult(
+        success: result.success,
+        orders: result.orders,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kufanya checkout'),
+      );
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/checkout'),
@@ -1126,7 +1437,6 @@ class ShopService {
           'items': items.map((i) => i.toJson()).toList(),
           if (pin != null) 'pin': pin,
           'payment_method': paymentMethod,
-          if (mpesaPhone != null) 'mpesa_phone': mpesaPhone,
           if (promoCode != null) 'promo_code': promoCode,
         }),
       );
@@ -1171,7 +1481,11 @@ class ShopService {
   Future<PromoCodeResult> validatePromoCode({
     required String code,
     required int userId,
+    double? subtotal,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlShopService.validatePromoCode(code: code, subtotal: subtotal);
+    }
     final url = '$_baseUrl/shop/promo/validate';
     try {
       final response = await http.post(
@@ -1203,6 +1517,20 @@ class ShopService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getBuyerOrders(
+        status: status,
+        page: page,
+        perPage: perPage,
+      );
+      return OrderListResult(
+        success: result.success,
+        orders: result.orders,
+        meta: result.meta,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kupakia oda'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final params = <String, String>{
       'user_id': userId.toString(),
@@ -1217,7 +1545,7 @@ class ShopService {
     _logRequest('GET', uri.toString(), params: params);
 
     try {
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -1269,6 +1597,20 @@ class ShopService {
     int page = 1,
     int perPage = 20,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getSellerOrders(
+        status: status,
+        page: page,
+        perPage: perPage,
+      );
+      return OrderListResult(
+        success: result.success,
+        orders: result.orders,
+        meta: result.meta,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kupakia oda'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final params = <String, String>{
       'user_id': userId.toString(),
@@ -1283,7 +1625,7 @@ class ShopService {
     _logRequest('GET', uri.toString(), params: params);
 
     try {
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -1330,8 +1672,17 @@ class ShopService {
 
   /// Get single order details
   Future<OrderResult> getOrder(int orderId, {required int userId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getOrder(orderId);
+      return OrderResult(
+        success: result.success,
+        order: result.order,
+        message: result.message ?? (result.success ? null : 'Oda haipatikani'),
+      );
+    }
+
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/shop/orders/$orderId?user_id=$userId'),
       );
 
@@ -1362,6 +1713,20 @@ class ShopService {
     String? note,
     DateTime? estimatedDelivery,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.updateOrderStatus(
+        orderId,
+        status: status,
+        trackingNumber: trackingNumber,
+        estimatedDelivery: estimatedDelivery,
+      );
+      return OrderResult(
+        success: result.success,
+        order: result.order,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kubadilisha hali ya oda'),
+      );
+    }
+
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/shop/orders/$orderId/status'),
@@ -1399,6 +1764,15 @@ class ShopService {
     required int userId,
     String? reason,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.cancelOrder(orderId, reason: reason);
+      return OrderResult(
+        success: result.success,
+        order: result.order,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kughairi oda'),
+      );
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/orders/$orderId/cancel'),
@@ -1428,6 +1802,33 @@ class ShopService {
 
   /// Mark order as received (for buyers)
   Future<OrderResult> confirmReceived(int orderId, {required int buyerId}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.confirmReceived(orderId);
+      if (result.success && result.order != null) {
+        final order = result.order!;
+        if (order.sellerId > 0) {
+          LocalStorageService.getInstance().then((storage) {
+            final token = storage.getAuthToken();
+            if (token != null) {
+              IncomeService.recordIncome(
+                token: token,
+                amount: order.totalAmount,
+                source: 'shop_sale',
+                description: 'Sale: ${order.product?.title ?? "Order #${order.id}"}',
+                referenceId: 'shop_sale_${order.id}',
+                sourceModule: 'shop',
+              ).catchError((_) => null);
+            }
+          }).catchError((_) => null);
+        }
+      }
+      return OrderResult(
+        success: result.success,
+        order: result.order,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kuthibitisha kupokea'),
+      );
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/orders/$orderId/received'),
@@ -1516,6 +1917,22 @@ class ShopService {
     int? rating, // Filter by specific rating
     int? currentUserId,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getProductReviews(
+        productId,
+        page: page,
+        perPage: perPage,
+        rating: rating,
+      );
+      return ReviewListResult(
+        success: result.success,
+        reviews: result.reviews,
+        stats: result.stats,
+        meta: result.meta,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kupakia maoni'),
+      );
+    }
+
     try {
       final params = <String, String>{
         'page': page.toString(),
@@ -1527,7 +1944,7 @@ class ShopService {
 
       final uri = Uri.parse('$_baseUrl/shop/products/$productId/reviews')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1564,6 +1981,20 @@ class ShopService {
     String? comment,
     List<File>? images,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.createReview(
+        productId: productId,
+        rating: rating,
+        comment: comment,
+        images: images,
+      );
+      return ReviewResult(
+        success: result.success,
+        review: result.review,
+        message: result.message ?? (result.success ? null : 'Imeshindwa kutuma tathmini'),
+      );
+    }
+
     try {
       final request = http.MultipartRequest(
         'POST',
@@ -1619,6 +2050,10 @@ class ShopService {
 
   /// Mark a review as helpful
   Future<bool> markReviewHelpful(int reviewId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlShopService.markReviewHelpful(reviewId);
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/shop/reviews/$reviewId/helpful'),
@@ -1635,6 +2070,10 @@ class ShopService {
 
   /// Delete own review
   Future<bool> deleteReview(int reviewId, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlShopService.deleteReview(reviewId);
+    }
+
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/shop/reviews/$reviewId'),
@@ -1655,12 +2094,26 @@ class ShopService {
 
   /// Get seller statistics
   Future<SellerStatsResult> getSellerStats(int sellerId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final result = await GraphqlShopService.getSellerStats(sellerId);
+      if (result.success && result.stats != null) {
+        return SellerStatsResult(
+          success: true,
+          stats: SellerStats.fromJson(result.stats!),
+        );
+      }
+      return SellerStatsResult(
+        success: false,
+        message: result.message ?? 'Imeshindwa kupakia takwimu',
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final url = '$_baseUrl/shop/seller/$sellerId/stats';
     _logRequest('GET', url, params: {'seller_id': sellerId});
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       stopwatch.stop();
       _logResponse(response.statusCode, response.body, duration: stopwatch.elapsed);
 
@@ -1697,14 +2150,29 @@ class ShopService {
     }
   }
 
-  /// Record product view
-  Future<void> recordProductView(int productId, {int? userId}) async {
+  /// Record product view. G-F-006: pass [originPostId] when the view
+  /// originates from a tagged-product tap on a post — backend fires
+  /// product_expand·post_author so the originating creator earns.
+  Future<void> recordProductView(
+    int productId, {
+    int? userId,
+    int? originPostId,
+  }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      await GraphqlShopService.recordProductView(
+        productId,
+        originPostId: originPostId,
+      );
+      return;
+    }
+
     try {
       await http.post(
         Uri.parse('$_baseUrl/shop/products/$productId/view'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           if (userId != null) 'user_id': userId,
+          if (originPostId != null) 'origin_post_id': originPostId,
         }),
       );
     } catch (_) {

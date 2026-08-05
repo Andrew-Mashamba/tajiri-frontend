@@ -4,12 +4,14 @@ import '../models/flywheel_models.dart';
 import '../models/collaboration_models.dart';
 import '../services/creator_service.dart';
 import '../services/collaboration_service.dart';
+import '../services/creator_onboarding_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../models/payment_models.dart';
 import '../widgets/creator_tier_badge.dart';
 import '../widgets/streak_indicator.dart';
 import '../widgets/collaboration_card.dart';
+import '../widgets/tajirika_welcome_banner.dart';
 import '../../l10n/app_strings_scope.dart';
 import 'settings_screen.dart';
 
@@ -30,6 +32,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
   final CreatorService _creatorService = CreatorService();
   final CollaborationService _collaborationService = CollaborationService();
   final PaymentService _paymentService = PaymentService();
+  final CreatorOnboardingService _onboardingService = CreatorOnboardingService();
   CreatorScore? _score;
   CreatorStreak? _streak;
   ViewerStreak? _viewerStreak;
@@ -37,6 +40,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
   CreatorFundPool? _fundPool;
   List<CollaborationSuggestion> _collaborations = [];
   ContentCalendar? _calendar;
+  CreatorOnboardingState? _onboarding;
   bool _loading = true;
 
   @override
@@ -56,6 +60,7 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
         _creatorService.getViewerStreak(userId: widget.userId),
         _paymentService.getCurrentPool(),
         _creatorService.getContentCalendar(creatorId: widget.userId),
+        _onboardingService.fetch(widget.userId),
       ]);
 
       if (mounted) {
@@ -69,12 +74,29 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
           _viewerStreak = results[4] as ViewerStreak?;
           _fundPool = results[5] as CreatorFundPool?;
           _calendar = results[6] as ContentCalendar?;
+          _onboarding = results[7] as CreatorOnboardingState?;
           _loading = false;
         });
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[CreatorDashboard] _loadData error: $e');
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Phase 1.4 — optimistic dismiss with revert on failure.
+  Future<void> _dismissTajirikaBanner() async {
+    final prev = _onboarding;
+    if (prev == null) return;
+    setState(() {
+      _onboarding = prev.copyWith(
+        tajirikaShowBanner: false,
+        tajirikaBannerDismissedAt: DateTime.now(),
+      );
+    });
+    final ok = await _onboardingService.dismissTajirikaBanner(widget.userId);
+    if (!ok && mounted) {
+      setState(() => _onboarding = prev);
     }
   }
 
@@ -180,6 +202,17 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
               ],
             ),
             const SizedBox(height: 12),
+            // Phase 1.4 — Tajirika auto-prov welcome banner. Renders once
+            // per user; tapping "Open Tajirika" or the close button both
+            // dismiss it server-side.
+            if (_onboarding?.tajirikaShowBanner == true)
+              TajirikaWelcomeBanner(
+                onOpenTajirika: () {
+                  _dismissTajirikaBanner();
+                  Navigator.pushNamed(context, '/tajirika');
+                },
+                onDismiss: _dismissTajirikaBanner,
+              ),
             // Tier badge + streak row
             Row(
               children: [
@@ -196,6 +229,27 @@ class _CreatorDashboardSectionState extends State<CreatorDashboardSection>
                 ],
               ],
             ),
+            // Phase 1.7 — grace-days remaining. `banked_skip_days` already
+            // exists server-side on creator_streaks; surface it here so
+            // creators can see how much room they have to take a day off
+            // without losing their streak.
+            if (_streak != null && _streak!.bankedSkipDays > 0) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.spa_rounded,
+                      size: 14, color: Color(0xFF666666)),
+                  const SizedBox(width: 6),
+                  Text(
+                    strings?.isSwahili == true
+                        ? 'Una siku ${_streak!.bankedSkipDays} za neema zilizobaki'
+                        : '${_streak!.bankedSkipDays} grace day${_streak!.bankedSkipDays == 1 ? '' : 's'} left',
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF666666)),
+                  ),
+                ],
+              ),
+            ],
             // Viewer streak row
             if (_viewerStreak != null && _viewerStreak!.currentStreakDays > 0) ...[
               const SizedBox(height: 8),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/customer_order.dart';
 
@@ -56,7 +57,7 @@ class CustomerOrdersService {
       };
       final uri = Uri.parse('$_baseUrl/customer-orders')
           .replace(queryParameters: params);
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
         final raw = body['data'] as List? ?? const [];
@@ -82,7 +83,7 @@ class CustomerOrdersService {
     try {
       final uri = Uri.parse('$_baseUrl/customer-orders/${source.apiValue}/$id')
           .replace(queryParameters: {'user_id': '$userId'});
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
         return CustomerOrderResult(
@@ -196,7 +197,7 @@ class CustomerOrdersService {
     try {
       final uri = Uri.parse('$_baseUrl/partner-weekly-benchmarks')
           .replace(queryParameters: {'partner_user_id': '$partnerUserId'});
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
         return (body['data'] as Map).cast<String, dynamic>();

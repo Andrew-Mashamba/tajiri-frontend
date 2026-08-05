@@ -92,6 +92,7 @@ class ProfileTabDefaults {
     ProfileTabConfig(id: 'live', label: 'Live', icon: 'live_tv', enabled: true, order: 4),
     ProfileTabConfig(id: 'groups', label: 'Groups', icon: 'group', enabled: true, order: 5),
     ProfileTabConfig(id: 'saved', label: 'Saved', icon: 'bookmark', enabled: true, order: 7),
+    ProfileTabConfig(id: 'collections', label: 'Collections', icon: 'collections_bookmark', enabled: true, order: 7),
     ProfileTabConfig(id: 'creator', label: 'Creator', icon: 'auto_awesome', enabled: true, order: 8),
     ProfileTabConfig(id: 'settings', label: 'Settings', icon: 'settings', enabled: true, order: 9),
 

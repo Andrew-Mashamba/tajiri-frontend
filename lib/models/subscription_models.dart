@@ -252,3 +252,116 @@ class CreatorPayout {
     }
   }
 }
+
+class TierListResult {
+  final bool success;
+  final List<SubscriptionTier> tiers;
+  final String? message;
+
+  TierListResult({required this.success, this.tiers = const [], this.message});
+}
+
+class TierResult {
+  final bool success;
+  final SubscriptionTier? tier;
+  final String? message;
+
+  TierResult({required this.success, this.tier, this.message});
+}
+
+class SubscriptionResult {
+  final bool success;
+  final Subscription? subscription;
+  final String? message;
+
+  SubscriptionResult({required this.success, this.subscription, this.message});
+}
+
+class SubscriptionListResult {
+  final bool success;
+  final List<Subscription> subscriptions;
+  final SubscriptionPaginationMeta? meta;
+  final String? message;
+
+  SubscriptionListResult({
+    required this.success,
+    this.subscriptions = const [],
+    this.meta,
+    this.message,
+  });
+}
+
+class TipResult {
+  final bool success;
+  final String? message;
+  final bool idempotentReplay;
+
+  TipResult({required this.success, this.message, this.idempotentReplay = false});
+}
+
+class EarningsListResult {
+  final bool success;
+  final List<CreatorEarning> earnings;
+  final SubscriptionPaginationMeta? meta;
+  final String? message;
+
+  EarningsListResult({
+    required this.success,
+    this.earnings = const [],
+    this.meta,
+    this.message,
+  });
+}
+
+class EarningsSummaryResult {
+  final bool success;
+  final EarningsSummary? summary;
+  final String? message;
+
+  EarningsSummaryResult({required this.success, this.summary, this.message});
+}
+
+class PayoutResult {
+  final bool success;
+  final CreatorPayout? payout;
+  final String? message;
+
+  PayoutResult({required this.success, this.payout, this.message});
+}
+
+class PayoutListResult {
+  final bool success;
+  final List<CreatorPayout> payouts;
+  final SubscriptionPaginationMeta? meta;
+  final String? message;
+
+  PayoutListResult({
+    required this.success,
+    this.payouts = const [],
+    this.meta,
+    this.message,
+  });
+}
+
+class SubscriptionPaginationMeta {
+  final int currentPage;
+  final int lastPage;
+  final int perPage;
+  final int total;
+
+  SubscriptionPaginationMeta({
+    required this.currentPage,
+    required this.lastPage,
+    required this.perPage,
+    required this.total,
+  });
+
+  factory SubscriptionPaginationMeta.fromJson(Map<String, dynamic> json) {
+    return SubscriptionPaginationMeta(
+      currentPage: json['current_page'] ?? 1,
+      lastPage: json['last_page'] ?? 1,
+      perPage: json['per_page'] ?? 20,
+      total: json['total'] ?? 0,
+    );
+  }
+}

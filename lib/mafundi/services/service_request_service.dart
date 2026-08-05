@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/service_request.dart';
 
@@ -45,6 +46,8 @@ class ServiceRequestService {
     }
   }
 
+  /// UN-015: when [originPostId] is set, the backend can fire
+  /// local_business_conversion·author on request acceptance / completion.
   static Future<ServiceRequestResult> create({
     required int userId,
     required String skillCategory,
@@ -56,6 +59,7 @@ class ServiceRequestService {
     List<String> photos = const [],
     double? lat,
     double? lng,
+    int? originPostId,
   }) async {
     final url = '$_baseUrl/service-requests';
     _log('POST $url skill=$skillCategory userId=$userId');
@@ -76,6 +80,7 @@ class ServiceRequestService {
       }
       if (lat != null) body['lat'] = lat;
       if (lng != null) body['lng'] = lng;
+      if (originPostId != null) body['origin_post_id'] = originPostId;
       final res = await http.post(
         Uri.parse(url),
         headers: const {'Content-Type': 'application/json'},
@@ -112,7 +117,7 @@ class ServiceRequestService {
     final uri = Uri.parse('$_baseUrl/service-requests').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -141,7 +146,7 @@ class ServiceRequestService {
         .replace(queryParameters: {'user_id': '$userId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('get status=${res.statusCode} body=${_snippet(res.body)}');
       return _decodeOne(res);
     } catch (e, stack) {

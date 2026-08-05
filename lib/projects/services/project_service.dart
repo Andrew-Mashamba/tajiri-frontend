@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/project_models.dart';
 
@@ -31,7 +32,7 @@ class ProjectService {
     try {
       final url = '$_base/business/$businessId/projects';
       _log('GET $url');
-      final res = await http.get(Uri.parse(url),
+      final res = await httpGetWithRetry(Uri.parse(url),
           headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -115,7 +116,7 @@ class ProjectService {
     try {
       final url = '$_base/business/projects/$projectId/tasks';
       _log('GET $url');
-      final res = await http.get(Uri.parse(url),
+      final res = await httpGetWithRetry(Uri.parse(url),
           headers: ApiConfig.authHeaders(token));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);

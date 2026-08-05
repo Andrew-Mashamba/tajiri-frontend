@@ -3,11 +3,11 @@
 # Usage:
 #   ./scripts/test_comments_api.sh [BASE_URL] [POST_ID] [USER_ID]
 # Example:
-#   ./scripts/test_comments_api.sh https://zima-uat.site:8003/api 42 1
+#   ./scripts/test_comments_api.sh https://tajiri.zimasystems.com/api 42 1
 # Optional: set BEARER_TOKEN for authenticated requests (e.g. add comment).
 
 set -e
-BASE_URL="${1:-https://zima-uat.site:8003/api}"
+BASE_URL="${1:-https://tajiri.zimasystems.com/api}"
 POST_ID="${2:-1}"
 USER_ID="${3:-1}"
 echo "Base URL: $BASE_URL"

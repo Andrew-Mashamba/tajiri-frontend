@@ -29,7 +29,7 @@ import '../../widgets/cached_media_image.dart';
 import '../../photos/screens/photos_screen.dart';
 import '../../myphotos/widgets/photo_gallery_widget.dart';
 import '../../mymusic/widgets/music_gallery_widget.dart';
-import '../../widgets/gallery/shop_gallery_widget.dart';
+import '../../shop/seller/screens/my_shop_screen.dart';
 import '../michangogallerywidget_screen.dart';
 import '../campaigns/create_campaign_screen.dart';
 import '../settings/settings_screen.dart';
@@ -843,6 +843,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     switch (tab.id) {
       case 'saved':
         Navigator.pushNamed(context, '/saved-posts');
+        return;
+      case 'collections':
+        Navigator.pushNamed(context, '/collections/${widget.userId}');
         return;
       case 'photos':
         Navigator.push(
@@ -2257,7 +2260,7 @@ class _ProfileTabPage extends StatelessWidget {
           isOwnProfile: isOwnProfile,
         );
       case 'shop':
-        return ShopGalleryWidget(
+        return MyShopScreen(
           userId: userId,
           isOwnProfile: isOwnProfile,
           onProductAdded: onRefresh,

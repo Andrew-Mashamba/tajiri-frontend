@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec line 614+ — customer beauty profile (skin type / hair type / allergies / concerns).
@@ -37,7 +38,7 @@ class BeautyProfileService {
     final uri = Uri.parse('$_baseUrl/users/$userId/beauty-profile');
     debugPrint('[BeautyProfileService] GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true && body['data'] is Map) {

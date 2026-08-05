@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/draft_models.dart';
 import '../config/api_config.dart';
@@ -51,7 +52,7 @@ class DraftService {
       final uri = Uri.parse('${ApiConfig.baseUrl}/drafts')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: ApiConfig.headers,
       );
@@ -83,7 +84,7 @@ class DraftService {
   /// Get draft counts
   Future<DraftResult> getDraftCounts() async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/drafts/counts'),
         headers: ApiConfig.headers,
       );
@@ -105,7 +106,7 @@ class DraftService {
   /// Get a specific draft
   Future<DraftResult> getDraft(int draftId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/drafts/$draftId'),
         headers: ApiConfig.headers,
       );

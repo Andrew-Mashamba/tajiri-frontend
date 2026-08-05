@@ -1190,6 +1190,8 @@ PODS:
   - abseil/xcprivacy (1.20240722.0)
   - add_2_calendar (0.0.1):
     - Flutter
+  - app_links (6.4.1):
+    - Flutter
   - audio_service (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -1815,6 +1817,9 @@ PODS:
   - MLKitXenoCommon (1.0.0-beta16):
     - MLKitCommon (~> 14.0)
     - MLKitVision (~> 10.0)
+  - mobile_scanner (7.0.0):
+    - Flutter
+    - FlutterMacOS
   - nanopb (3.30910.0):
     - nanopb/decode (= 3.30910.0)
     - nanopb/encode (= 3.30910.0)
@@ -1834,6 +1839,8 @@ PODS:
   - PromisesObjC (2.4.0)
   - RecaptchaInterop (101.0.0)
   - rive_native (0.0.1):
+    - Flutter
+  - screen_capture_event (0.0.1):
     - Flutter
   - SDWebImage (5.21.7):
     - SDWebImage/Core (= 5.21.7)
@@ -1868,6 +1875,7 @@ PODS:
 
 DEPENDENCIES:
   - add_2_calendar (from `.symlinks/plugins/add_2_calendar/ios`)
+  - app_links (from `.symlinks/plugins/app_links/ios`)
   - audio_service (from `.symlinks/plugins/audio_service/darwin`)
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
   - audioplayers_darwin (from `.symlinks/plugins/audioplayers_darwin/darwin`)
@@ -1915,12 +1923,14 @@ DEPENDENCIES:
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
   - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
+  - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
   - network_info_plus (from `.symlinks/plugins/network_info_plus/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - printing (from `.symlinks/plugins/printing/ios`)
   - rive_native (from `.symlinks/plugins/rive_native/ios`)
+  - screen_capture_event (from `.symlinks/plugins/screen_capture_event/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sms_autofill (from `.symlinks/plugins/sms_autofill/ios`)
@@ -2011,6 +2021,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   add_2_calendar:
     :path: ".symlinks/plugins/add_2_calendar/ios"
+  app_links:
+    :path: ".symlinks/plugins/app_links/ios"
   audio_service:
     :path: ".symlinks/plugins/audio_service/darwin"
   audio_session:
@@ -2103,6 +2115,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/just_audio/darwin"
   local_auth_darwin:
     :path: ".symlinks/plugins/local_auth_darwin/darwin"
+  mobile_scanner:
+    :path: ".symlinks/plugins/mobile_scanner/darwin"
   network_info_plus:
     :path: ".symlinks/plugins/network_info_plus/ios"
   package_info_plus:
@@ -2115,6 +2129,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/printing/ios"
   rive_native:
     :path: ".symlinks/plugins/rive_native/ios"
+  screen_capture_event:
+    :path: ".symlinks/plugins/screen_capture_event/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
@@ -2135,6 +2151,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   abseil: a05cc83bf02079535e17169a73c5be5ba47f714b
   add_2_calendar: e626377f607d055070093cbd56abd1fafa1a02a5
+  app_links: 3dbc685f76b1693c66a6d9dd1e9ab6f73d97dc0a
   audio_service: aa99a6ba2ae7565996015322b0bb024e1d25c6fd
   audio_session: 9bb7f6c970f21241b19f5a3658097ae459681ba0
   audioplayers_darwin: 4f9ca89d92d3d21cec7ec580e78ca888e5fb68bd
@@ -2246,6 +2263,7 @@ SPEC CHECKSUMS:
   MLKitVision: 39a5a812db83c4a0794445088e567f3631c11961
   MLKitVisionKit: 316cd349468797ef4e7fd785bf658ca838984de3
   MLKitXenoCommon: 1a4268c1222a6043047af5bb9435028206c63287
+  mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   network_info_plus: 16d8832ab43b7bc22b168d76fffcad9da35486d2
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
@@ -2255,6 +2273,7 @@ SPEC CHECKSUMS:
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   rive_native: c9ed76ccf380f38205edcb8f552121aac8ec39da
+  screen_capture_event: efc4eb455e1c5cc304cec85a4372e0a633ff2a7c
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a

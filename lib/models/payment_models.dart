@@ -48,7 +48,7 @@ class CreatorFundPool {
     return CreatorFundPool(
       id: _parseInt(json['id']),
       totalAmount: _parseDouble(json['total_amount']),
-      currency: (json['currency'] as String?) ?? 'KES',
+      currency: (json['currency'] as String?) ?? 'TZS',
       month: (json['month'] as String?) ?? '',
       isDistributed: _parseBool(json['is_distributed']),
       distributedAt: json['distributed_at'] != null
@@ -102,7 +102,7 @@ class CreatorFundPayout {
       effectiveMultiplier: _parseDouble(json['effective_multiplier'], 1.0),
       finalScore: _parseDouble(json['final_score']),
       payoutAmount: _parseDouble(json['payout_amount']),
-      payoutCurrency: (json['payout_currency'] as String?) ?? 'KES',
+      payoutCurrency: (json['payout_currency'] as String?) ?? 'TZS',
       status: (json['status'] as String?) ?? 'pending',
       paidAt: json['paid_at'] != null
           ? DateTime.tryParse(json['paid_at'].toString())

@@ -33,6 +33,18 @@ class LiveStream {
   final StreamUser? user;
   final List<StreamCohost>? cohosts;
   final bool? isLiked;
+  /// Phase 3b — VOD URL (set on stream end when recording is processed).
+  final String? vodUrl;
+  final String? vodStatus; // none|processing|ready|expired
+  /// Phase G — community-contributed translation tracks (subtitles).
+  /// Backend returns these under `translations` when present; the VOD
+  /// player surfaces them through a language picker so viewers can
+  /// activate non-default subtitles (fires translated_vod_view).
+  final List<StreamTranslationTrack>? translations;
+  /// Phase G — broadcaster-pinned outbound link. Renders as an overlay
+  /// on the viewer; viewer tap fires external_link_click·author.
+  final String? pinnedLinkUrl;
+  final String? pinnedLinkLabel;
 
   LiveStream({
     required this.id,
@@ -67,6 +79,11 @@ class LiveStream {
     this.user,
     this.cohosts,
     this.isLiked,
+    this.vodUrl,
+    this.vodStatus,
+    this.translations,
+    this.pinnedLinkUrl,
+    this.pinnedLinkLabel,
   });
 
   factory LiveStream.fromJson(Map<String, dynamic> json) {
@@ -107,6 +124,15 @@ class LiveStream {
           ? (json['cohosts'] as List).map((c) => StreamCohost.fromJson(c)).toList()
           : null,
       isLiked: json['is_liked'],
+      vodUrl: json['vod_url'] as String?,
+      vodStatus: json['vod_status'] as String?,
+      translations: json['translations'] is List
+          ? (json['translations'] as List)
+              .map((t) => StreamTranslationTrack.fromJson(t as Map<String, dynamic>))
+              .toList()
+          : null,
+      pinnedLinkUrl: json['pinned_link_url'] as String?,
+      pinnedLinkLabel: json['pinned_link_label'] as String?,
     );
   }
 
@@ -443,6 +469,75 @@ class StreamCohost {
       joinedAt: json['joined_at'] != null ? DateTime.parse(json['joined_at']) : null,
       leftAt: json['left_at'] != null ? DateTime.parse(json['left_at']) : null,
       user: json['user'] != null ? StreamUser.fromJson(json['user']) : null,
+    );
+  }
+}
+
+/// Community-contributed translation/subtitle track. The translator
+/// earns translated_vod_view·translator each time a viewer activates
+/// their track on VOD playback.
+class StreamTranslationTrack {
+  final int id;
+  final int translatorUserId;
+  final String sourceLanguageCode;
+  final String targetLanguageCode;
+  final String? subtitleUrl;
+
+  const StreamTranslationTrack({
+    required this.id,
+    required this.translatorUserId,
+    required this.sourceLanguageCode,
+    required this.targetLanguageCode,
+    this.subtitleUrl,
+  });
+
+  factory StreamTranslationTrack.fromJson(Map<String, dynamic> json) {
+    return StreamTranslationTrack(
+      id: (json['id'] as num).toInt(),
+      translatorUserId: (json['translator_user_id'] as num).toInt(),
+      sourceLanguageCode: (json['source_language_code'] ?? '').toString(),
+      targetLanguageCode: (json['target_language_code'] ?? '').toString(),
+      subtitleUrl: json['subtitle_url'] as String?,
+    );
+  }
+
+  /// Human-readable label for the language picker.
+  String get label =>
+      '${sourceLanguageCode.toUpperCase()} → ${targetLanguageCode.toUpperCase()}';
+}
+
+/// Q&A question from a viewer; backend returns these via
+/// GET /streams/{id}/questions sorted by upvotes desc.
+class StreamQuestion {
+  final int id;
+  final int userId;
+  final String username;
+  final String question;
+  final int upvotes;
+  final bool isAnswered;
+  final DateTime? createdAt;
+
+  StreamQuestion({
+    required this.id,
+    required this.userId,
+    required this.username,
+    required this.question,
+    this.upvotes = 0,
+    this.isAnswered = false,
+    this.createdAt,
+  });
+
+  factory StreamQuestion.fromJson(Map<String, dynamic> json) {
+    return StreamQuestion(
+      id: (json['id'] as num).toInt(),
+      userId: (json['user_id'] as num).toInt(),
+      username: (json['username'] ?? '').toString(),
+      question: (json['question'] ?? '').toString(),
+      upvotes: (json['upvotes'] as num?)?.toInt() ?? 0,
+      isAnswered: json['is_answered'] == true,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
     );
   }
 }

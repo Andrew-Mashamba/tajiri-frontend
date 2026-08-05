@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'http_retry.dart';
 import 'local_storage_service.dart';
 
 /// Security-related API calls: 2FA, wallet PIN, recovery codes.
@@ -26,7 +27,8 @@ class SecurityService {
   Future<({bool success, bool enabled, String? error})> check2FAStatus(int userId) async {
     try {
       final token = await _token();
-      final resp = await _client.get(
+      final resp = await httpClientGetWithRetry(
+        _client,
         Uri.parse('${ApiConfig.baseUrl}/2fa/status?user_id=$userId'),
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -170,7 +172,8 @@ class SecurityService {
   Future<({bool success, bool hasPin, bool biometricEnabled, int timeout, String? error})> checkAppLockStatus(int userId) async {
     try {
       final token = await _token();
-      final resp = await _client.get(
+      final resp = await httpClientGetWithRetry(
+        _client,
         Uri.parse('${ApiConfig.baseUrl}/security/pin/status?user_id=$userId'),
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -316,7 +319,8 @@ class SecurityService {
   Future<List<SecurityActivityItem>> activityLog(int userId, {int limit = 50}) async {
     try {
       final token = await _token();
-      final resp = await _client.get(
+      final resp = await httpClientGetWithRetry(
+        _client,
         Uri.parse('${ApiConfig.baseUrl}/users/$userId/security-activity?limit=$limit'),
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -337,7 +341,8 @@ class SecurityService {
   Future<List<SessionInfo>> sessions(int userId) async {
     try {
       final token = await _token();
-      final resp = await _client.get(
+      final resp = await httpClientGetWithRetry(
+        _client,
         Uri.parse('${ApiConfig.baseUrl}/sessions?user_id=$userId'),
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );

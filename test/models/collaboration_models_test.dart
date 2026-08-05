@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tajiri/models/collaboration_models.dart';
+import 'package:tajiri/creator/models/collaboration_models.dart';
 
 void main() {
   group('CollaborationSuggestion', () {

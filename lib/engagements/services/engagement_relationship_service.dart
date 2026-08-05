@@ -1,8 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 class EngagementRelationship {
@@ -37,7 +36,7 @@ class EngagementRelationshipService {
       'customer_user_id': '$customerUserId',
     });
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       if (res.statusCode != 200) return null;
       final r = jsonDecode(res.body);
       if (r['success'] != true || r['data'] == null) return null;

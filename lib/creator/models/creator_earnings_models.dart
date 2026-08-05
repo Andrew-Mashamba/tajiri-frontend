@@ -932,7 +932,24 @@ String metricLabel(String metric, bool isSw) {
       isSw ? 'Mageuzi ya affiliate' : 'Affiliate conversion',
     'local_business_conversion' =>
       isSw ? 'Mageuzi ya biashara ya ndani' : 'Local business conversion',
-    // §XI.A Platform health bonuses (positive multipliers)
+    // §XI.A Engine-level positive multipliers (always emitted by the
+    // earnings pipeline before integrity-framework bonuses apply).
+    'mwanzo_boost' =>
+      isSw ? 'Bonasi ya Mwanzo' : 'Mwanzo (launch) boost',
+    'watch_completion' =>
+      isSw ? 'Bonasi ya kumaliza' : 'Watch-completion bonus',
+    'tier_boost' =>
+      isSw ? 'Bonasi ya daraja' : 'Creator-tier boost',
+    'streak' =>
+      isSw ? 'Bonasi ya mfululizo' : 'Streak bonus',
+    'discovery_mode' =>
+      isSw ? 'Hali ya ugunduzi' : 'Discovery-mode boost',
+    'originality' =>
+      isSw ? 'Uhalisi (engine)' : 'Originality (engine signal)',
+    'actor_trust_expert' =>
+      isSw ? 'Bonasi ya uaminifu wa mtaalamu' : 'Expert-trust bonus',
+    // §XI.A Platform health bonuses (positive multipliers from the
+    // integrity framework — applied on top of engine-level bonuses).
     'originality_bonus' =>
       isSw ? 'Bonasi ya uhalisi' : 'Originality bonus',
     'evergreen_bonus' =>
@@ -960,7 +977,28 @@ String metricLabel(String metric, bool isSw) {
       isSw ? 'Adhabu ya kunyamazisha' : 'Mute-after-view penalty',
     'spam_ring_detection_penalty' =>
       isSw ? 'Adhabu ya spam-ring' : 'Spam-ring detection penalty',
-    // §XI.C Content-safety & AI penalties (classifier-driven)
+    // §XI.C Trust / fraud / safety / AI penalties (classifier-driven
+    // and integrity-pipeline clamps).
+    'actor_trust_age' =>
+      isSw ? 'Punguzo la umri wa akaunti' : 'Account-age clamp',
+    'actor_authenticity' =>
+      isSw ? 'Punguzo la uhalisi wa mtumiaji' : 'Actor authenticity clamp',
+    'actor_network_reputation' =>
+      isSw ? 'Punguzo la sifa ya mtandao' : 'Network-reputation clamp',
+    'fraud_risk' =>
+      isSw ? 'Punguzo la hatari ya udanganyifu' : 'Fraud-risk clamp',
+    'human_probability' =>
+      isSw ? 'Punguzo la uwezekano wa binadamu' : 'Human-probability clamp',
+    'device_cluster' =>
+      isSw ? 'Punguzo la kifaa kilichojaa' : 'Device-cluster clamp',
+    'diminishing_returns' =>
+      isSw ? 'Punguzo la kupungua kwa thamani' : 'Diminishing-returns clamp',
+    'content_safety_mature' =>
+      isSw ? 'Punguzo la maudhui makomavu' : 'Mature-content clamp',
+    'content_safety_suggestive' =>
+      isSw ? 'Punguzo la maudhui ya pendekezo' : 'Suggestive-content clamp',
+    // Legacy/spec-doc names not yet emitted by backend filters — kept
+    // for future-compat. Do not delete unless backend confirms removal.
     'spam_penalty' =>
       isSw ? 'Adhabu ya spam' : 'Spam penalty',
     'misinformation_penalty' =>

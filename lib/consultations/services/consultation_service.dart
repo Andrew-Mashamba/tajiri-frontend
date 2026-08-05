@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/consultation.dart';
 
@@ -96,7 +97,7 @@ class ConsultationService {
     final uri = Uri.parse('$_baseUrl/consultations').replace(queryParameters: params);
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('list status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body['success'] == true) {
@@ -125,7 +126,7 @@ class ConsultationService {
         .replace(queryParameters: {'user_id': '$userId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('get status=${res.statusCode} body=${_snippet(res.body)}');
       return _decodeOne(res);
     } catch (e, stack) {
@@ -145,7 +146,7 @@ class ConsultationService {
         .replace(queryParameters: {'user_id': '$userId'});
     _log('GET $uri');
     try {
-      final res = await http.get(uri);
+      final res = await httpGetWithRetry(uri);
       _log('revealPhone status=${res.statusCode} body=${_snippet(res.body)}');
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200 && body['success'] == true) {

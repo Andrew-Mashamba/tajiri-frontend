@@ -5,8 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
+import '../../../services/http_retry.dart';
 import '../../../config/api_config.dart';
 import '../../core/game_context.dart' as gc;
 import '../../core/game_enums.dart';
@@ -58,7 +57,7 @@ class TriviaGameState extends State<TriviaGame> implements GameInterface {
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/games/trivia/questions?seed=${_ctx.gameSeed}&count=10',
       );
-      final response = await http.get(uri, headers: ApiConfig.headers);
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.headers);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data is Map && data['questions'] is List) {

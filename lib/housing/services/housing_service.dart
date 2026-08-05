@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/local_storage_service.dart';
@@ -35,7 +36,7 @@ class HousingService {
 
       final uri = Uri.parse('$_baseUrl/housing/properties')
           .replace(queryParameters: params.isNotEmpty ? params : null);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -53,7 +54,7 @@ class HousingService {
 
   Future<HousingResult<Property>> getPropertyDetail(int propertyId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/housing/properties/$propertyId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/housing/properties/$propertyId'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -74,7 +75,7 @@ class HousingService {
 
   Future<HousingListResult<MyRental>> getMyRentals(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/housing/rentals?user_id=$userId'),
       );
       if (response.statusCode == 200) {
@@ -96,7 +97,7 @@ class HousingService {
 
   Future<HousingListResult<RentalPayment>> getRentalPayments(int rentalId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/housing/rentals/$rentalId/payments'),
       );
       if (response.statusCode == 200) {

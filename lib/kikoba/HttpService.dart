@@ -8,6 +8,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:http/http.dart' as http;
+import '../services/http_retry.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'DataStore.dart';
@@ -158,7 +159,7 @@ class HttpService {
       final url = "${_baseUrl}vicoba?userId=${DataStore.currentUserId ?? ''}";
       _logger.d('Request URL: $url');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: {"Accept": "application/json"},
       ).timeout(const Duration(seconds: 30));
@@ -455,7 +456,7 @@ class HttpService {
       final url = "${_baseUrl}user?number=$normalizedNumber";
 
       _logger.d('Verification request: GET $url');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: {"Accept": "application/json"},
       ).timeout(const Duration(seconds: 30));
@@ -478,7 +479,7 @@ class HttpService {
       final url = "${_baseUrl}auth-request?userNumber=$userNumber&oauthcallback=${_baseUrl}nmb-oauth-callback";
 
       _logger.d('Authorization URL: $url');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
       ).timeout(const Duration(seconds: 30));
 
@@ -1002,7 +1003,7 @@ class HttpService {
     logger.i('Loan Principal Interest URL: $url');
 
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
 
       if (res.statusCode == 200) {
         logger.i('Loan Principal Interest Response: ${res.body}');
@@ -1066,7 +1067,7 @@ class HttpService {
     logger.i('Loan Info URL: $url');
 
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
 
       if (res.statusCode == 200) {
         logger.i('Loan Info Response: ${res.body}');
@@ -1327,7 +1328,7 @@ class HttpService {
       final link = '${_baseUrl}bank-services?userId=${DataStore.currentUserId ?? ''}';
       logger.i('Getting Bank Services from: $link');
 
-      final res = await http.get(Uri.parse(link), headers: {"Accept": "application/json"});
+      final res = await httpGetWithRetry(Uri.parse(link), headers: {"Accept": "application/json"});
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -1426,7 +1427,7 @@ class HttpService {
   static Future<String> getBalance() async {
     logger.i("Fetching running balance... ${_baseUrl}kikoba/${DataStore.currentKikobaId}/balance");
     try {
-      final response = await http.get(Uri.parse("${_baseUrl}kikoba/${DataStore.currentKikobaId}/balance"));
+      final response = await httpGetWithRetry(Uri.parse("${_baseUrl}kikoba/${DataStore.currentKikobaId}/balance"));
 
       if (response.statusCode == 200) {
         logger.d("Balance fetched successfully");
@@ -1577,7 +1578,7 @@ class HttpService {
           ? '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}'
           : '';
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting/$voteableType/$voteableId$queryString'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1646,7 +1647,7 @@ class HttpService {
       };
       final queryString = '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting/kikoba/$kId/pending$queryString'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1676,7 +1677,7 @@ class HttpService {
     final uId = userId ?? DataStore.currentUserId;
     _logger.i('Getting vote history for user: $uId in kikoba: $kId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting/kikoba/$kId/user/$uId/history'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1699,7 +1700,7 @@ class HttpService {
     final kId = kikobaId ?? DataStore.currentKikobaId;
     _logger.i('Getting voting config for kikoba: $kId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting/kikoba/$kId/config'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1755,7 +1756,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getVoteableTypes() async {
     _logger.i('Getting voteable types');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting/types'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1857,7 +1858,7 @@ class HttpService {
       final url = Uri.parse('${_baseUrl}katiba?kikobaId=$kId');
       _logger.d('[getKatibaData] API URL: $url');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -1938,7 +1939,7 @@ class HttpService {
       final url = Uri.parse('${_baseUrl}data?kikobaId=$kikobaId&userID=$userID');
       _logger.d('[refreshKatibaData] API URL: $url');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2005,7 +2006,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getKatibaChangeFields() async {
     _logger.i('Getting katiba change fields');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}katiba-changes-fields'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2114,7 +2115,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2137,7 +2138,7 @@ class HttpService {
   }) async {
     _logger.i('Getting katiba change details: $requestId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}katiba-changes/$requestId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2160,7 +2161,7 @@ class HttpService {
   }) async {
     _logger.i('Getting membership removal details: $requestId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}membership-removals/$requestId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2192,7 +2193,7 @@ class HttpService {
   }) async {
     _logger.i('Getting expense request details: $requestId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}expense-requests/$requestId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2224,7 +2225,7 @@ class HttpService {
   }) async {
     _logger.i('Getting fine approval details: $requestId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}fine-approvals/$requestId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2277,7 +2278,7 @@ class HttpService {
   }) async {
     _logger.i('Getting loan application details: $applicationId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}loan-applications/$applicationId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2420,7 +2421,7 @@ class HttpService {
     final kId = kikobaId ?? DataStore.currentKikobaId;
     _logger.i('Getting pending membership requests for kikoba: $kId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}kikoba/$kId/membership-requests'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2443,7 +2444,7 @@ class HttpService {
   }) async {
     _logger.i('Getting membership request details: $requestId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}membership-request/$requestId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2503,7 +2504,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getMembershipRemovalTypes() async {
     _logger.i('Getting membership removal types');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}membership-removal-types'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2572,7 +2573,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2595,7 +2596,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getExpenseCategories() async {
     _logger.i('Getting expense categories');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}expense-categories'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2713,7 +2714,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getProxyMchangoTypes() async {
     _logger.i('Getting proxy mchango types');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}proxy-mchango-types'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2786,7 +2787,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getFineApprovalTypes() async {
     _logger.i('Getting fine approval types');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}fine-approval-types'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -2957,7 +2958,7 @@ class HttpService {
     final kId = kikobaId ?? DataStore.currentKikobaId;
     _logger.i('Getting unpaid fines for member: $memberId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}fine-approvals/kikoba/$kId/member/$memberId/unpaid'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3035,7 +3036,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3104,7 +3105,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3168,7 +3169,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3287,7 +3288,7 @@ class HttpService {
         },
       );
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3343,7 +3344,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getVotingCaseCategories() async {
     _logger.i('Getting voting case categories');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting-case-categories'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3365,7 +3366,7 @@ class HttpService {
     final kId = kikobaId ?? DataStore.currentKikobaId;
     _logger.i('Getting all voting cases for kikoba: $kId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting-cases/kikoba/$kId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3387,7 +3388,7 @@ class HttpService {
   static Future<Map<String, dynamic>> getVotingCaseDetails({required String caseId}) async {
     _logger.i('Getting voting case details: $caseId');
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}voting-cases/$caseId'),
         headers: {'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 30));
@@ -3471,7 +3472,7 @@ class HttpService {
     logger.i("Preparing device, URL: $url");
 
     try {
-      final res = await http.get(Uri.parse(url), headers: {"Accept": "application/json"});
+      final res = await httpGetWithRetry(Uri.parse(url), headers: {"Accept": "application/json"});
 
       logger.i("prepareDevice Response Status: ${res.statusCode}");
       if (res.statusCode == 200 && res.body.isNotEmpty) {
@@ -3491,7 +3492,7 @@ class HttpService {
     logger.i("Getting Vikundi, URL: $url");
 
     try {
-      final res = await http.get(Uri.parse(url), headers: {"Accept": "application/json"});
+      final res = await httpGetWithRetry(Uri.parse(url), headers: {"Accept": "application/json"});
       logger.i("getData2xp Response Status: ${res.statusCode}");
 
       if (res.statusCode == 200) {
@@ -3516,7 +3517,7 @@ class HttpService {
     logger.i("Fetching posts...");
 
     try {
-      final res = await http.get(Uri.parse("${baseUrl}posts")); // Assuming this was meant to fetch posts
+      final res = await httpGetWithRetry(Uri.parse("${baseUrl}posts")); // Assuming this was meant to fetch posts
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as List;
@@ -3538,7 +3539,7 @@ class HttpService {
     logger.i("Fetching Kikoba, URL: $url");
 
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as List;
         final posts = body.map((item) => Kikoba.fromJson(item)).toList();
@@ -3583,7 +3584,7 @@ class HttpService {
     logger.i("Fetching Katiba, URL: $url");
 
     try {
-      final res = await http.get(Uri.parse(url));
+      final res = await httpGetWithRetry(Uri.parse(url));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as List;
         final posts = body.map((item) => Katiba.fromJson(item)).toList();
@@ -4405,7 +4406,7 @@ class HttpService {
     try {
       final url = "${baseUrl}letshego/transfer/$payerRef/status";
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: {
           'Accept': 'application/json',
@@ -4529,7 +4530,7 @@ class HttpService {
       final url = '${_baseUrl}akiba/$kikobaId/withdrawal/balance?userId=$userId';
       logger.i('Getting akiba balance: $url');
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       logger.i('Balance response: ${response.body}');
 
       if (response.statusCode == 200) {
@@ -4619,7 +4620,7 @@ class HttpService {
 
       logger.i('Getting withdrawal history: $url');
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       logger.i('Withdrawal history response: ${response.body}');
 
       if (response.statusCode == 200) {
@@ -4640,7 +4641,7 @@ class HttpService {
       final url = '${_baseUrl}akiba/withdrawal/$requestId/status';
       logger.i('Getting withdrawal status: $url');
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       logger.i('Withdrawal status response: ${response.body}');
 
       if (response.statusCode == 200) {
@@ -4661,7 +4662,7 @@ class HttpService {
       final url = '${_baseUrl}akiba/$kikobaId/withdrawal/pending';
       logger.i('Getting pending withdrawals: $url');
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
       logger.i('Pending withdrawals response: ${response.body}');
 
       if (response.statusCode == 200) {
@@ -4843,7 +4844,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}getLoanProducts?kikobaId=$targetKikobaId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Accept': 'application/json',
@@ -5093,7 +5094,7 @@ class HttpService {
 
       final url = Uri.parse('${baseUrl}loanApplications').replace(queryParameters: queryParams);
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5136,7 +5137,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loanApplication/$applicationId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5375,7 +5376,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loans/active?userId=$targetUserId&kikobaId=${DataStore.currentKikobaId}');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5421,7 +5422,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loanApplication/$applicationId/schedules');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5458,7 +5459,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}user/$targetUserId/loans?kikobaId=$targetKikobaId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5585,7 +5586,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}guarantor/myGuaranteedLoans?userId=$targetUserId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5634,7 +5635,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}guarantor/guarantorLimit?userId=$targetUserId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5669,7 +5670,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}guarantor/pendingRequests?userId=$targetUserId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5790,7 +5791,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loanApplication/$applicationId/schedules');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5822,7 +5823,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loan-applications/$applicationId/arrears');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -5904,7 +5905,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}loan-applications/$applicationId/payments');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6122,7 +6123,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}kikoba/$targetKikobaId/michango');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6195,7 +6196,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/$mchangoId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6262,7 +6263,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}user/$targetUserId/michango');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6328,7 +6329,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/$mchangoId/status/$targetUserId');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6393,7 +6394,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/control-number/$controlNumber');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6644,7 +6645,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}kikoba/$targetKikobaId/michango/ready');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -6795,7 +6796,7 @@ class HttpService {
     logger.i('📜 [GET /api/mchango/$mchangoId/disbursements] Fetching disbursement history');
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${baseUrl}mchango/$mchangoId/disbursements'),
         headers: {
           'Content-Type': 'application/json',
@@ -7058,7 +7059,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/$mchangoId/report');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -7139,7 +7140,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/$mchangoId/contributors');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -7215,7 +7216,7 @@ class HttpService {
     try {
       final url = Uri.parse('${baseUrl}mchango/$mchangoId/non-contributors');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -7374,7 +7375,7 @@ class HttpService {
     logger.i('📋 [GET /api/expenses/categories] Fetching expense categories');
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${baseUrl}expenses/categories'),
         headers: {
           'Content-Type': 'application/json',
@@ -7420,7 +7421,7 @@ class HttpService {
     logger.i('📋 [GET /api/expenses/$kikobaId/accounts] Fetching expense accounts');
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${baseUrl}expenses/$kikobaId/accounts'),
         headers: {
           'Content-Type': 'application/json',
@@ -7487,7 +7488,7 @@ class HttpService {
       logger.d('⏳ Sending GET request...');
       final stopwatch = Stopwatch()..start();
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(url),
         headers: headers,
       ).timeout(const Duration(seconds: 30));
@@ -7802,7 +7803,7 @@ class HttpService {
 
       final uri = Uri.parse('${baseUrl}expenses/$kikobaId/summary').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -7863,7 +7864,7 @@ class HttpService {
 
       final uri = Uri.parse('${baseUrl}expenses/$kikobaId/history').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -7913,7 +7914,7 @@ class HttpService {
 
   // ---------------------------------------------------------------------------
   // Reports API
-  // Base URL: https://zima-uat.site:8001/api/reports/{kikobaId}
+  // Base URL: (see lib/config/api_config.dart) /api/reports/{kikobaId}
   // ---------------------------------------------------------------------------
 
   /// Get Ada (Membership Fees) Report
@@ -8063,7 +8064,7 @@ class HttpService {
 
       logger.d('🔗 Dashboard URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -8212,7 +8213,7 @@ class HttpService {
       };
       if (etag != null) headers['If-None-Match'] = etag;
 
-      final response = await http.get(uri, headers: headers)
+      final response = await httpGetWithRetry(uri, headers: headers)
           .timeout(const Duration(seconds: 60));
 
       logger.d('📥 Dashboard response: ${response.statusCode}');
@@ -8284,7 +8285,7 @@ class HttpService {
       };
       if (etag != null) headers['If-None-Match'] = etag;
 
-      final response = await http.get(uri, headers: headers)
+      final response = await httpGetWithRetry(uri, headers: headers)
           .timeout(const Duration(seconds: 60));
 
       logger.d('📥 Uongozi response: ${response.statusCode}');
@@ -8546,7 +8547,7 @@ class HttpService {
       };
       if (etag != null) headers['If-None-Match'] = etag;
 
-      final response = await http.get(uri, headers: headers)
+      final response = await httpGetWithRetry(uri, headers: headers)
           .timeout(const Duration(seconds: 60));
 
       logger.d('📥 Uongozi response: ${response.statusCode}');
@@ -8598,7 +8599,7 @@ class HttpService {
 
       logger.d('🔗 Report URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -8653,7 +8654,7 @@ class HttpService {
 
       logger.d('🔗 Members URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -8690,7 +8691,7 @@ class HttpService {
     logger.i('👤 [GET /api/kikoba/$kikobaId/member/$memberId/details] Fetching member details');
 
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${baseUrl}kikoba/$kikobaId/member/$memberId/details'),
         headers: {
           'Content-Type': 'application/json',
@@ -8729,7 +8730,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}kikoba/$kikobaId/members/leaderboard')
           .replace(queryParameters: {'limit': limit.toString()});
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -8769,7 +8770,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}chat/$kikobaId/members')
           .replace(queryParameters: {'user_id': userId});
 
-      final response = await http.get(uri, headers: _jsonHeaders)
+      final response = await httpGetWithRetry(uri, headers: _jsonHeaders)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -8832,7 +8833,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}chat/$kikobaId/conversations')
           .replace(queryParameters: {'user_id': userId});
 
-      final response = await http.get(uri, headers: _jsonHeaders)
+      final response = await httpGetWithRetry(uri, headers: _jsonHeaders)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -8912,7 +8913,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}chat/conversation/$conversationId/messages')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _jsonHeaders)
+      final response = await httpGetWithRetry(uri, headers: _jsonHeaders)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -9088,7 +9089,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}chat/$kikobaId/blocked')
           .replace(queryParameters: {'user_id': userId});
 
-      final response = await http.get(uri, headers: _jsonHeaders)
+      final response = await httpGetWithRetry(uri, headers: _jsonHeaders)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -9112,7 +9113,7 @@ class HttpService {
       final uri = Uri.parse('${baseUrl}chat/$kikobaId/unread-count')
           .replace(queryParameters: {'user_id': userId});
 
-      final response = await http.get(uri, headers: _jsonHeaders)
+      final response = await httpGetWithRetry(uri, headers: _jsonHeaders)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -9172,7 +9173,7 @@ class HttpService {
 
       logger.i('💳 Full URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: _jsonHeaders,
       ).timeout(const Duration(seconds: 30));
@@ -9238,7 +9239,7 @@ class HttpService {
 
       logger.i('📊 Full URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: _jsonHeaders,
       ).timeout(const Duration(seconds: 30));
@@ -9313,7 +9314,7 @@ class HttpService {
 
       logger.i('📊 Full URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: _jsonHeaders,
       ).timeout(const Duration(seconds: 30));
@@ -9383,7 +9384,7 @@ class HttpService {
 
       logger.i('💰 Full URL: $uri');
 
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: _jsonHeaders,
       ).timeout(const Duration(seconds: 30));
@@ -9454,7 +9455,7 @@ class HttpService {
 
   static Future<List<Map<String, dynamic>>> searchTajiriUsers(String query) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${_baseUrl}tajiri-users/search?q=${Uri.encodeComponent(query)}'),
       );
       if (response.statusCode == 200) {

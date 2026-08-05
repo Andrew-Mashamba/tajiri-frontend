@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
+import '../config/api_config.dart';
 import '../models/contribution_models.dart';
+import 'graphql/graphql_fundraising_service.dart';
 import '../config/api_config.dart';
 import 'income_service.dart';
 import 'expenditure_service.dart';
@@ -14,11 +17,16 @@ class ContributionService {
 
   /// Get user's campaigns
   Future<CampaignsResult> getUserCampaigns(int userId, {String? status}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaigns =
+          await GraphqlFundraisingService.getUserCampaigns(status: status);
+      return CampaignsResult(success: true, campaigns: campaigns);
+    }
     try {
       String url = '$_baseUrl/users/$userId/campaigns';
       if (status != null) url += '?status=$status';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -37,8 +45,15 @@ class ContributionService {
 
   /// Get user's campaign statistics
   Future<StatsResult> getUserCampaignStats(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final stats = await GraphqlFundraisingService.getUserCampaignStats();
+      if (stats != null) {
+        return StatsResult(success: true, stats: stats);
+      }
+      return StatsResult(success: false, message: 'Imeshindwa kupakia takwimu');
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/users/$userId/campaigns/stats'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/users/$userId/campaigns/stats'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -57,8 +72,15 @@ class ContributionService {
 
   /// Get single campaign details
   Future<CampaignResult> getCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign = await GraphqlFundraisingService.getCampaign(campaignId);
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Mchango haujapatikana');
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/campaigns/$campaignId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/campaigns/$campaignId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -93,6 +115,26 @@ class ContributionService {
     String? accountNumber,
     String? mobileMoneyNumber,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign = await GraphqlFundraisingService.createCampaign({
+        'title': title,
+        'story': story,
+        'short_description': shortDescription,
+        'goal_amount': goalAmount,
+        'category': category.name,
+        if (deadline != null) 'deadline': deadline.toIso8601String(),
+        'allow_anonymous_donations': allowAnonymousDonations,
+        'minimum_donation': minimumDonation,
+        'is_urgent': isUrgent,
+        'bank_name': bankName,
+        'account_number': accountNumber,
+        'mobile_money_number': mobileMoneyNumber,
+      });
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Imeshindwa kuunda mchango');
+    }
     try {
       var request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/campaigns'));
 
@@ -187,6 +229,13 @@ class ContributionService {
 
   /// Publish/activate a draft campaign
   Future<CampaignResult> publishCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign = await GraphqlFundraisingService.publishCampaign(campaignId);
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Imeshindwa kuchapisha');
+    }
     try {
       final response = await http.post(Uri.parse('$_baseUrl/campaigns/$campaignId/publish'));
 
@@ -208,6 +257,13 @@ class ContributionService {
 
   /// Pause an active campaign
   Future<CampaignResult> pauseCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign = await GraphqlFundraisingService.pauseCampaign(campaignId);
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Imeshindwa kusimamisha');
+    }
     try {
       final response = await http.post(Uri.parse('$_baseUrl/campaigns/$campaignId/pause'));
 
@@ -228,6 +284,13 @@ class ContributionService {
 
   /// Resume a paused campaign
   Future<CampaignResult> resumeCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign = await GraphqlFundraisingService.resumeCampaign(campaignId);
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Imeshindwa kuendelea');
+    }
     try {
       final response = await http.post(Uri.parse('$_baseUrl/campaigns/$campaignId/resume'));
 
@@ -248,6 +311,14 @@ class ContributionService {
 
   /// Complete/close a campaign
   Future<CampaignResult> completeCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final campaign =
+          await GraphqlFundraisingService.completeCampaign(campaignId);
+      if (campaign != null) {
+        return CampaignResult(success: true, campaign: campaign);
+      }
+      return CampaignResult(success: false, message: 'Imeshindwa kukamilisha');
+    }
     try {
       final response = await http.post(Uri.parse('$_baseUrl/campaigns/$campaignId/complete'));
 
@@ -268,6 +339,10 @@ class ContributionService {
 
   /// Delete a draft campaign
   Future<BaseResult> deleteCampaign(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final ok = await GraphqlFundraisingService.deleteCampaign(campaignId);
+      return BaseResult(success: ok);
+    }
     try {
       final response = await http.delete(Uri.parse('$_baseUrl/campaigns/$campaignId'));
 
@@ -289,6 +364,16 @@ class ContributionService {
     required String content,
     List<File>? mediaFiles,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final update = await GraphqlFundraisingService.postCampaignUpdate(
+        campaignId,
+        content,
+      );
+      if (update != null) {
+        return UpdateResult(success: true, update: update);
+      }
+      return UpdateResult(success: false, message: 'Imeshindwa');
+    }
     try {
       var request = http.MultipartRequest(
         'POST',
@@ -321,8 +406,13 @@ class ContributionService {
 
   /// Get campaign updates
   Future<UpdatesResult> getCampaignUpdates(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final updates =
+          await GraphqlFundraisingService.getCampaignUpdates(campaignId);
+      return UpdatesResult(success: true, updates: updates);
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/campaigns/$campaignId/updates'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/campaigns/$campaignId/updates'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -351,6 +441,20 @@ class ContributionService {
     bool isAnonymous = false,
     String? pin, // required when paymentMethod is 'wallet'
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final donation = await GraphqlFundraisingService.donateToCampaign(
+        campaignId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        message: message,
+        isAnonymous: isAnonymous,
+        pin: pin,
+      );
+      if (donation != null) {
+        return DonationResult(success: true, donation: donation);
+      }
+      return DonationResult(success: false, message: 'Imeshindwa kuchangia');
+    }
     try {
       final body = <String, dynamic>{
         'amount': amount,
@@ -402,8 +506,13 @@ class ContributionService {
 
   /// Get campaign donations
   Future<DonationsResult> getCampaignDonations(int campaignId, {int page = 1}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final donations =
+          await GraphqlFundraisingService.getCampaignDonations(campaignId);
+      return DonationsResult(success: true, donations: donations);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/campaigns/$campaignId/donations?page=$page'),
       );
 
@@ -426,8 +535,13 @@ class ContributionService {
 
   /// Get campaign withdrawals
   Future<WithdrawalsResult> getCampaignWithdrawals(int campaignId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final withdrawals =
+          await GraphqlFundraisingService.getCampaignWithdrawals(campaignId);
+      return WithdrawalsResult(success: true, withdrawals: withdrawals);
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/campaigns/$campaignId/withdrawals'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/campaigns/$campaignId/withdrawals'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -451,6 +565,18 @@ class ContributionService {
     required String destinationType, // 'bank' or 'mobile_money'
     required String destinationDetails,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final withdrawal = await GraphqlFundraisingService.requestWithdrawal(
+        campaignId,
+        amount: amount,
+        destinationType: destinationType,
+        destinationDetails: destinationDetails,
+      );
+      if (withdrawal != null) {
+        return WithdrawalResult(success: true, withdrawal: withdrawal);
+      }
+      return WithdrawalResult(success: false, message: 'Imeshindwa');
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/campaigns/$campaignId/withdrawals'),
@@ -492,8 +618,12 @@ class ContributionService {
 
   /// Get user's all withdrawals
   Future<WithdrawalsResult> getUserWithdrawals(int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final withdrawals = await GraphqlFundraisingService.getUserWithdrawals();
+      return WithdrawalsResult(success: true, withdrawals: withdrawals);
+    }
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/users/$userId/withdrawals'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/users/$userId/withdrawals'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

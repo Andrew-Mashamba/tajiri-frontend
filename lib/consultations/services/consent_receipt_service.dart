@@ -1,8 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 class ConsentReceipt {
@@ -49,7 +48,7 @@ class ConsentReceipt {
 class ConsentReceiptService {
   static Future<List<ConsentReceipt>> list(int userId) async {
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/consent-receipts')
             .replace(queryParameters: {'user_id': '$userId'}),
       );

@@ -1,6 +1,7 @@
 // lib/games/services/games_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../core/game_enums.dart';
 import '../models/game_session.dart';
@@ -59,7 +60,7 @@ class GamesService {
   /// Get a session by ID.
   Future<GameResult<GameSession>> getSession(int id) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/games/sessions/$id'),
         headers: ApiConfig.headers,
       );
@@ -176,7 +177,7 @@ class GamesService {
   /// Get active sessions for a user.
   Future<GameListResult<GameSession>> getActiveSessions(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/games/sessions/active?user_id=$userId'),
         headers: ApiConfig.headers,
       );
@@ -202,7 +203,7 @@ class GamesService {
   /// Get game history for a user (paginated).
   Future<GameListResult<GameSession>> getHistory(int userId, {int page = 1}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/games/sessions/history?user_id=$userId&page=$page'),
         headers: ApiConfig.headers,
       );
@@ -242,7 +243,7 @@ class GamesService {
 
       final uri = Uri.parse('$_baseUrl/games/leaderboard/global')
           .replace(queryParameters: params);
-      final response = await http.get(uri, headers: ApiConfig.headers);
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -277,7 +278,7 @@ class GamesService {
 
       final uri = Uri.parse('$_baseUrl/games/leaderboard/friends')
           .replace(queryParameters: params);
-      final response = await http.get(uri, headers: ApiConfig.headers);
+      final response = await httpGetWithRetry(uri, headers: ApiConfig.headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -389,7 +390,7 @@ class GamesService {
   /// Fetch the user's wallet balance.
   Future<double> getWalletBalance(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/wallet/$userId'),
         headers: ApiConfig.headers,
       );
@@ -413,7 +414,7 @@ class GamesService {
   /// Fetch user's accepted friends for the game challenge picker.
   Future<List<Map<String, dynamic>>> getFriendsForPicker(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/friends?user_id=$userId&per_page=100'),
         headers: ApiConfig.headers,
       );

@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../models/message_models.dart';
 import '../../services/message_service.dart';
@@ -68,7 +69,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       final storage = await LocalStorageService.getInstance();
       final token = storage.getAuthToken();
       if (token == null) return;
-      final resp = await http.get(
+      final resp = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/conversations/${widget.conversation.id}/settings'),
         headers: ApiConfig.authHeaders(token),
       );

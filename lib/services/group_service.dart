@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/group_models.dart';
 import '../models/post_models.dart';
 import '../config/api_config.dart';
@@ -20,7 +21,7 @@ class GroupService {
       if (search != null) url += '&search=$search';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -47,7 +48,7 @@ class GroupService {
       if (includeSystemGroups) {
         url += '&include_system_groups=1';
       }
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -129,7 +130,7 @@ class GroupService {
       String url = '$_baseUrl/groups/$identifier';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -187,7 +188,7 @@ class GroupService {
       String url = '$_baseUrl/groups/$groupId/members?status=$status';
       if (role != null) url += '&role=$role';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -207,7 +208,7 @@ class GroupService {
   /// Get group posts
   Future<PostListResult> getGroupPosts(int groupId, {int page = 1, int perPage = 20}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/groups/$groupId/posts?page=$page&per_page=$perPage'),
       );
 
@@ -277,7 +278,7 @@ class GroupService {
   /// Get user's pending invitations
   Future<InvitationListResult> getUserInvitations(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/groups/invitations?user_id=$userId'),
       );
 
@@ -313,7 +314,7 @@ class GroupService {
   /// Search groups
   Future<GroupListResult> searchGroups(String query) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/groups/search?q=$query'),
       );
 

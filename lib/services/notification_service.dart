@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/notification_models.dart';
 import 'local_storage_service.dart';
@@ -26,7 +27,7 @@ class NotificationService {
           hasMore: false,
         );
       }
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/notifications?page=$page'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -83,7 +84,7 @@ class NotificationService {
     try {
       final token = _token();
       if (token == null) return 0;
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/notifications/unread-count'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -125,7 +126,7 @@ class NotificationService {
     try {
       final token = _token();
       if (token == null) return null;
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/notification-preferences'),
         headers: ApiConfig.authHeaders(token),
       );

@@ -210,6 +210,14 @@ List<_TagOption> _suggestedTagsFor(SkillCategory? skill) {
         _TagOption('national_park', 'Hifadhi'),
         _TagOption('beach', 'Ufukweni'),
       ];
+    case SkillCategory.deliveryDriver:
+      return const [
+        _TagOption('local', 'Karibu'),
+        _TagOption('intercity', 'Mji-mji'),
+        _TagOption('same_day', 'Siku hiyo hiyo'),
+        _TagOption('bulky', 'Mzigo mkubwa'),
+        _TagOption('refrigerated', 'Joto la baridi'),
+      ];
   }
 }
 

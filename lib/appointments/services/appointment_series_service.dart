@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 
 /// Spec F6 #41 — Recurring appointment series.
@@ -142,7 +143,7 @@ class AppointmentSeriesService {
   static Future<List<AppointmentSeries>> mine({required int userId}) async {
     final url = ApiConfig.sanitizeUrl(
         '${ApiConfig.baseUrl}/api/appointment-series/mine?user_id=$userId')!;
-    final res = await http.get(Uri.parse(url));
+    final res = await httpGetWithRetry(Uri.parse(url));
     if (res.statusCode != 200) return const [];
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic> && body['series'] is List) {

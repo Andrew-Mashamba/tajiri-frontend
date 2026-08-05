@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import '../models/battle_models.dart';
 
@@ -9,7 +10,7 @@ String get _baseUrl => ApiConfig.baseUrl;
 class BattleService {
   Future<List<CreatorBattle>> getActiveBattles({required String token}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/creator-battles'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -28,7 +29,7 @@ class BattleService {
 
   Future<CreatorBattle?> getBattle({required String token, required int battleId}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/battles/$battleId'),
         headers: ApiConfig.authHeaders(token),
       );

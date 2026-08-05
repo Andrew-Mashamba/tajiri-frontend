@@ -7,6 +7,7 @@ import '../widgets/tier_badge.dart';
 import '../widgets/partner_stat_card.dart';
 import '../widgets/tier_progress_bar.dart';
 import '../widgets/earnings_module_breakdown.dart';
+import 'driver_registration_page.dart';
 import 'registration_page.dart';
 import 'partner_profile_page.dart';
 import 'verification_status_page.dart';
@@ -140,51 +141,139 @@ class _TajirikaHomePageState extends State<TajirikaHomePage> {
   }
 
   Widget _buildRegistrationCta(bool isSwahili) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.handshake_rounded, size: 64, color: _kSecondary),
-            const SizedBox(height: 24),
-            Text(
-              isSwahili ? 'Jiunge na Tajirika' : 'Join Tajirika',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _kPrimary),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 16),
+          Text(
+            isSwahili ? 'Jiunge na Tajirika' : 'Join as a Partner',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: _kPrimary,
             ),
-            const SizedBox(height: 12),
-            Text(
-              isSwahili
-                  ? 'Sajili ujuzi wako na uanze kupata wateja kupitia jukwaa la TAJIRI.'
-                  : 'Register your skills and start getting customers through the TAJIRI platform.',
-              style: const TextStyle(fontSize: 14, color: _kSecondary),
-              textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isSwahili
+                ? 'Chagua njia unayotaka kujipatia kipato kupitia TAJIRI.'
+                : 'Choose how you want to earn through the TAJIRI platform.',
+            style: const TextStyle(fontSize: 14, color: _kSecondary),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 32),
+          // Skills Partner card
+          _buildPartnershipCard(
+            icon: Icons.handshake_rounded,
+            title: isSwahili ? 'Mshirika wa Ujuzi' : 'Skills Partner',
+            subtitle: isSwahili
+                ? 'Toa huduma za kitaalamu (fundi, mwalimu, daktari, n.k.) na upate wateja kupitia TAJIRI.'
+                : 'Offer professional services (trades, tutoring, healthcare, etc.) and get clients through TAJIRI.',
+            buttonLabel: isSwahili ? 'Jisajili kama Mshirika' : 'Register as Partner',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RegistrationPage()),
+              );
+              _loadData();
+            },
+          ),
+          const SizedBox(height: 16),
+          // Delivery Driver card
+          _buildPartnershipCard(
+            icon: Icons.local_shipping_rounded,
+            title: isSwahili ? 'Dereva wa Delivery' : 'Delivery Driver',
+            subtitle: isSwahili
+                ? 'Pata kazi za kupeleka mizigo na bidhaa kwa wauzaji na wanunuzi wa TAJIRI katika eneo lako.'
+                : 'Pick up delivery jobs for TAJIRI sellers and buyers in your area — earn per trip.',
+            buttonLabel:
+                isSwahili ? 'Jisajili kama Dereva' : 'Register as Driver',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const DriverRegistrationPage()),
+              );
+              _loadData();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartnershipCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String buttonLabel,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RegistrationPage()),
-                  );
-                  _loadData();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kPrimary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(
-                  isSwahili ? 'Jisajili Sasa' : 'Register Now',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+            child: Icon(icon, size: 26, color: _kPrimary),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: _kPrimary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 13, color: _kSecondary),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                buttonLabel,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

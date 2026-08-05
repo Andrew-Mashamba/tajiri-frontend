@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../doctor/models/doctor_models.dart';
 import '../../doctor/pages/find_doctor_page.dart';
 import '../../screens/feed/tea_chat_screen.dart';
-import '../../screens/shop/shop_screen.dart';
+import '../../shop/buyer/screens/shop_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../services/expenditure_service.dart';

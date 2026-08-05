@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import 'package:http/io_client.dart';
 import 'package:http_parser/http_parser.dart';
 import '../models/music_models.dart';
@@ -30,7 +31,7 @@ class MusicService {
       String url = '$_baseUrl/music?page=$page&per_page=$perPage';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -48,7 +49,7 @@ class MusicService {
   // Get tracks uploaded by a specific user
   Future<TracksResult> getUserTracks(int userId, {int page = 1}) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/music/user/$userId?page=$page'),
       );
 
@@ -76,7 +77,7 @@ class MusicService {
       String url = '$_baseUrl/music/featured';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -96,7 +97,7 @@ class MusicService {
       String url = '$_baseUrl/music/trending';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -116,7 +117,7 @@ class MusicService {
       String url = '$_baseUrl/music/$trackId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -135,7 +136,7 @@ class MusicService {
       String url = '$_baseUrl/music/search?q=${Uri.encodeComponent(query)}';
       if (currentUserId != null) url += '&current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -178,7 +179,7 @@ class MusicService {
 
   Future<TracksResult> getSavedTracks(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/music/saved/$userId'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/music/saved/$userId'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -196,7 +197,7 @@ class MusicService {
   // Artists
   Future<ArtistsResult> getArtists({int page = 1, int perPage = 20}) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/music/artists?page=$page&per_page=$perPage'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/music/artists?page=$page&per_page=$perPage'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -216,7 +217,7 @@ class MusicService {
       String url = '$_baseUrl/music/artists/$artistId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -704,7 +705,7 @@ class MusicService {
         },
       );
 
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
       return response.statusCode == 200;
     } catch (e) {
       return false;
@@ -820,7 +821,7 @@ class MusicService {
   // Categories
   Future<CategoriesResult> getCategories() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/music/categories'));
+      final response = await httpGetWithRetry(Uri.parse('$_baseUrl/music/categories'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -840,7 +841,7 @@ class MusicService {
       String url = '$_baseUrl/music/categories/$categoryId';
       if (currentUserId != null) url += '?current_user_id=$currentUserId';
 
-      final response = await http.get(Uri.parse(url));
+      final response = await httpGetWithRetry(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

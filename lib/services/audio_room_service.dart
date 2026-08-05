@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import 'local_storage_service.dart';
 
@@ -163,7 +164,7 @@ class AudioRoomService {
     final token = await _getToken();
     if (token == null) return [];
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse(
             '${ApiConfig.baseUrl}/audio-rooms?page=$page&status=active'),
         headers: ApiConfig.authHeaders(token),
@@ -314,7 +315,7 @@ class AudioRoomService {
     final token = await _getToken();
     if (token == null) return null;
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('${ApiConfig.baseUrl}/audio-rooms/$roomId'),
         headers: ApiConfig.authHeaders(token),
       );

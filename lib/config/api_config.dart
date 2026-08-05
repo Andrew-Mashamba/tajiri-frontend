@@ -1,9 +1,31 @@
 // API Configuration — switch between local and remote backend
 
 class ApiConfig {
-  // Remote backend (production/UAT)
+  // Remote backend (production/UAT) — legacy Laravel REST
   static const String baseUrl = 'https://tajiri.zimasystems.com/api';
   static const String storageUrl = 'https://tajiri.zimasystems.com/storage';
+
+  // Greenfield GraphQL backend (TAJIRI-BACKEND). Enable via:
+  //   flutter run --dart-define=USE_GRAPHQL=true
+  //   flutter run --dart-define=USE_GRAPHQL=true --dart-define=GRAPHQL_URL=http://10.0.2.2:8000/graphql
+  static const bool useGraphqlBackend =
+      bool.fromEnvironment('USE_GRAPHQL', defaultValue: false);
+  static const String graphqlUrl = String.fromEnvironment(
+    'GRAPHQL_URL',
+    defaultValue: 'http://127.0.0.1:8000/graphql',
+  );
+
+  /// Media base when using the greenfield backend (FastAPI storage_url).
+  static const String graphqlStorageUrl = String.fromEnvironment(
+    'GRAPHQL_STORAGE_URL',
+    defaultValue: 'http://127.0.0.1:8000/media/files',
+  );
+
+  /// Multipart media upload endpoint on greenfield backend (not GraphQL).
+  static String get graphqlMediaUploadUrl {
+    final base = graphqlUrl.replaceFirst(RegExp(r'/graphql/?$'), '');
+    return '$base/media/upload';
+  }
 
   // Local backend (for development)
   // static const String baseUrl = 'http://127.0.0.1:1617/api';

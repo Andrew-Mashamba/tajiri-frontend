@@ -2,11 +2,13 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/budget_models.dart';
 import '../../services/income_service.dart';
 import '../../services/expenditure_service.dart';
 import '../../services/wallet_service.dart';
+import '../../services/graphql/graphql_budget_service.dart';
 
 String get _baseUrl => ApiConfig.baseUrl;
 
@@ -63,8 +65,11 @@ class BudgetService {
   /// Called from: OnboardingBudgetScreen (initial envelope picker),
   ///             EnvelopeSettingsScreen (add from defaults).
   static Future<List<EnvelopeDefault>> getEnvelopeDefaults(String token) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getEnvelopeDefaults();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/budget/envelope-defaults'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -93,8 +98,12 @@ class BudgetService {
   ///             loadBudgetSnapshot (parallel load).
   static Future<EnvelopeListResult> getUserEnvelopes(
       String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final envelopes = await GraphqlBudgetService.getUserEnvelopes();
+      return EnvelopeListResult(success: true, envelopes: envelopes);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/budget/users/$userId/envelopes'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -123,6 +132,9 @@ class BudgetService {
   /// Called from: AddEnvelopeScreen, OnboardingBudgetScreen.
   static Future<BudgetEnvelope?> createEnvelope(
       String token, int userId, Map<String, dynamic> data) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.createEnvelope(data);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/budget/users/$userId/envelopes'),
@@ -148,6 +160,9 @@ class BudgetService {
   /// Called from: EditEnvelopeScreen, EnvelopeDetailScreen (quick allocation edit).
   static Future<BudgetEnvelope?> updateEnvelope(
       String token, int userId, int envelopeId, Map<String, dynamic> data) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.updateEnvelope(envelopeId, data);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/budget/users/$userId/envelopes/$envelopeId'),
@@ -175,6 +190,9 @@ class BudgetService {
   /// Called from: BudgetHomeScreen (period bar), MonthlyReportScreen.
   static Future<BudgetPeriod?> getPeriod(String token, int userId,
       {int? year, int? month}) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getPeriod(year: year, month: month);
+    }
     try {
       final params = <String, String>{};
       if (year != null) params['year'] = year.toString();
@@ -184,7 +202,7 @@ class BudgetService {
           .replace(queryParameters: params.isNotEmpty ? params : null);
 
       final response =
-          await http.get(uri, headers: ApiConfig.authHeaders(token));
+          await httpGetWithRetry(uri, headers: ApiConfig.authHeaders(token));
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (json['success'] == true && json['data'] != null) {
@@ -205,8 +223,12 @@ class BudgetService {
   ///
   /// Called from: GoalsScreen (goal list), BudgetHomeScreen (goals summary).
   static Future<GoalListResult> getGoals(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      final goals = await GraphqlBudgetService.getGoals();
+      return GoalListResult(success: true, goals: goals);
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/budget/users/$userId/goals'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -235,6 +257,9 @@ class BudgetService {
   /// Called from: AddGoalScreen.
   static Future<BudgetGoal?> createGoal(
       String token, int userId, Map<String, dynamic> data) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.createGoal(data);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/budget/users/$userId/goals'),
@@ -260,6 +285,9 @@ class BudgetService {
   /// Called from: EditGoalScreen, GoalDetailScreen (add savings).
   static Future<BudgetGoal?> updateGoal(
       String token, int userId, int goalId, Map<String, dynamic> data) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.updateGoal(goalId, data);
+    }
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/budget/users/$userId/goals/$goalId'),
@@ -285,6 +313,9 @@ class BudgetService {
   /// Called from: GoalDetailScreen (delete action), GoalsScreen (swipe-to-delete).
   static Future<bool> deleteGoal(
       String token, int userId, int goalId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.deleteGoal(goalId);
+    }
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/budget/users/$userId/goals/$goalId'),
@@ -362,8 +393,11 @@ class BudgetService {
   ///
   /// Called from: BudgetHomePage (streak card display).
   static Future<BudgetStreak> getStreak(String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getStreak();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/budget/users/$userId/streak'),
         headers: ApiConfig.authHeaders(token),
       );
@@ -384,6 +418,9 @@ class BudgetService {
   /// Called from: BudgetHomePage (auto check-in after data load).
   static Future<BudgetStreak?> checkInStreak(
       String token, int userId, bool allWithinBudget) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.checkInStreak(allWithinBudget);
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/budget/users/$userId/streak/check-in'),
@@ -410,6 +447,9 @@ class BudgetService {
   /// Called from: BudgetHomePage._loadData (after main data loads).
   static Future<List<Map<String, dynamic>>> checkNotifications(
       String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.checkNotifications();
+    }
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/budget/users/$userId/check-notifications'),
@@ -431,8 +471,11 @@ class BudgetService {
   /// Called from: BudgetNotificationsPage (if built).
   static Future<List<Map<String, dynamic>>> getNotifications(
       String token, int userId) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlBudgetService.getNotifications();
+    }
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/budget/users/$userId/notifications'),
         headers: ApiConfig.authHeaders(token),
       );

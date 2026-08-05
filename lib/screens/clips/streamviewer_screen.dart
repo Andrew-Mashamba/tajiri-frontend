@@ -1,20 +1,33 @@
 /// Story 58: Watch Live Stream
-/// Full-screen video, overlay chat, like/hearts, gifts.
+/// Full-screen video, overlay chat, reactions, gifts, share, tips.
 /// Navigation: Home → Feed → Live tab → Tap stream OR Profile → Live tab → Tap.
+///
+/// Phase A wiring (streams.md §I-§IX):
+///  - reactions, heartbeat, screenshot, share, super-chat, Q&A
+///  - share_uid deep-link plumbing (view_from_share·sharer)
+///  - viewer overflow menu (4 negative-attribution signals)
+///  - rapid_leave + session_exit_after_join detection
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:screen_capture_event/screen_capture_event.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/livestream_models.dart';
 import '../../services/livestream_service.dart';
+import '../../services/friend_service.dart';
+import '../../services/profile_service.dart';
 import '../../services/websocket_service.dart';
 import '../../services/battle_mode_service.dart' show BattleModeService, BattleState, BattleInvite, BattleStatus;
 import '../../widgets/battle_mode_overlay.dart';
 import '../../config/api_config.dart';
 import '../../services/local_storage_service.dart';
+import '../../l10n/app_strings_scope.dart';
 import '../wallet/send_tip_screen.dart';
+import '../wallet/subscribe_to_creator_screen.dart';
 import 'battlemodeoverlay_screen.dart';
 import '../../models/ad_models.dart';
 import '../../services/ad_service.dart';
@@ -27,18 +40,31 @@ const double _kMinTouchTarget = 48.0;
 class StreamViewerScreen extends StatefulWidget {
   final LiveStream stream;
   final int currentUserId;
+  /// A.6 — when viewer arrives via a shared link, pass through so backend
+  /// fires `view_from_share·sharer` for the original sharer.
+  final String? shareUid;
+  /// Phase F — when viewer arrives from an external cross-post link
+  /// (TikTok / IG / YT / FB / X / WhatsApp), the deep-link parser passes
+  /// the originating sharer's user_id and platform so backend fires
+  /// `cross_post_view·sharer` (Lever 4 attribution).
+  final int? crossPostSharerId;
+  final String? crossPostPlatform;
 
   const StreamViewerScreen({
     super.key,
     required this.stream,
     required this.currentUserId,
+    this.shareUid,
+    this.crossPostSharerId,
+    this.crossPostPlatform,
   });
 
   @override
   State<StreamViewerScreen> createState() => _StreamViewerScreenState();
 }
 
-class _StreamViewerScreenState extends State<StreamViewerScreen> {
+class _StreamViewerScreenState extends State<StreamViewerScreen>
+    with WidgetsBindingObserver {
   final LiveStreamService _streamService = LiveStreamService();
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _commentsScrollController = ScrollController();
@@ -77,13 +103,68 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
   /// Whether the pre-stream ad overlay is currently showing.
   bool _showPreStreamAd = false;
 
+  // ─── Phase A — viewer earnings plumbing ─────────────────────────────
+  /// Timestamp of viewer join — drives rapid_leave / session_exit signals.
+  DateTime? _joinedAt;
+  /// 1-minute heartbeat firing live_watch_minute·author.
+  Timer? _heartbeatTimer;
+  /// iOS/Android screenshot listener — fires screenshot_during_live.
+  ScreenCaptureEvent? _screenCaptureEvent;
+  /// Whether app entered background within 60s — fires session_exit_after_join.
+  bool _sessionExitFired = false;
+  final FriendService _friendService = FriendService();
+
+  // ─── Phase F — cohost invite detection (invitee-side) ──────────────
+  /// True when this viewer has a pending co-host invite for this stream.
+  bool _hasPendingCohostInvite = false;
+
+  // ─── Phase G — follow CTA on top bar ───────────────────────────────
+  /// Tracks whether the current viewer follows the streamer.
+  /// Updated optimistically when the viewer taps Follow.
+  bool _isFollowing = false;
+  bool _followBusy = false;
+  /// Lazy import for ProfileService — used by tap-on-avatar to record
+  /// `profile_visit_from_live·author`.
+  final ProfileService _profileService = ProfileService();
+  /// Phase G — per-viewer "notify me on go-live" subscription state.
+  bool _notifyOnLive = false;
+  /// Phase G — broadcaster's pinned outbound link (refreshed on join).
+  String? _pinnedLinkUrl;
+  String? _pinnedLinkLabel;
+
   @override
   void initState() {
     super.initState();
     _battleModeService = BattleModeService(_webSocketService);
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     WakelockPlus.enable();
+
+    // A.7 — Screenshot listener. Fires screenshot_during_live·author.
+    _screenCaptureEvent = ScreenCaptureEvent();
+    _screenCaptureEvent!.addScreenShotListener((path) {
+      _streamService.screenshotFeedback(widget.stream.id, widget.currentUserId);
+    });
+    _screenCaptureEvent!.watch();
+
     _checkSessionAndStart();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // A.10 — session_exit_after_join. Fire once if app backgrounds within
+    // 60s of join (signals viewer abandoned the stream very quickly).
+    if (state == AppLifecycleState.paused
+        && !_sessionExitFired
+        && _joinedAt != null
+        && DateTime.now().difference(_joinedAt!).inSeconds < 60) {
+      _sessionExitFired = true;
+      _streamService.negativeFeedback(
+        widget.stream.id, widget.currentUserId, 'session_exit_after_join',
+        metadata: {'dwell_ms': DateTime.now().difference(_joinedAt!).inMilliseconds},
+      );
+    }
   }
 
   /// If user has ended session or there is no session (e.g. forgot to end), show proper response and do not connect.
@@ -129,7 +210,11 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
 
   /// Actually join the stream (called after pre-stream ad completes or directly).
   Future<void> _proceedToJoinStream() async {
-    final joinResult = await _streamService.joinStream(widget.stream.id, widget.currentUserId);
+    // A.6 — pass shareUid through so backend fires view_from_share·sharer.
+    final joinResult = await _streamService.joinStream(
+      widget.stream.id, widget.currentUserId,
+      shareUid: widget.shareUid,
+    );
     if (!mounted) return;
 
     setState(() {
@@ -149,6 +234,29 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
       return;
     }
 
+    // A.5 — record join time + start 1-minute heartbeat that fires
+    // live_watch_minute·author. Skips when video controller is not playing
+    // (idle stream avoids ghost-credits).
+    _joinedAt = DateTime.now();
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final c = _videoPlayerController;
+      if (c != null && c.value.isPlaying) {
+        _streamService.heartbeat(widget.stream.id, widget.currentUserId);
+      }
+    });
+
+    // Phase F — cross_post_view·sharer (Lever 4). One-shot fire on join
+    // when viewer arrived from an external platform deep-link.
+    if (widget.crossPostSharerId != null && widget.crossPostPlatform != null) {
+      _streamService.crossPostView(
+        streamId: widget.stream.id,
+        sharerUserId: widget.crossPostSharerId!,
+        externalPlatform: widget.crossPostPlatform!,
+        viewerUserId: widget.currentUserId,
+      );
+    }
+
     final playbackUrl = joinResult.playbackUrl;
     final websocket = joinResult.websocket;
     if (joinResult.currentViewers != null) {
@@ -157,9 +265,122 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
 
     _initializeVideoPlayer(playbackUrl);
     _loadData();
+    _checkPendingCohostInvite();
+    _refreshNotifyLiveState();
     if (websocket != null && websocket.url.isNotEmpty && websocket.channel.isNotEmpty) {
       _connectWebSocket(websocket.url, websocket.channel);
     }
+  }
+
+  /// Phase F+G — fetch fresh stream and surface:
+  ///  - Co-host accept banner (when status='invited' for this viewer)
+  ///  - Pinned outbound link overlay (when broadcaster has pinned one)
+  Future<void> _checkPendingCohostInvite() async {
+    final result = await _streamService.getStream(
+      widget.stream.id, currentUserId: widget.currentUserId);
+    if (!mounted) return;
+    final stream = result.stream;
+    final cohosts = stream?.cohosts ?? const [];
+    final pending = cohosts.any((c) =>
+        c.userId == widget.currentUserId && c.status == 'invited');
+    setState(() {
+      if (pending) _hasPendingCohostInvite = true;
+      _pinnedLinkUrl = stream?.pinnedLinkUrl;
+      _pinnedLinkLabel = stream?.pinnedLinkLabel;
+    });
+  }
+
+  /// B5 — viewer taps the pinned link overlay. Fires
+  /// external_link_click·author and opens the URL externally.
+  Future<void> _onPinnedLinkTap() async {
+    final url = _pinnedLinkUrl;
+    if (url == null || url.isEmpty) return;
+    _streamService.externalLinkClick(
+      widget.stream.id, widget.currentUserId, url);
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      // Use share_plus to surface the URL — gives the user the
+      // platform's native "Open in..." picker without an extra dep.
+      await SharePlus.instance.share(ShareParams(uri: uri, text: url));
+    }
+  }
+
+  // ─── Phase G — follow / profile-visit with stream attribution ────
+  Future<void> _toggleFollow() async {
+    if (_followBusy) return;
+    setState(() => _followBusy = true);
+    final wasFollowing = _isFollowing;
+    final ok = wasFollowing
+        ? await _friendService.unfollowUser(
+            widget.currentUserId, widget.stream.userId)
+        : await _friendService.followUser(
+            widget.currentUserId, widget.stream.userId,
+            originStreamId: widget.stream.id,
+            shareUid: widget.shareUid,
+          );
+    if (!mounted) return;
+    setState(() {
+      _followBusy = false;
+      if (ok) _isFollowing = !wasFollowing;
+    });
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isSw ? 'Imeshindikana' : 'Failed'),
+      ));
+    }
+  }
+
+  Future<void> _refreshNotifyLiveState() async {
+    if (widget.currentUserId == widget.stream.userId) return;
+    final on = await _streamService.notifyLiveStatus(
+      streamerUserId: widget.stream.userId, userId: widget.currentUserId);
+    if (mounted) setState(() => _notifyOnLive = on);
+  }
+
+  Future<void> _toggleNotifyOnLive() async {
+    final newVal = !_notifyOnLive;
+    setState(() => _notifyOnLive = newVal);
+    final ok = await _streamService.notifyLiveToggle(
+      streamerUserId: widget.stream.userId,
+      userId: widget.currentUserId,
+      enabled: newVal,
+    );
+    if (!ok && mounted) {
+      // revert on failure
+      setState(() => _notifyOnLive = !newVal);
+    }
+  }
+
+  void _openStreamerProfile() {
+    // Fire profile_visit_from_live·author + profile_visit_from_stream_share
+    // (when share_uid is in flight). This records the visit; the calling
+    // route below opens the actual profile screen.
+    _profileService.recordProfileVisit(
+      targetUserId: widget.stream.userId,
+      viewerUserId: widget.currentUserId,
+      originStreamId: widget.stream.id,
+      shareUid: widget.shareUid,
+    );
+    Navigator.of(context).pushNamed('/profile/${widget.stream.userId}');
+  }
+
+  Future<void> _respondToCohostInvite(bool accept) async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final ok = await _streamService.cohostRespond(
+      streamId: widget.stream.id,
+      userId: widget.currentUserId,
+      accept: accept,
+    );
+    if (!mounted) return;
+    setState(() => _hasPendingCohostInvite = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? (accept
+              ? (isSw ? 'Umejiunga kama mwenyeji-wa-pamoja' : 'Joined as co-host')
+              : (isSw ? 'Umekataa' : 'Declined'))
+          : (isSw ? 'Imeshindikana' : 'Failed')),
+    ));
   }
 
   Future<void> _connectWebSocket(String wsUrl, String channel) async {
@@ -537,16 +758,159 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
     });
   }
 
-  Future<void> _toggleLike() async {
-    await _streamService.likeStream(widget.stream.id, widget.currentUserId);
-    setState(() => _isLiked = !_isLiked);
+  /// A.2 — open the 6-emoji reaction picker. Each reaction fires
+  /// `live_reaction·author` (rate 1.50 TZS/event) via `/streams/{id}/reaction`.
+  /// 👎 fires `negative_reaction_during_live` instead of a positive reaction.
+  void _openReactionPicker() {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                isSw ? 'Onyesha hisia zako' : 'React',
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12, runSpacing: 8, alignment: WrapAlignment.center,
+                children: [
+                  _reactionTile(ctx, 'heart', '❤️'),
+                  _reactionTile(ctx, 'fire', '🔥'),
+                  _reactionTile(ctx, 'love', '😍'),
+                  _reactionTile(ctx, 'wow', '😮'),
+                  _reactionTile(ctx, 'clap', '👏'),
+                  _reactionTile(ctx, 'laugh', '😂'),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(color: Colors.white24, height: 1),
+              const SizedBox(height: 8),
+              // A.9 — 👎 negative_reaction_during_live (low severity).
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _streamService.negativeFeedback(
+                    widget.stream.id, widget.currentUserId,
+                    'negative_reaction_during_live',
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isSw
+                            ? 'Asante kwa maoni'
+                            : 'Thanks for the feedback'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('👎', style: TextStyle(fontSize: 24)),
+                      const SizedBox(width: 8),
+                      Text(
+                        isSw ? 'Si vyema' : 'Dislike',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// G19 — chat_reaction·chat_author. 6-emoji picker on a chat message.
+  void _openChatReactionPicker(StreamComment comment) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          child: Wrap(
+            spacing: 12, alignment: WrapAlignment.center,
+            children: [
+              for (final pair in const [
+                ['heart', '❤️'], ['fire', '🔥'], ['clap', '👏'],
+                ['wow', '😮'], ['laugh', '😂'], ['sad', '😢'],
+              ])
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _streamService.reactToComment(
+                      streamId: widget.stream.id,
+                      commentId: comment.id,
+                      userId: widget.currentUserId,
+                      reactionType: pair[0],
+                    );
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Text(pair[1], style: const TextStyle(fontSize: 28)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _reactionTile(BuildContext sheetCtx, String type, String emoji) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        _streamService.sendReaction(widget.stream.id, widget.currentUserId, type);
+        setState(() => _isLiked = type == 'heart');
+      },
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(emoji, style: const TextStyle(fontSize: 28)),
+      ),
+    );
   }
 
   Future<void> _sendGift(VirtualGift gift) async {
+    // L1 — generate a stable per-tap idempotency key so network retries
+    // short-circuit on the server instead of double-charging the wallet.
+    final transactionId = const Uuid().v4();
     final success = await _streamService.sendGift(
       widget.stream.id,
       widget.currentUserId,
       gift.id,
+      transactionId: transactionId,
     );
 
     if (success) {
@@ -559,6 +923,8 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
     }
   }
 
+  /// A.3 — tip in stream context. Forwards stream_id so backend fires
+  /// `live_tip·author` (95% net) instead of generic `tip·author`.
   void _openSendTip() {
     Navigator.push<void>(
       context,
@@ -567,7 +933,785 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
           creatorId: widget.stream.userId,
           currentUserId: widget.currentUserId,
           creatorDisplayName: widget.stream.user?.displayName,
+          streamId: widget.stream.id,
         ),
+      ),
+    );
+  }
+
+  /// A.4 — wire the share button. Calls /streams/{id}/share to obtain a
+  /// share_uid, then opens the native share sheet with the attribution URL.
+  /// Backend fires `stream_share·sharer`; downstream views/follows via that
+  /// URL fire `view_from_share·sharer` and `follow_from_stream_share·sharer`.
+  Future<void> _shareStream() async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+
+    // B4 — surface intent picker first. Critique-shares fire
+    // negative_share_during_stream so the integrity pipeline can
+    // separate genuine recommendations from "look at this trainwreck".
+    final intent = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 8, bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.thumb_up_alt_rounded, color: Colors.greenAccent),
+              title: Text(isSw ? 'Pendekeza' : 'Recommend',
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                isSw ? 'Unapenda — wawasilishe kwa marafiki' : 'You like it — share with friends',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              onTap: () => Navigator.pop(ctx, 'recommend'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.thumb_down_alt_rounded, color: Colors.orange),
+              title: Text(isSw ? 'Kosoa' : 'Critique',
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                isSw
+                    ? 'Hupendi — usambaze kama tahadhari'
+                    : "You don't like it — share as a warning",
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              onTap: () => Navigator.pop(ctx, 'critique'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (intent == null) return;
+
+    final result = await _streamService.shareStream(
+      widget.stream.id, widget.currentUserId);
+    if (!mounted) return;
+    if (!result.success || result.shareUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isSw ? 'Imeshindikana kushiriki' : 'Failed to share')),
+      );
+      return;
+    }
+    if (intent == 'critique') {
+      _streamService.negativeFeedback(
+        widget.stream.id, widget.currentUserId,
+        'negative_share_during_stream',
+        metadata: {'share_uid': result.shareUid},
+      );
+    }
+    final title = widget.stream.title ?? (widget.stream.user?.displayName ?? 'TAJIRI live');
+    await SharePlus.instance.share(
+      ShareParams(
+        title: title,
+        text: '$title\n${result.shareUrl}',
+        uri: Uri.tryParse(result.shareUrl!),
+      ),
+    );
+  }
+
+  /// A.5 (companion) — open super-chat composer. Tier picker → /super-chats.
+  void _openSuperChat() {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final controller = TextEditingController();
+    int amount = 1000;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16,
+              16 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isSw ? 'Tuma Super Chat' : 'Send Super Chat',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: [500, 1000, 2500, 5000, 10000].map((v) =>
+                  ChoiceChip(
+                    label: Text('TSh $v'),
+                    selected: amount == v,
+                    onSelected: (_) => setSheetState(() => amount = v),
+                  )
+                ).toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLength: 200,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: isSw ? 'Andika ujumbe (hiari)' : 'Optional message',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final ok = await _streamService.sendSuperChat(
+                      widget.stream.id, widget.currentUserId, amount,
+                      message: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(ok
+                            ? (isSw ? 'Super Chat imetumwa' : 'Super Chat sent')
+                            : (isSw ? 'Imeshindikana' : 'Failed'))),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(isSw ? 'Tuma TSh $amount' : 'Send TSh $amount'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A.8 — overflow menu (3-dot). Surfaces 4 negative-attribution signals:
+  /// report_stream · not_interested · mute_streamer · chat_disable_for_creator.
+  void _openOverflowMenu() {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 8, bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // G9/G10 — Subscribe with stream attribution. Routes to
+            // SubscribeToCreatorScreen with originStreamId so backend
+            // fires subscribe_from_live·author (or resub_during_live).
+            if (widget.currentUserId != widget.stream.userId)
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_rounded, color: Colors.amber),
+                title: Text(
+                  isSw ? 'Jisajili kwa muundaji' : 'Subscribe to creator',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SubscribeToCreatorScreen(
+                        creatorId: widget.stream.userId,
+                        currentUserId: widget.currentUserId,
+                        creatorDisplayName: widget.stream.user?.displayName,
+                        originStreamId: widget.stream.id,
+                        shareUid: widget.shareUid,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            // Phase F — community contribute (captions / translations / dubs).
+            // Routes to a single bottom sheet that picks the contribution
+            // type and submits to the §V endpoints.
+            ListTile(
+              leading: const Icon(Icons.translate_rounded, color: Colors.white),
+              title: Text(
+                isSw ? 'Changia: manukuu / tafsiri / dub'
+                     : 'Contribute: captions / translation / dub',
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _openContributeSheet();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.visibility_off_rounded, color: Colors.white),
+              title: Text(
+                isSw ? 'Sipendi mitiririko kama hii' : 'Hide streams like this',
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _streamService.negativeFeedback(
+                  widget.stream.id, widget.currentUserId,
+                  'not_interested_in_streams_like_this',
+                );
+                _showNegFeedbackToast(isSw);
+                Navigator.of(context).pop(); // leave viewer
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.volume_off_rounded, color: Colors.white),
+              title: Text(
+                isSw ? 'Nyamazisha mtumiaji' : 'Mute streamer',
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                _streamService.negativeFeedback(
+                  widget.stream.id, widget.currentUserId, 'mute_streamer',
+                );
+                await _friendService.muteUser(
+                  userId: widget.currentUserId,
+                  mutedUserId: widget.stream.userId,
+                );
+                _showNegFeedbackToast(isSw);
+                if (mounted) Navigator.of(context).pop();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
+              title: Text(
+                isSw ? 'Zima gumzo la mtumiaji huyu' : "Disable chat for this streamer",
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _streamService.negativeFeedback(
+                  widget.stream.id, widget.currentUserId, 'chat_disable_for_creator',
+                );
+                _showNegFeedbackToast(isSw);
+              },
+            ),
+            // §A — block_streamer. Blocks the user via FriendService AND
+            // tags this stream context so the integrity pipeline sees it.
+            ListTile(
+              leading: Icon(Icons.block_rounded, color: Colors.red.shade400),
+              title: Text(
+                isSw ? 'Zuia mtumiaji' : 'Block streamer',
+                style: TextStyle(color: Colors.red.shade400),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: Text(isSw ? 'Zuia mtumiaji?' : 'Block streamer?'),
+                    content: Text(isSw
+                        ? 'Hutaona machapisho au mitiririko yao tena.'
+                        : "You won't see their posts or streams again."),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dctx, false),
+                        child: Text(isSw ? 'Ghairi' : 'Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dctx, true),
+                        child: Text(isSw ? 'Zuia' : 'Block',
+                            style: const TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
+                _streamService.negativeFeedback(
+                  widget.stream.id, widget.currentUserId, 'block_streamer',
+                );
+                await _friendService.blockUser(
+                    widget.currentUserId, widget.stream.userId);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(isSw ? 'Mtumiaji amezuiwa' : 'Streamer blocked'),
+                ));
+                Navigator.of(context).pop(); // leave viewer
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.flag_rounded, color: Colors.red.shade400),
+              title: Text(
+                isSw ? 'Ripoti mtiririko' : 'Report stream',
+                style: TextStyle(color: Colors.red.shade400),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final reason = await showDialog<String>(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: Text(isSw ? 'Sababu ya kuripoti' : 'Report reason'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final r in const [
+                          'inappropriate', 'harassment', 'misinformation',
+                          'adult_content', 'spam_scam', 'other',
+                        ])
+                          ListTile(
+                            title: Text(r),
+                            onTap: () => Navigator.pop(dctx, r),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+                if (reason == null) return;
+                _streamService.negativeFeedback(
+                  widget.stream.id, widget.currentUserId, 'report_stream',
+                  metadata: {'reason': reason},
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(isSw ? 'Ripoti imetumwa' : 'Report submitted')),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Phase F — community contribution sheet (§V localization) ───
+  // Single bottom-sheet that branches into 3 contribution flows:
+  //   • Live caption (captioner_user_id earns live_caption_create)
+  //   • VOD subtitle (translator earns subtitle_localization)
+  //   • Audio dub (voice_actor earns dub_overlay)
+  void _openContributeSheet() {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 8, bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                isSw ? 'Changia mtiririko huu' : 'Contribute to this stream',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.subtitles_rounded, color: Colors.white),
+              title: Text(isSw ? 'Andika manukuu (live)' : 'Live captions',
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                isSw ? 'Kuwa nukuzi — pata mapato kwa kila nukuu'
+                     : 'Become a captioner — earn per caption',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              onTap: () { Navigator.pop(ctx); _submitCaption(); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.translate_rounded, color: Colors.white),
+              title: Text(isSw ? 'Tafsiri (subtitles)' : 'Translation (subtitles)',
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                isSw ? 'Toa subtitle kwa lugha nyingine'
+                     : 'Submit subtitles in another language',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              onTap: () { Navigator.pop(ctx); _submitTranslation(); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.record_voice_over_rounded, color: Colors.white),
+              title: Text(isSw ? 'Dub ya sauti' : 'Voice dub',
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                isSw ? 'Tuma URL ya sauti iliyodubiwa'
+                     : 'Submit a dubbed audio URL',
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              onTap: () { Navigator.pop(ctx); _submitDub(); },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitCaption() async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final urlCtl = TextEditingController();
+    final langCtl = TextEditingController(text: 'sw');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isSw ? 'Tuma manukuu' : 'Submit captions'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: langCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'Lugha (mfano: sw, en)' : 'Language (e.g. sw, en)')),
+          TextField(controller: urlCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'URL ya manukuu (vtt/srt)' : 'Caption URL (vtt/srt)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isSw ? 'Ghairi' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isSw ? 'Tuma' : 'Submit')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final lang = langCtl.text.trim();
+    final url = urlCtl.text.trim();
+    if (lang.length != 2) {
+      _toastError(isSw ? 'Lugha lazima iwe herufi 2' : 'Language must be 2 chars');
+      return;
+    }
+    final id = await _streamService.createCaption(
+      streamId: widget.stream.id,
+      captionerUserId: widget.currentUserId,
+      languageCode: lang,
+      captionUrl: url.isEmpty ? null : url,
+      isLive: true,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(id != null
+            ? (isSw ? 'Asante — manukuu yamesajiliwa' : 'Captions recorded')
+            : (isSw ? 'Imeshindikana' : 'Failed')),
+      ));
+    }
+  }
+
+  Future<void> _submitTranslation() async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final srcCtl = TextEditingController(text: 'sw');
+    final tgtCtl = TextEditingController(text: 'en');
+    final urlCtl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isSw ? 'Tuma tafsiri' : 'Submit translation'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: srcCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'Lugha asili' : 'Source language')),
+          TextField(controller: tgtCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'Lugha lengwa' : 'Target language')),
+          TextField(controller: urlCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'URL ya subtitle' : 'Subtitle URL')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isSw ? 'Ghairi' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isSw ? 'Tuma' : 'Submit')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final src = srcCtl.text.trim();
+    final tgt = tgtCtl.text.trim();
+    if (src.length != 2 || tgt.length != 2) {
+      _toastError(isSw ? 'Lugha lazima ziwe herufi 2' : 'Languages must be 2 chars');
+      return;
+    }
+    final id = await _streamService.createTranslation(
+      streamId: widget.stream.id,
+      translatorUserId: widget.currentUserId,
+      sourceLanguageCode: src,
+      targetLanguageCode: tgt,
+      subtitleUrl: urlCtl.text.trim().isEmpty ? null : urlCtl.text.trim(),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(id != null
+            ? (isSw ? 'Asante — tafsiri imehifadhiwa' : 'Translation saved')
+            : (isSw ? 'Imeshindikana' : 'Failed')),
+      ));
+    }
+  }
+
+  Future<void> _submitDub() async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final langCtl = TextEditingController(text: 'sw');
+    final urlCtl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isSw ? 'Tuma dub' : 'Submit dub'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: langCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'Lugha' : 'Language')),
+          TextField(controller: urlCtl,
+            decoration: InputDecoration(
+              labelText: isSw ? 'URL ya sauti' : 'Audio URL')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isSw ? 'Ghairi' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isSw ? 'Tuma' : 'Submit')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final lang = langCtl.text.trim();
+    if (lang.length != 2) {
+      _toastError(isSw ? 'Lugha lazima iwe herufi 2' : 'Language must be 2 chars');
+      return;
+    }
+    final id = await _streamService.createDub(
+      streamId: widget.stream.id,
+      voiceActorUserId: widget.currentUserId,
+      languageCode: lang,
+      audioUrl: urlCtl.text.trim().isEmpty ? null : urlCtl.text.trim(),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(id != null
+            ? (isSw ? 'Asante — dub imehifadhiwa' : 'Dub saved')
+            : (isSw ? 'Imeshindikana' : 'Failed')),
+      ));
+    }
+  }
+
+  void _toastError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
+  }
+
+  // ─── B1 — Q&A panel (viewer-side) ──────────────────────────────
+  // Bottom sheet shows current questions sorted by upvotes; viewer can
+  // submit a new question (submit_question·question_author) or upvote
+  // existing ones (q_and_a_upvote·question_author — the asker earns).
+  Future<void> _openQuestionsPanel() async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final upvoted = <int>{};
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black87,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (ctx, scroll) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(top: 8, bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(children: [
+                    const Icon(Icons.live_help_rounded, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      isSw ? 'Maswali' : 'Q&A',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      icon: const Icon(Icons.add, color: Colors.white),
+                      label: Text(isSw ? 'Uliza' : 'Ask',
+                          style: const TextStyle(color: Colors.white)),
+                      onPressed: () => _submitQuestion(setLocal),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: FutureBuilder<List<StreamQuestion>>(
+                    future: _streamService.getQuestions(widget.stream.id),
+                    builder: (ctx, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white));
+                      }
+                      final qs = snap.data ?? const [];
+                      if (qs.isEmpty) {
+                        return Center(
+                          child: Text(
+                            isSw
+                                ? 'Hakuna swali bado. Kuwa wa kwanza.'
+                                : 'No questions yet. Be the first.',
+                            style: const TextStyle(color: Colors.white60),
+                          ),
+                        );
+                      }
+                      return ListView.builder(
+                        controller: scroll,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: qs.length,
+                        itemBuilder: (ctx, i) {
+                          final q = qs[i];
+                          final hasUpvoted = upvoted.contains(q.id);
+                          return Card(
+                            color: Colors.white10,
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              title: Text(q.question,
+                                  style: const TextStyle(color: Colors.white)),
+                              subtitle: Text(q.username,
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      hasUpvoted
+                                          ? Icons.thumb_up_alt_rounded
+                                          : Icons.thumb_up_alt_outlined,
+                                      color: hasUpvoted
+                                          ? Colors.orange
+                                          : Colors.white70,
+                                    ),
+                                    onPressed: hasUpvoted
+                                        ? null
+                                        : () async {
+                                            setLocal(() => upvoted.add(q.id));
+                                            await _streamService.upvoteQuestion(
+                                              widget.stream.id,
+                                              widget.currentUserId,
+                                              q.id,
+                                            );
+                                          },
+                                  ),
+                                  Text('${q.upvotes + (hasUpvoted ? 1 : 0)}',
+                                      style: const TextStyle(
+                                          color: Colors.white70, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _submitQuestion(void Function(void Function()) setLocal) async {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    final ctl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isSw ? 'Uliza swali' : 'Ask a question'),
+        content: TextField(
+          controller: ctl,
+          maxLength: 200,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: isSw ? 'Swali lako...' : 'Your question...',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isSw ? 'Ghairi' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isSw ? 'Tuma' : 'Submit')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final text = ctl.text.trim();
+    if (text.isEmpty) return;
+    final result = await _streamService.submitQuestion(
+      widget.stream.id, widget.currentUserId, text,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.success
+            ? (isSw ? 'Swali limetumwa' : 'Question submitted')
+            : (isSw ? 'Imeshindikana' : 'Failed')),
+      ));
+      // Force the bottom sheet to refresh its FutureBuilder.
+      setLocal(() {});
+    }
+  }
+
+  void _showNegFeedbackToast(bool isSw) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isSw ? 'Asante kwa maoni' : 'Thanks for the feedback'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -769,7 +1913,104 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
                   onTap: _recordStreamAdClick,
                 ),
               ),
+            // Phase F — co-host invite banner (invitee-side accept UI)
+            if (_hasPendingCohostInvite) _buildCohostInviteBanner(),
+            // B5 — pinned outbound link overlay (viewer tap fires
+            // external_link_click·author).
+            if (_pinnedLinkUrl != null && _pinnedLinkUrl!.isNotEmpty)
+              _buildPinnedLinkOverlay(),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinnedLinkOverlay() {
+    return Positioned(
+      left: 12,
+      bottom: MediaQuery.of(context).padding.bottom + 80,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _onPinnedLinkTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.link_rounded, color: Colors.amber, size: 18),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Text(
+                    _pinnedLinkLabel?.isNotEmpty == true
+                        ? _pinnedLinkLabel!
+                        : (Uri.tryParse(_pinnedLinkUrl!)?.host ?? 'Open link'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.open_in_new_rounded,
+                    color: Colors.white70, size: 14),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCohostInviteBanner() {
+    final isSw = AppStringsScope.of(context)?.isSwahili == true;
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 80,
+      left: 12,
+      right: 12,
+      child: Material(
+        color: Colors.deepPurple.shade700,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 6,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              const Icon(Icons.group_add_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isSw
+                      ? 'Umekaribishwa kuwa mwenyeji-wa-pamoja'
+                      : 'You were invited to co-host',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _respondToCohostInvite(false),
+                child: Text(isSw ? 'Kataa' : 'Decline',
+                    style: const TextStyle(color: Colors.white70)),
+              ),
+              ElevatedButton(
+                onPressed: () => _respondToCohostInvite(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.deepPurple.shade700,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(isSw ? 'Kubali' : 'Accept'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -952,47 +2193,100 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundImage: widget.stream.user?.avatarUrl.isNotEmpty == true
-                      ? NetworkImage(widget.stream.user!.avatarUrl)
-                      : null,
-                  child: widget.stream.user?.avatarUrl.isEmpty == true
-                      ? Text(widget.stream.user!.firstName[0])
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.stream.user?.displayName ?? 'Mtumiaji',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        widget.stream.title,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              // G11/G12 — tap streamer info → record profile_visit_from_live
+              // (and profile_visit_from_stream_share when share_uid present).
+              onTap: widget.currentUserId == widget.stream.userId
+                  ? null
+                  : _openStreamerProfile,
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundImage: widget.stream.user?.avatarUrl.isNotEmpty == true
+                        ? NetworkImage(widget.stream.user!.avatarUrl)
+                        : null,
+                    child: widget.stream.user?.avatarUrl.isEmpty == true
+                        ? Text(widget.stream.user!.firstName[0])
+                        : null,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.stream.user?.displayName ?? 'Mtumiaji',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          widget.stream.title,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+          // G22 — per-viewer "notify when this streamer goes live" bell.
+          if (widget.currentUserId != widget.stream.userId)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: Icon(
+                _notifyOnLive
+                    ? Icons.notifications_active_rounded
+                    : Icons.notifications_none_rounded,
+                color: _notifyOnLive ? Colors.amber : Colors.white,
+                size: 22,
+              ),
+              tooltip: _notifyOnLive ? 'Notifications on' : 'Notify me on go-live',
+              onPressed: _toggleNotifyOnLive,
+            ),
+          // G8/G13 — Follow CTA. Hidden when viewing your own stream or
+          // already following. Pressing fires follow_from_live·author
+          // (origin_stream_id) and follow_from_stream_share·sharer
+          // (share_uid). Backend wires both inside FollowController::follow.
+          if (widget.currentUserId != widget.stream.userId && !_isFollowing)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ElevatedButton(
+                onPressed: _followBusy ? null : _toggleFollow,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: _followBusy
+                    ? const SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                    : Text(
+                        AppStringsScope.of(context)?.isSwahili == true
+                            ? 'Fuata' : 'Follow',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+              ),
+            ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -1067,57 +2361,65 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
             final comment = _comments[index];
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundImage: comment.user?.avatarUrl.isNotEmpty == true
-                        ? NetworkImage(comment.user!.avatarUrl)
-                        : null,
-                    child: comment.user?.avatarUrl.isEmpty == true
-                        ? Text(
-                            comment.user!.firstName[0],
-                            style: const TextStyle(fontSize: 10),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            comment.user?.displayName ?? 'Mtumiaji',
-                            style: const TextStyle(
-                              color: Colors.blue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+              // G19 — long-press a chat message → reaction picker.
+              // Backend fires chat_reaction·chat_author crediting the
+              // viewer who wrote the message.
+              child: GestureDetector(
+                onLongPress: comment.userId == widget.currentUserId
+                    ? null
+                    : () => _openChatReactionPicker(comment),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundImage: comment.user?.avatarUrl.isNotEmpty == true
+                          ? NetworkImage(comment.user!.avatarUrl)
+                          : null,
+                      child: comment.user?.avatarUrl.isEmpty == true
+                          ? Text(
+                              comment.user!.firstName[0],
+                              style: const TextStyle(fontSize: 10),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              comment.user?.displayName ?? 'Mtumiaji',
+                              style: const TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            comment.content,
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                            Text(
+                              comment.content,
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -1132,11 +2434,12 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
       bottom: 100,
       child: Column(
         children: [
+          // A.2 — reaction picker (replaces likeStream heart-toggle)
           SemanticButton(
             minSize: _kMinTouchTarget,
             icon: _isLiked ? Icons.favorite : Icons.favorite_border,
             color: _isLiked ? Colors.red : Colors.white,
-            onTap: _toggleLike,
+            onTap: _openReactionPicker,
           ),
           const SizedBox(height: 16),
           SemanticButton(
@@ -1146,6 +2449,7 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
             onTap: () => setState(() => _showGifts = true),
           ),
           const SizedBox(height: 16),
+          // A.3 — tip with stream context
           SemanticButton(
             minSize: _kMinTouchTarget,
             icon: Icons.volunteer_activism,
@@ -1153,11 +2457,36 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
             onTap: _openSendTip,
           ),
           const SizedBox(height: 16),
+          // Super-chat (paid pinned chat — live_super_chat·author)
+          SemanticButton(
+            minSize: _kMinTouchTarget,
+            icon: Icons.star_rate_rounded,
+            color: Colors.amber,
+            onTap: _openSuperChat,
+          ),
+          const SizedBox(height: 16),
+          // B1 — Q&A panel (submit + upvote questions)
+          SemanticButton(
+            minSize: _kMinTouchTarget,
+            icon: Icons.live_help_rounded,
+            color: Colors.white,
+            onTap: _openQuestionsPanel,
+          ),
+          const SizedBox(height: 16),
+          // A.4 — share now actually shares
           SemanticButton(
             minSize: _kMinTouchTarget,
             icon: Icons.share,
             color: Colors.white,
-            onTap: () {},
+            onTap: _shareStream,
+          ),
+          const SizedBox(height: 16),
+          // A.8 — overflow (report / hide / mute / disable-chat)
+          SemanticButton(
+            minSize: _kMinTouchTarget,
+            icon: Icons.more_horiz_rounded,
+            color: Colors.white,
+            onTap: _openOverflowMenu,
           ),
         ],
       ),
@@ -1226,6 +2555,21 @@ class _StreamViewerScreenState extends State<StreamViewerScreen> {
 
   @override
   void dispose() {
+    // A.10 — rapid_leave detection. If viewer dwelled <30s, fire signal.
+    if (_joinedAt != null) {
+      final dwellMs = DateTime.now().difference(_joinedAt!).inMilliseconds;
+      if (dwellMs < 30000) {
+        _streamService.negativeFeedback(
+          widget.stream.id, widget.currentUserId, 'rapid_leave',
+          metadata: {'dwell_ms': dwellMs},
+        );
+      }
+    }
+
+    _heartbeatTimer?.cancel();
+    _screenCaptureEvent?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+
     _commentController.dispose();
     _commentsScrollController.dispose();
     _videoPlayerController?.dispose();

@@ -3,7 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:heroicons/heroicons.dart';
 import '../../models/post_models.dart';
 import '../../models/poll_models.dart';
+import 'package:screen_capture_event/screen_capture_event.dart';
+import '../../services/profile_service.dart';
+import '../../widgets/editor_action_sheet.dart';
+import '../../widgets/post_locale_switcher.dart';
 import '../../widgets/share_post_sheet.dart';
+import '../../widgets/save_to_collection_sheet.dart';
+import '../../widgets/translation_submit_sheet.dart';
+import 'clip_composer_screen.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/video_player_widget.dart';
 import '../../widgets/cached_media_image.dart';
@@ -13,21 +20,39 @@ import '../../services/post_service.dart';
 import '../../services/friend_service.dart';
 import '../../services/poll_service.dart';
 import '../../services/event_tracking_service.dart';
+import '../../l10n/app_strings_scope.dart';
 import 'video_reply_screen.dart';
 import 'video_stitch_screen.dart';
 
 /// Full-screen TikTok-style post viewer: one post per viewport, vertical swipe, snap.
 /// Media fills screen by aspect ratio with black letterboxing; overlay UI like TikTok.
+/// Where a post viewer was opened from. Drives §IX `reference_revisit`
+/// firing — the metric only fires when the user arrived from a non-feed
+/// source (search, saved, collection, profile).
+enum PostReferrer { feed, search, saved, collection, profile }
+
 class FullScreenPostViewerScreen extends StatefulWidget {
   final List<Post> posts;
   final int initialIndex;
   final int currentUserId;
+
+  /// §III sharer attribution: when the viewer arrived via a shared link
+  /// (`?share_uid=...`), this UUID flows through to every engagement
+  /// service call so the sharer earns view·sharer / reaction·sharer / etc.
+  final String? shareUid;
+
+  /// §IX referrer detection: when the viewer arrived from search /
+  /// saved-posts / a collection (NOT from the live feed), fire
+  /// reference_revisit·author once.
+  final PostReferrer referrer;
 
   const FullScreenPostViewerScreen({
     super.key,
     required this.posts,
     this.initialIndex = 0,
     required this.currentUserId,
+    this.shareUid,
+    this.referrer = PostReferrer.feed,
   });
 
   @override
@@ -37,6 +62,7 @@ class FullScreenPostViewerScreen extends StatefulWidget {
 
 class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen> {
   late PageController _pageController;
+  ScreenCaptureEvent? _screenCaptureEvent;
   final PostService _postService = PostService();
   final FriendService _friendService = FriendService();
   late List<Post> _posts;
@@ -73,6 +99,21 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
       _currentPostId = initialPost.id;
       _currentCreatorId = initialPost.userId;
       _currentPostEnteredAt = DateTime.now();
+      // UN-001: backend earnings view event (foundational metric).
+      unawaited(_postService.recordView(
+        postId: initialPost.id,
+        userId: widget.currentUserId,
+        via: widget.shareUid,
+      ));
+      // UN-016 / row 73: reference_revisit fires once per session when
+      // viewer arrived from a non-feed surface (search/saved/collection).
+      if (widget.referrer != PostReferrer.feed) {
+        unawaited(_postService.recordReferenceRevisit(
+          postId: initialPost.id,
+          userId: widget.currentUserId,
+        ));
+      }
+      // Analytics tracker (separate from earnings).
       EventTrackingService.getInstance().then((tracker) {
         tracker.trackEvent(
           eventType: 'view',
@@ -80,6 +121,25 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
           creatorId: initialPost.userId,
         );
       });
+    }
+
+    // Native screenshot listener — strategy posts.md row 15 (G-Q-010).
+    // Fires recordScreenshot for the currently viewed post when the user
+    // takes a system screenshot. Backend rate-card pays the post author.
+    try {
+      _screenCaptureEvent = ScreenCaptureEvent();
+      _screenCaptureEvent!.addScreenShotListener((_) {
+        final pid = _currentPostId;
+        if (pid != null) {
+          unawaited(_postService.recordScreenshot(
+            postId: pid,
+            userId: widget.currentUserId,
+          ));
+        }
+      });
+      _screenCaptureEvent!.watch();
+    } catch (_) {
+      // Plugin may fail on simulator / unsupported platform — silent.
     }
   }
 
@@ -93,18 +153,27 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
 
   @override
   void dispose() {
-    _emitDwellForCurrentPost();
+    _emitDwellForCurrentPost(isPageSwipe: false);
     _countdownTimer?.cancel();
+    _screenCaptureEvent?.dispose();
     _pageController.dispose();
     _commentController.dispose();
     _commentFocusNode.dispose();
     super.dispose();
   }
 
-  void _emitDwellForCurrentPost() {
+  void _emitDwellForCurrentPost({bool isPageSwipe = false}) {
     if (_currentPostEnteredAt != null && _currentPostId != null) {
       final dwellMs = DateTime.now().difference(_currentPostEnteredAt!).inMilliseconds;
       if (dwellMs > 1000) {
+        // UN-001 row 2: watch_second·author. Backend derives the metric
+        // from watch_seconds; this is the only path that supplies it.
+        unawaited(_postService.recordView(
+          postId: _currentPostId!,
+          userId: widget.currentUserId,
+          watchSeconds: (dwellMs / 1000).round(),
+          via: widget.shareUid,
+        ));
         EventTrackingService.getInstance().then((tracker) {
           tracker.trackEvent(
             eventType: 'dwell',
@@ -114,11 +183,18 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
           );
         });
       }
-      // Integrity layer §II — session_exit_after_view (bounce) signal.
-      // Fires when the user dismisses a post in under 2 seconds —
-      // suggests low quality / not-interesting content. Feeds the
-      // bounce_penalty clamp in the EarningsEngine integrity pipeline.
-      if (dwellMs < 2000) {
+      // Integrity layer §II — distinguish two negative signals:
+      //  • rapid_scroll_past (severity low): swiped onto next post in <500ms
+      //  • session_exit_after_view (severity low): closed viewer in <2000ms
+      // Feeds bounce_penalty in QualityFilter.
+      if (isPageSwipe && dwellMs < 500) {
+        _postService.postFeedback(
+          postId: _currentPostId!,
+          userId: widget.currentUserId,
+          signalType: 'rapid_scroll_past',
+          metadata: {'dwell_ms': dwellMs},
+        );
+      } else if (!isPageSwipe && dwellMs < 2000) {
         _postService.postFeedback(
           postId: _currentPostId!,
           userId: widget.currentUserId,
@@ -222,7 +298,7 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     try {
       final result = post.isLiked
           ? await _postService.unlikePost(post.id, widget.currentUserId)
-          : await _postService.likePost(post.id, widget.currentUserId);
+          : await _postService.likePost(post.id, widget.currentUserId, shareUid: widget.shareUid);
       if (!mounted) return;
       setState(() => _likingPostId = null);
       if (result.success) {
@@ -302,7 +378,7 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     try {
       final result = post.isSaved
           ? await _postService.unsavePost(post.id, widget.currentUserId)
-          : await _postService.savePost(post.id, widget.currentUserId);
+          : await _postService.savePost(post.id, widget.currentUserId, shareUid: widget.shareUid);
       if (!mounted) return;
       setState(() => _savingPostId = null);
       if (result.success) {
@@ -339,7 +415,23 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     try {
       final success = isCurrentlyFollowing
           ? await _friendService.unfollowUser(widget.currentUserId, post.userId)
-          : await _friendService.followUser(widget.currentUserId, post.userId);
+          : await _friendService.followUser(
+              widget.currentUserId,
+              post.userId,
+              originPostId: post.id,
+              shareUid: widget.shareUid,
+            );
+      // Integrity §II — unfollow_after_view (severity medium). Fire only
+      // after the unfollow actually succeeded, so we don't record intent
+      // that was reversed by an API failure. Backend FollowController also
+      // derives this from view history; backend dedup makes this idempotent.
+      if (success && isCurrentlyFollowing) {
+        unawaited(_postService.postFeedback(
+          postId: post.id,
+          userId: widget.currentUserId,
+          signalType: 'unfollow_after_view',
+        ));
+      }
       if (!mounted) return;
       setState(() {
         _followingInProgress.remove(post.userId);
@@ -359,7 +451,7 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
     if (text.isEmpty || _sendingComment) return;
     setState(() => _sendingComment = true);
     try {
-      final result = await _postService.addComment(post.id, widget.currentUserId, text);
+      final result = await _postService.addComment(post.id, widget.currentUserId, text, shareUid: widget.shareUid);
       if (!mounted) return;
       if (result.success) {
         _commentController.clear();
@@ -383,6 +475,14 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
   }
 
   void _onUserTap(Post post) {
+    // UN-002: fire profile_visit_from_post·author + (if shared) row 31
+    // profile_visit_from_share·sharer via the share_uid plumb.
+    unawaited(ProfileService().recordProfileVisit(
+      targetUserId: post.userId,
+      viewerUserId: widget.currentUserId,
+      originPostId: post.id,
+      shareUid: widget.shareUid,
+    ));
     Navigator.pushNamed(context, '/profile/${post.userId}');
   }
 
@@ -395,8 +495,78 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
         currentUserId: widget.currentUserId,
         onReport: () => _reportPost(post),
         onNotInterested: () => _notInterested(post),
+        onMute: () => _muteCreator(post),
+        onBlock: () => _blockCreator(post),
         onReply: () => _openReply(post),
         onStitch: () => _openStitch(post),
+        onSaveToCollection: () => _saveToCollection(post),
+        onClip: () => _openClipComposer(post),
+        onTranslate: () => _openTranslate(post),
+        onEditorTools: () => _openEditorTools(post),
+      ),
+    );
+  }
+
+  void _muteCreator(Post post) async {
+    Navigator.pop(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'mute_creator',
+    );
+    final ok = await _friendService.muteUser(
+      userId: widget.currentUserId,
+      mutedUserId: post.userId,
+    );
+    if (!mounted) return;
+    setState(() => _posts.removeWhere((p) => p.userId == post.userId));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (isSwahili ? 'Mtumiaji amenyamazishwa' : 'Creator muted')
+            : (isSwahili ? 'Imeshindikana kunyamazisha' : 'Failed to mute')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _blockCreator(Post post) async {
+    Navigator.pop(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isSwahili ? 'Zuia mtumiaji?' : 'Block this user?'),
+        content: Text(isSwahili
+            ? 'Hutaona machapisho yake tena na hawezi kukutumia ujumbe.'
+            : "You won't see their posts and they can't message you."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isSwahili ? 'Ghairi' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isSwahili ? 'Zuia' : 'Block', style: const TextStyle(color: Color(0xFF1A1A1A))),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'block_creator',
+    );
+    final ok = await _friendService.blockUser(widget.currentUserId, post.userId);
+    if (!mounted) return;
+    setState(() => _posts.removeWhere((p) => p.userId == post.userId));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? (isSwahili ? 'Mtumiaji amezuiwa' : 'User blocked')
+            : (isSwahili ? 'Imeshindikana kuzuia' : 'Failed to block')),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -439,26 +609,83 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
 
   void _reportPost(Post post) async {
     Navigator.pop(context); // close the sheet
-    // Show report reason dialog
-    final reason = await showDialog<String>(
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final picked = await showDialog<_ReportReason>(
       context: context,
-      builder: (ctx) => _ReportReasonDialog(),
+      builder: (ctx) => const _ReportReasonDialog(),
     );
-    if (reason == null || !mounted) return;
-    final result = await _postService.reportPost(post.id, widget.currentUserId, reason: reason);
+    if (picked == null || !mounted) return;
+    final result = await _postService.reportPost(
+      post.id,
+      widget.currentUserId,
+      reason: picked.label(isSwahili),
+      category: picked.code,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result.success ? 'Ripoti imetumwa. Asante!' : (result.message ?? 'Imeshindikana kutuma ripoti')),
+        content: Text(result.success
+            ? (isSwahili ? 'Ripoti imetumwa. Asante!' : 'Report submitted. Thank you!')
+            : (result.message ??
+                (isSwahili ? 'Imeshindikana kutuma ripoti' : 'Failed to send report'))),
         backgroundColor: Colors.grey.shade800,
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
+  void _saveToCollection(Post post) {
+    Navigator.pop(context); // close options sheet
+    SaveToCollectionSheet.show(
+      context,
+      postId: post.id,
+      currentUserId: widget.currentUserId,
+    );
+  }
+
+  void _openClipComposer(Post post) {
+    Navigator.pop(context); // close options sheet
+    if (!post.hasVideo) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClipComposerScreen(
+          sourcePost: post,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+  }
+
+  void _openTranslate(Post post) {
+    Navigator.pop(context); // close options sheet
+    TranslationSubmitSheet.show(
+      context,
+      postId: post.id,
+      currentUserId: widget.currentUserId,
+      originalContent: post.content,
+    );
+  }
+
+  /// UN-007/8/9 — open editor-tools sheet for video posts.
+  void _openEditorTools(Post post) {
+    Navigator.pop(context); // close options sheet
+    if (!post.hasVideo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Editor tools are video-only')),
+      );
+      return;
+    }
+    EditorActionSheet.show(
+      context,
+      post: post,
+      currentUserId: widget.currentUserId,
+    );
+  }
+
   void _notInterested(Post post) async {
     Navigator.pop(context); // close the sheet
-    // Track "not_interested" event for algorithm
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
     EventTrackingService.getInstance().then((tracker) {
       tracker.trackEvent(
         eventType: 'not_interested',
@@ -466,28 +693,26 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
         creatorId: post.userId,
       );
     });
-    // Hide from feed by calling API
+    // Integrity §II — fire both signals: not_interested (medium) is the
+    // explicit user signal; hide_post (medium) is recorded server-side
+    // by /posts/{id}/hide so QualityFilter can clamp earnings on the post.
+    _postService.postFeedback(
+      postId: post.id,
+      userId: widget.currentUserId,
+      signalType: 'not_interested',
+    );
     _postService.hidePost(post.id, widget.currentUserId);
-    // Remove from local list
     setState(() {
       _posts.removeWhere((p) => p.id == post.id);
     });
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Hutaona chapisho kama hili tena'),
+        content: Text(isSwahili
+            ? 'Hutaona chapisho kama hili tena'
+            : "You won't see posts like this anymore"),
         backgroundColor: Colors.grey.shade800,
         behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'Rejesha',
-          textColor: Colors.white,
-          onPressed: () {
-            // Re-add the post
-            setState(() {
-              _posts.add(post);
-            });
-          },
-        ),
       ),
     );
   }
@@ -529,11 +754,17 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
                 ? const _EasierSwipePhysics(parent: ClampingScrollPhysics())
                 : const BouncingScrollPhysics(parent: ClampingScrollPhysics()),
             onPageChanged: (index) {
-              _emitDwellForCurrentPost();
+              _emitDwellForCurrentPost(isPageSwipe: true);
               final post = _posts[index];
               _currentPostId = post.id;
               _currentCreatorId = post.userId;
               _currentPostEnteredAt = DateTime.now();
+              // UN-001 row 1: backend earnings view event for new post.
+              unawaited(_postService.recordView(
+                postId: post.id,
+                userId: widget.currentUserId,
+                via: widget.shareUid,
+              ));
               EventTrackingService.getInstance().then((tracker) {
                 tracker.trackEvent(
                   eventType: 'view',
@@ -681,6 +912,18 @@ class _FullScreenPostViewerScreenState extends State<FullScreenPostViewerScreen>
                     ),
                   ] else
                     const Spacer(),
+                  // UN-010 row 55 — locale switcher pill. Renders only when
+                  // approved translations exist for the current post.
+                  if (_currentPostId != null)
+                    PostLocaleSwitcher(
+                      key: ValueKey('locale_${_currentPostId!}'),
+                      postId: _currentPostId!,
+                      currentUserId: widget.currentUserId,
+                      onLocaleSelected: (_) {
+                        // Visual swap is out of scope for now; the
+                        // earnings event has fired by this point.
+                      },
+                    ),
                 ],
               ),
             ),
@@ -1673,16 +1916,28 @@ class _PostOptionsSheet extends StatelessWidget {
   final int currentUserId;
   final VoidCallback onReport;
   final VoidCallback onNotInterested;
+  final VoidCallback onMute;
+  final VoidCallback onBlock;
   final VoidCallback onReply;
   final VoidCallback onStitch;
+  final VoidCallback onSaveToCollection;
+  final VoidCallback onClip;
+  final VoidCallback onTranslate;
+  final VoidCallback onEditorTools;
 
   const _PostOptionsSheet({
     required this.post,
     required this.currentUserId,
     required this.onReport,
     required this.onNotInterested,
+    required this.onMute,
+    required this.onBlock,
     required this.onReply,
     required this.onStitch,
+    required this.onSaveToCollection,
+    required this.onClip,
+    required this.onEditorTools,
+    required this.onTranslate,
   });
 
   @override
@@ -1721,18 +1976,51 @@ class _PostOptionsSheet extends StatelessWidget {
                     onTap: onReply,
                   ),
                   const SizedBox(width: 12),
-                  if (post.hasVideo)
+                  if (post.hasVideo) ...[
                     _TopActionButton(
                       icon: Icons.content_cut_rounded,
                       label: 'Stitch',
                       onTap: onStitch,
                     ),
+                    const SizedBox(width: 12),
+                    _TopActionButton(
+                      icon: Icons.movie_filter_rounded,
+                      label: 'Clip',
+                      onTap: onClip,
+                    ),
+                  ],
                 ],
               ),
             ),
             const Divider(height: 1, indent: 16, endIndent: 16),
+            // Save to collection — strategy posts.md §VII (G-F-001).
+            _OptionTile(
+              icon: Icons.collections_bookmark_rounded,
+              label: 'Hifadhi kwenye mkusanyiko',
+              subtitle: 'Ongeza kwenye orodha yako',
+              onTap: onSaveToCollection,
+            ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            // Translate — strategy posts.md §VI (G-F-003).
+            _OptionTile(
+              icon: Icons.translate_rounded,
+              label: 'Tafsiri kwa lugha nyingine',
+              subtitle: 'Pata mapato kutoka kwa watazamaji',
+              onTap: onTranslate,
+            ),
+            // Editor tools — strategy posts.md §V (UN-007/8/9). Video posts only.
+            if (post.hasVideo) ...[
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              _OptionTile(
+                icon: Icons.edit_note_rounded,
+                label: 'Hariri (subtitle / format / highlight)',
+                subtitle: 'Pata mapato kwa kuongeza maelezo, geuza umbo, au chagua sehemu',
+                onTap: onEditorTools,
+              ),
+            ],
+            const Divider(height: 1, indent: 16, endIndent: 16),
             if (!isOwnPost) ...[
-              // Not interested
+              // Not interested → fires not_interested (severity medium)
               _OptionTile(
                 icon: Icons.not_interested_rounded,
                 label: 'Sipendi hii',
@@ -1740,7 +2028,23 @@ class _PostOptionsSheet extends StatelessWidget {
                 onTap: onNotInterested,
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
-              // Report
+              // Mute creator → fires mute_creator (severity high)
+              _OptionTile(
+                icon: Icons.volume_off_rounded,
+                label: 'Nyamazisha mtumiaji',
+                subtitle: 'Hutaona machapisho yake tena',
+                onTap: onMute,
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              // Block creator → fires block_creator (severity very_high)
+              _OptionTile(
+                icon: Icons.block_rounded,
+                label: 'Zuia mtumiaji',
+                subtitle: 'Hatakuona wala kukutumia ujumbe',
+                onTap: onBlock,
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              // Report → fires report_content (severity severe)
               _OptionTile(
                 icon: Icons.flag_outlined,
                 label: 'Ripoti',
@@ -1864,41 +2168,67 @@ class _OptionTile extends StatelessWidget {
 }
 
 /// Report reason dialog with predefined categories.
+enum _ReportReason {
+  inappropriate('inappropriate'),
+  hateSpeech('hate_speech'),
+  spamScam('spam_scam'),
+  harassment('harassment'),
+  adultContent('adult_content'),
+  misinformation('misinformation'),
+  other('other');
+
+  const _ReportReason(this.code);
+  final String code;
+
+  String label(bool isSwahili) {
+    switch (this) {
+      case _ReportReason.inappropriate:
+        return isSwahili ? 'Maudhui yasiyofaa' : 'Inappropriate content';
+      case _ReportReason.hateSpeech:
+        return isSwahili ? 'Uchochezi' : 'Hate speech';
+      case _ReportReason.spamScam:
+        return isSwahili ? 'Udanganyifu' : 'Spam / Scam';
+      case _ReportReason.harassment:
+        return isSwahili ? 'Unyanyasaji' : 'Harassment';
+      case _ReportReason.adultContent:
+        return isSwahili ? 'Maudhui ya watu wazima' : 'Adult content';
+      case _ReportReason.misinformation:
+        return isSwahili ? 'Habari za uongo' : 'Misinformation';
+      case _ReportReason.other:
+        return isSwahili ? 'Sababu nyingine' : 'Other';
+    }
+  }
+}
+
 class _ReportReasonDialog extends StatelessWidget {
-  static const _reasons = [
-    'Maudhui yasiyofaa (Inappropriate content)',
-    'Uchochezi (Hate speech)',
-    'Udanganyifu (Spam/Scam)',
-    'Unyanyasaji (Harassment)',
-    'Maudhui ya watu wazima (Adult content)',
-    'Habari za uongo (Misinformation)',
-    'Sababu nyingine (Other)',
-  ];
+  const _ReportReasonDialog();
 
   @override
   Widget build(BuildContext context) {
+    final isSwahili = AppStringsScope.of(context)?.isSwahili == true;
+    final reasons = _ReportReason.values;
     return AlertDialog(
       backgroundColor: const Color(0xFFFAFAFA),
-      title: const Text(
-        'Ripoti chapisho',
-        style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 17, fontWeight: FontWeight.w600),
+      title: Text(
+        isSwahili ? 'Ripoti chapisho' : 'Report post',
+        style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 17, fontWeight: FontWeight.w600),
       ),
       content: SizedBox(
         width: double.maxFinite,
         child: ListView.separated(
           shrinkWrap: true,
-          itemCount: _reasons.length,
+          itemCount: reasons.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (ctx, i) => Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => Navigator.pop(ctx, _reasons[i]),
+              onTap: () => Navigator.pop(ctx, reasons[i]),
               child: Container(
                 constraints: const BoxConstraints(minHeight: 48),
                 alignment: Alignment.centerLeft,
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                 child: Text(
-                  _reasons[i],
+                  reasons[i].label(isSwahili),
                   style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 14),
                 ),
               ),
@@ -1909,7 +2239,10 @@ class _ReportReasonDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Ghairi', style: TextStyle(color: Color(0xFF666666))),
+          child: Text(
+            isSwahili ? 'Ghairi' : 'Cancel',
+            style: const TextStyle(color: Color(0xFF666666)),
+          ),
         ),
       ],
     );

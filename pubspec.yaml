@@ -151,6 +151,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
   share_plus: ^12.0.1
+  app_links: ^6.3.2
   pdf: ^3.11.1
   printing: ^5.13.0
   add_2_calendar: ^3.0.1
@@ -187,9 +188,12 @@ dependencies:
   photo_view: ^0.15.0
   flutter_svg: ^2.0.17
   screenshot: ^3.0.0
+  # Native screenshot detection for G-Q-010 (posts.md row 15).
+  screen_capture_event: ^1.1.5
   timeago: ^3.7.0
   steel_crypt: ^3.0.0+1
   chess: ^0.8.1
+  mobile_scanner: ^7.2.0
 
 dev_dependencies:
   flutter_test:

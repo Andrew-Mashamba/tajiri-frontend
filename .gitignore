@@ -49,3 +49,8 @@ android/build/
 
 # Superpowers brainstorm session artifacts (mockups, state)
 .superpowers/
+
+# Local secrets / environment (never committed)
+.env
+.env.*
+!.env.example

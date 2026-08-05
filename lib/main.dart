@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
+import 'services/stream_deep_link_service.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/feed/feed_screen.dart';
@@ -15,6 +16,11 @@ import 'screens/feed/post_detail_screen.dart';
 import 'screens/feed/thread_viewer_screen.dart';
 import 'screens/feed/digest_screen.dart';
 import 'screens/feed/saved_posts_screen.dart';
+import 'screens/collections/collections_screen.dart';
+import 'screens/collections/collection_detail_screen.dart';
+import 'screens/feed/clip_detail_screen.dart';
+import 'screens/profile/affiliate_settings_screen.dart';
+import 'creator/services/earnings_taxonomy_service.dart';
 import 'creator/screens/weekly_report_screen.dart';
 import 'mymusic/widgets/music_gallery_widget_screen.dart';
 import 'screens/michangogallerywidget_screen.dart';
@@ -43,13 +49,36 @@ import 'screens/search/search_screen.dart'; // Retained: used by other screens
 import 'screens/search/universal_search_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
-import 'screens/shop/create_product_screen.dart';
-import 'screens/shop/product_detail_screen.dart';
-import 'screens/shop/seller_orders_screen.dart';
-import 'screens/shop/order_detail_screen.dart';
-import 'screens/shop/cart_screen.dart';
-import 'screens/shop/checkout_screen.dart';
-import 'screens/shop/wishlist_screen.dart';
+import 'shop/seller/screens/create_product_screen.dart';
+import 'shop/buyer/screens/product_detail_screen.dart';
+import 'shop/seller/screens/seller_orders_screen.dart';
+import 'shop/buyer/screens/order_detail_screen.dart';
+import 'shop/buyer/screens/cart_screen.dart';
+import 'shop/buyer/screens/checkout_screen.dart';
+import 'shop/buyer/screens/wishlist_screen.dart';
+import 'shop/buyer/screens/category_screen.dart';
+import 'shop/buyer/screens/flash_deals_screen.dart';
+import 'shop/buyer/screens/order_tracking_screen.dart';
+import 'shop/seller/screens/seller_analytics_screen.dart';
+import 'shop/seller/screens/my_shop_screen.dart';
+import 'shop/buyer/screens/recommended_products_screen.dart';
+import 'shop/buyer/screens/nearby_products_screen.dart';
+import 'shop/buyer/screens/recently_viewed_screen.dart';
+import 'shop/buyer/screens/seller_shop_profile_screen.dart';
+import 'shop/buyer/screens/service_detail_screen.dart';
+import 'shop/search/screens/shop_search_screen.dart';
+import 'shop/search/screens/shop_search_results_screen.dart';
+import 'shop/reviews/screens/product_reviews_list_screen.dart';
+import 'shop/seller/screens/seller_inventory_screen.dart';
+import 'shop/payments/screens/shop_wallet_screen.dart';
+import 'shop/social_commerce/screens/trending_products_screen.dart';
+import 'shop/chat/screens/seller_inbox_screen.dart';
+import 'shop/seller/screens/ad_campaigns_screen.dart';
+import 'shop/common/screens/shop_feature_hub_screen.dart';
+import 'shop/offers/screens/my_offers_screen.dart';
+import 'shop/escrow/screens/disputes_list_screen.dart';
+import 'shop/delivery/driver/screens/driver_home_screen.dart';
+import 'shop/delivery/tracking/tajiri_live_tracking_screen.dart';
 import 'screens/analytics/analytics_dashboard_screen.dart';
 import 'screens/feed/battle_thread_screen.dart';
 import 'creator/screens/creator_revenue_screen.dart';
@@ -79,8 +108,9 @@ import 'screens/biashara/deposit_ad_balance_screen.dart';
 import 'screens/audio_rooms/audio_rooms_discovery_screen.dart';
 import 'screens/audio_rooms/audio_room_screen.dart';
 // AudioRoom model used via route arguments only; service called by screen imports.
-import 'models/shop_models.dart' show Product, DeliveryMethod, Cart;
+import 'models/shop_models.dart' show Product, DeliveryMethod, Cart, ProductCategory, Order;
 import 'services/local_storage_service.dart';
+import 'shop/bootstrap/app_initializer.dart';
 import 'services/theme_notifier.dart';
 import 'services/language_notifier.dart';
 import 'services/fcm_service.dart';
@@ -89,7 +119,6 @@ import 'services/ad_service.dart';
 import 'services/background_sync_service.dart';
 import 'games/pages/game_challenge_accept_screen.dart';
 import 'services/message_database.dart';
-import 'l10n/app_strings.dart';
 import 'l10n/app_strings_scope.dart';
 
 void main() async {
@@ -121,6 +150,8 @@ void main() async {
   // Ensure LocalStorageService is ready before background tasks use it
   await LocalStorageService.getInstance();
 
+  await AppInitializer.initialize();
+
   // Ensure message SQLite database is created before app renders
   await MessageDatabase.instance.database;
 
@@ -129,6 +160,11 @@ void main() async {
 
   // Start app-wide connectivity listener (drives the offline banner).
   NetworkStateService.instance.start().ignore();
+
+  // Fire-and-forget: warm the earnings taxonomy cache so any
+  // creator-earnings screen renders with the server-served gating
+  // rules instead of the hardcoded fallback.
+  EarningsTaxonomyService.instance.warmup().ignore();
 
   runApp(const TajiriApp());
 }
@@ -205,6 +241,9 @@ class _TajiriAppState extends State<TajiriApp> {
     LanguageNotifier.init(storage.getLanguageCode());
     // Fire-and-forget ad settings refresh (non-blocking)
     _fetchAdSettingsIfNeeded().ignore();
+    // Phase G — listen for incoming stream deep links so cross-post
+    // and share-uid attribution works end-to-end. Idempotent.
+    StreamDeepLinkService().attach(_appNavigatorKey).ignore();
     if (mounted) setState(() => _themeReady = true);
   }
 
@@ -239,7 +278,7 @@ class _TajiriAppState extends State<TajiriApp> {
       builder: (context, _) {
         return ListenableBuilder(
           listenable: LanguageNotifier.instance,
-          builder: (context, __) {
+          builder: (context, unused) {
             final locale = Locale(LanguageNotifier.instance.value);
             FcmService.setNavigatorKey(_appNavigatorKey);
             return AppStringsScope(
@@ -405,7 +444,19 @@ class _TajiriAppState extends State<TajiriApp> {
                 settings: settings,
               );
             }
-            return null;
+            // Tab / deep link: Friends feed
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return FriendsScreen(
+                      currentUserId: snapshot.data!, isCurrentTab: true);
+                },
+              ),
+            );
 
           case 'subscribers':
             // /subscribers/manage — creator-only subscribers management page.
@@ -445,6 +496,84 @@ class _TajiriAppState extends State<TajiriApp> {
               ),
             );
 
+          case 'collections':
+            // /collections           — public discovery feed
+            // /collections/:userId   — that curator's boards
+            // /collections/board/:id — single collection detail (UN-011)
+            if (pathSegments.length > 2 && pathSegments[1] == 'board') {
+              final collectionId = int.tryParse(pathSegments[2]) ?? 0;
+              if (collectionId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return CollectionDetailScreen(
+                        collectionId: collectionId,
+                        currentUserId: snapshot.data!,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            final curatorId = pathSegments.length > 1
+                ? int.tryParse(pathSegments[1])
+                : null;
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return CollectionsScreen(
+                    curatorUserId: curatorId,
+                    currentUserId: snapshot.data!,
+                  );
+                },
+              ),
+            );
+
+          case 'affiliate-settings':
+            // /affiliate-settings — UN-014 creator settings
+            return MaterialPageRoute(
+              builder: (_) => FutureBuilder<int>(
+                future: getCurrentUserId(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return AffiliateSettingsScreen(currentUserId: snapshot.data!);
+                },
+              ),
+            );
+
+          case 'clip':
+            // /clip/:clipId — single §V clipper-economy clip viewer (UN-005)
+            if (pathSegments.length > 1) {
+              final clipId = int.tryParse(pathSegments[1]) ?? 0;
+              if (clipId > 0) {
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int>(
+                    future: getCurrentUserId(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return ClipDetailScreen(
+                        clipId: clipId,
+                        currentUserId: snapshot.data!,
+                      );
+                    },
+                  ),
+                );
+              }
+            }
+            return null;
+
           case 'notifications':
             return MaterialPageRoute(
               builder: (_) => FutureBuilder<int>(
@@ -462,6 +591,8 @@ class _TajiriAppState extends State<TajiriApp> {
             if (pathSegments.length > 1) {
               final postId = int.tryParse(pathSegments[1]) ?? 0;
               if (postId > 0) {
+                // UN-003: extract share_uid from query for §III sharer chain.
+                final shareUid = uri.queryParameters['share_uid'];
                 return MaterialPageRoute(
                   builder: (_) => FutureBuilder<int>(
                     future: getCurrentUserId(),
@@ -472,6 +603,7 @@ class _TajiriAppState extends State<TajiriApp> {
                       return PostDetailScreen(
                         postId: postId,
                         currentUserId: snapshot.data!,
+                        shareUid: shareUid,
                       );
                     },
                   ),
@@ -794,19 +926,6 @@ class _TajiriAppState extends State<TajiriApp> {
               ),
             );
 
-          case 'friends':
-            return MaterialPageRoute(
-              builder: (_) => FutureBuilder<int>(
-                future: getCurrentUserId(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return FriendsScreen(currentUserId: snapshot.data!, isCurrentTab: true);
-                },
-              ),
-            );
-
           case 'messages': {
             // Sub-tab: query ?tab=groups|calls or path /messages/groups or /messages/calls
             final messagesTab = uri.queryParameters['tab'] ??
@@ -1032,7 +1151,23 @@ class _TajiriAppState extends State<TajiriApp> {
             break;
 
           case 'shop':
-            // Handle shop routes: /shop/create-product, /shop/edit-product, etc.
+            // Handle shop routes: /shop, /shop/create-product, /shop/edit-product, etc.
+            if (pathSegments.length == 1) {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    return MyShopScreen(
+                      userId: snapshot.data!,
+                      isOwnProfile: true,
+                    );
+                  },
+                ),
+              );
+            }
             if (pathSegments.length > 1) {
               switch (pathSegments[1]) {
                 case 'create-product':
@@ -1051,11 +1186,14 @@ class _TajiriAppState extends State<TajiriApp> {
                 case 'product': {
                   // Supports /shop/product/123 or /shop/product with arguments
                   int productId = 0;
+                  int? originPostId;
                   if (pathSegments.length > 2) {
                     productId = int.tryParse(pathSegments[2]) ?? 0;
                   }
-                  if (productId == 0 && settings.arguments is Map) {
-                    productId = (settings.arguments as Map<String, dynamic>)['productId'] as int? ?? 0;
+                  if (settings.arguments is Map) {
+                    final args = settings.arguments as Map<String, dynamic>;
+                    productId = productId == 0 ? (args['productId'] as int? ?? 0) : productId;
+                    originPostId = args['origin_post_id'] as int?;
                   }
                   if (productId > 0) {
                     return MaterialPageRoute(
@@ -1068,9 +1206,67 @@ class _TajiriAppState extends State<TajiriApp> {
                           return ProductDetailScreen(
                             productId: productId,
                             currentUserId: snapshot.data!,
+                            originPostId: originPostId,
                           );
                         },
                       ),
+                    );
+                  }
+                  break;
+                }
+
+                case 'category': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final category = args?['category'] as ProductCategory?;
+                  if (category != null) {
+                    return MaterialPageRoute(
+                      builder: (_) => FutureBuilder<int>(
+                        future: getCurrentUserId(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          return CategoryScreen(
+                            category: category,
+                            currentUserId: snapshot.data!,
+                          );
+                        },
+                      ),
+                    );
+                  }
+                  break;
+                }
+
+                case 'flash-deals':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return FlashDealsScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'order-tracking': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final order = args?['order'] as Order?;
+                  if (order != null) {
+                    return MaterialPageRoute(
+                      builder: (_) => OrderTrackingScreen(order: order),
+                    );
+                  }
+                  break;
+                }
+
+                case 'seller-analytics': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final sellerId = args?['sellerId'] as int? ?? 0;
+                  if (sellerId > 0) {
+                    return MaterialPageRoute(
+                      builder: (_) => SellerAnalyticsScreen(sellerId: sellerId),
                     );
                   }
                   break;
@@ -1149,6 +1345,244 @@ class _TajiriAppState extends State<TajiriApp> {
                     ),
                   );
 
+                case 'recommended':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return RecommendedProductsScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'nearby':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return NearbyProductsScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'recently-viewed':
+                  return MaterialPageRoute(
+                    builder: (_) => const RecentlyViewedScreen(),
+                  );
+
+                case 'seller-profile': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final sellerId = args?['sellerId'] as int? ?? 0;
+                  if (sellerId <= 0) break;
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return SellerShopProfileScreen(
+                          sellerId: sellerId,
+                          currentUserId: snapshot.data!,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                case 'service': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  int productId = args?['productId'] as int? ?? 0;
+                  if (productId <= 0 && pathSegments.length > 2) {
+                    productId = int.tryParse(pathSegments[2]) ?? 0;
+                  }
+                  if (productId <= 0) break;
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ServiceDetailScreen(
+                          productId: productId,
+                          currentUserId: snapshot.data!,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                case 'search':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ShopSearchScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'search-results': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final query = args?['query'] as String? ?? '';
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ShopSearchResultsScreen(
+                          query: query,
+                          currentUserId: snapshot.data!,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                case 'product-reviews': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  int productId = args?['productId'] as int? ?? 0;
+                  if (productId <= 0 && pathSegments.length > 2) {
+                    productId = int.tryParse(pathSegments[2]) ?? 0;
+                  }
+                  if (productId <= 0) break;
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ProductReviewsListScreen(
+                          productId: productId,
+                          currentUserId: snapshot.data!,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                case 'inventory': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final sellerIdArg = args?['sellerId'] as int?;
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return SellerInventoryScreen(
+                          sellerId: sellerIdArg ?? snapshot.data!,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                case 'wallet':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ShopWalletScreen(userId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'trending':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return TrendingProductsScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'seller-inbox':
+                  return MaterialPageRoute(
+                    builder: (_) => const SellerInboxScreen(),
+                  );
+
+                case 'ad-campaigns':
+                  return MaterialPageRoute(
+                    builder: (_) => const AdCampaignsScreen(),
+                  );
+
+                case 'my-offers':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return MyOffersScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'disputes':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return DisputesListScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
+                case 'live-tracking': {
+                  final args = settings.arguments as Map<String, dynamic>?;
+                  final jobId = args?['jobId'] as int? ?? 0;
+                  final driverId = args?['driverId'] as int?;
+                  final dropoffAddress = args?['dropoffAddress'] as String? ?? '';
+                  final authToken = args?['authToken'] as String?;
+                  return MaterialPageRoute(
+                    builder: (_) => TajiriLiveTrackingScreen(
+                      jobId: jobId,
+                      driverId: driverId,
+                      dropoffAddress: dropoffAddress,
+                      authToken: authToken,
+                    ),
+                  );
+                }
+
+                case 'features':
+                  return MaterialPageRoute(
+                    builder: (_) => FutureBuilder<int>(
+                      future: getCurrentUserId(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return ShopFeatureHubScreen(currentUserId: snapshot.data!);
+                      },
+                    ),
+                  );
+
                 case 'checkout':
                   final args = settings.arguments as Map<String, dynamic>?;
                   return MaterialPageRoute(
@@ -1169,6 +1603,34 @@ class _TajiriAppState extends State<TajiriApp> {
                     ),
                   );
               }
+            }
+            break;
+
+          case 'delivery':
+            if (pathSegments.length > 2 && pathSegments[1] == 'driver' && pathSegments[2] == 'home') {
+              return MaterialPageRoute(
+                builder: (_) => FutureBuilder<int>(
+                  future: getCurrentUserId(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    return FutureBuilder<String?>(
+                      future: LocalStorageService.getInstance()
+                          .then((s) => s.getAuthToken()),
+                      builder: (context, tokenSnap) {
+                        if (!tokenSnap.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return DriverHomeScreen(
+                          userId: snapshot.data!,
+                          token: tokenSnap.data ?? '',
+                        );
+                      },
+                    );
+                  },
+                ),
+              );
             }
             break;
 

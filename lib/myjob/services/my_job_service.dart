@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../../team/models/work_models.dart';
 import '../../team/models/task_models.dart';
@@ -31,7 +32,7 @@ class MyJobService {
   static Future<WorkResult<JobDescription>> getMyJobDescription(String token) async {
     _log('GET /my/job-description');
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
           Uri.parse('${ApiConfig.baseUrl}/my/job-description'),
           headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -48,7 +49,7 @@ class MyJobService {
   static Future<WorkListResult<Kpi>> getMyKpis(String token) async {
     _log('GET /my/kpis');
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
           Uri.parse('${ApiConfig.baseUrl}/my/kpis'),
           headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -67,7 +68,7 @@ class MyJobService {
       String token, int kpiId) async {
     _log('GET /my/kpis/$kpiId/entries');
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
           Uri.parse('${ApiConfig.baseUrl}/my/kpis/$kpiId/entries'),
           headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -90,7 +91,7 @@ class MyJobService {
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/my/tasks')
           .replace(queryParameters: {'date': dateStr});
-      final res = await http.get(uri, headers: _h(token));
+      final res = await httpGetWithRetry(uri, headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode == 200) {
         // Backend returns {standing: [...], adhoc: [...]}
@@ -109,7 +110,7 @@ class MyJobService {
   static Future<WorkListResult<MyPayslip>> getMyPayslips(String token) async {
     _log('GET /my/payslips');
     try {
-      final res = await http.get(
+      final res = await httpGetWithRetry(
           Uri.parse('${ApiConfig.baseUrl}/my/payslips'),
           headers: _h(token));
       final body = jsonDecode(res.body) as Map<String, dynamic>;

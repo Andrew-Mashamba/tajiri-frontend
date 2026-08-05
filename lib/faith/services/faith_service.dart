@@ -1,6 +1,7 @@
 // lib/faith/services/faith_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../services/http_retry.dart';
 import '../../config/api_config.dart';
 import '../models/faith_models.dart';
 
@@ -11,7 +12,7 @@ class FaithService {
 
   Future<FaithResult<FaithPreference>> getPreference(int userId) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/faith/preference/$userId'),
       );
       if (response.statusCode == 200) {
@@ -60,7 +61,7 @@ class FaithService {
     required FaithType faith,
   }) async {
     try {
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         Uri.parse('$_baseUrl/faith/inspiration?faith=${faith.name}'),
       );
       if (response.statusCode == 200) {
@@ -94,7 +95,7 @@ class FaithService {
 
       final uri = Uri.parse('$_baseUrl/faith/prayer-times')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -131,7 +132,7 @@ class FaithService {
 
       final uri = Uri.parse('$_baseUrl/faith/places')
           .replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await httpGetWithRetry(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../config/api_config.dart';
 import 'local_storage_service.dart';
 
@@ -30,7 +31,7 @@ class PresenceService {
     try {
       final storage = await LocalStorageService.getInstance();
       final token = storage.getAuthToken();
-      final resp = await http.get(
+      final resp = await httpGetWithRetry(
         Uri.parse('$_baseUrl/presence/$userId'),
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );

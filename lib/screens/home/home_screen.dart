@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../feed/feed_screen.dart';
 import '../friends/friends_screen.dart';
 import '../messages/conversations_screen.dart';
-import '../shop/shop_screen.dart';
+import '../../shop/buyer/screens/shop_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../services/message_service.dart';
 import '../../services/live_update_service.dart';

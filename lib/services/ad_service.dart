@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'http_retry.dart';
 import '../models/ad_models.dart';
 import '../config/api_config.dart';
+import 'graphql/graphql_ad_service.dart';
 import 'expenditure_service.dart';
 import 'income_service.dart';
 import 'local_storage_service.dart';
@@ -27,6 +29,9 @@ class AdService {
     String placement,
     int count,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getServedAds(placement, count);
+    }
     try {
       // Resolve user_id — backend requires it
       final storage = await LocalStorageService.getInstance();
@@ -39,7 +44,7 @@ class AdService {
       if (userId != null) params['user_id'] = userId.toString();
 
       final uri = Uri.parse('$_baseUrl/ads/serve').replace(queryParameters: params);
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -72,6 +77,15 @@ class AdService {
     String placement,
     String eventType,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.recordAdEvent(
+        campaignId,
+        creativeId,
+        userId,
+        placement,
+        eventType,
+      );
+    }
     try {
       final uri = Uri.parse('$_baseUrl/ads/event');
       final response = await http.post(
@@ -101,6 +115,9 @@ class AdService {
     String placement,
     double revenue,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.reportAdMobRevenue(userId, placement, revenue);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/ads/admob-revenue');
       final response = await http.post(
@@ -139,9 +156,12 @@ class AdService {
 
   /// List all campaigns belonging to the authenticated advertiser.
   static Future<List<AdCampaign>> getCampaigns(String? token) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getCampaigns();
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -168,6 +188,9 @@ class AdService {
     String? token,
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.createCampaign(data);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns');
       final response = await http.post(
@@ -192,9 +215,12 @@ class AdService {
 
   /// Fetch a single campaign by [id].
   static Future<AdCampaign?> getCampaign(String? token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getCampaign(id);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns/$id');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -217,6 +243,9 @@ class AdService {
     int id,
     Map<String, dynamic> data,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.updateCampaign(id, data);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns/$id');
       final response = await http.put(
@@ -250,6 +279,12 @@ class AdService {
     Map<String, dynamic> data, {
     File? mediaFile,
   }) async {
+    if (ApiConfig.useGraphqlBackend) {
+      if (mediaFile != null && data['media_url'] == null) {
+        _log('uploadCreative: mediaFile ignored in GraphQL mode — pass media_url');
+      }
+      return GraphqlAdService.uploadCreative(campaignId, data);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns/$campaignId/creatives');
       final request = http.MultipartRequest('POST', uri);
@@ -298,20 +333,33 @@ class AdService {
   // ---------------------------------------------------------------------------
 
   /// Submit a draft campaign for review.
-  static Future<bool> submitCampaign(String? token, int id) async =>
-      _postAction(token, '$_baseUrl/biashara/campaigns/$id/submit');
+  static Future<bool> submitCampaign(String? token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.submitCampaign(id);
+    }
+    return _postAction(token, '$_baseUrl/biashara/campaigns/$id/submit');
+  }
 
-  /// Pause an active campaign.
-  static Future<bool> pauseCampaign(String? token, int id) async =>
-      _postAction(token, '$_baseUrl/biashara/campaigns/$id/pause');
+  static Future<bool> pauseCampaign(String? token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.pauseCampaign(id);
+    }
+    return _postAction(token, '$_baseUrl/biashara/campaigns/$id/pause');
+  }
 
-  /// Resume a paused campaign.
-  static Future<bool> resumeCampaign(String? token, int id) async =>
-      _postAction(token, '$_baseUrl/biashara/campaigns/$id/resume');
+  static Future<bool> resumeCampaign(String? token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.resumeCampaign(id);
+    }
+    return _postAction(token, '$_baseUrl/biashara/campaigns/$id/resume');
+  }
 
-  /// Cancel a campaign.
-  static Future<bool> cancelCampaign(String? token, int id) async =>
-      _postAction(token, '$_baseUrl/biashara/campaigns/$id/cancel');
+  static Future<bool> cancelCampaign(String? token, int id) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.cancelCampaign(id);
+    }
+    return _postAction(token, '$_baseUrl/biashara/campaigns/$id/cancel');
+  }
 
   static Future<bool> _postAction(String? token, String url) async {
     try {
@@ -337,9 +385,12 @@ class AdService {
     String? token,
     int id,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getCampaignPerformance(id);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/campaigns/$id/performance');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -362,9 +413,12 @@ class AdService {
 
   /// Get the current ad account balance for the authenticated user.
   static Future<double> getAdBalance(String? token) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getAdBalance();
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/balance');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
@@ -388,6 +442,9 @@ class AdService {
     String? token,
     double amount,
   ) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.depositAdBalance(amount);
+    }
     try {
       final uri = Uri.parse('$_baseUrl/biashara/balance/deposit');
       final response = await http.post(
@@ -422,9 +479,12 @@ class AdService {
 
   /// Fetch client-facing ad settings (frequency caps, enabled placements, etc.).
   static Future<Map<String, dynamic>> getClientSettings(String? token) async {
+    if (ApiConfig.useGraphqlBackend) {
+      return GraphqlAdService.getClientSettings();
+    }
     try {
       final uri = Uri.parse('$_baseUrl/ads/client-settings');
-      final response = await http.get(
+      final response = await httpGetWithRetry(
         uri,
         headers: token != null ? ApiConfig.authHeaders(token) : ApiConfig.headers,
       );
